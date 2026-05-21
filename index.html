@@ -108,8 +108,8 @@
     width: 100%;
     background: var(--bg-card); /* 与 tabbar 内容区统一,避免出现两段不同颜色 */
     border-top: 1px solid var(--divider);
-    /* 整体上移:safe-area 基础上额外加 30px,让按钮远离 Home 条 */
-    padding-bottom: calc(env(safe-area-inset-bottom) + 30px);
+    /* ⭐ v2.18 整体下移30px:原 safe-area + 30px,现在 safe-area + 0 */
+    padding-bottom: env(safe-area-inset-bottom);
     z-index: 20;
   }
   /* tabbar 本身(与 wrap 同色,视觉上是一整块) */
@@ -125,7 +125,7 @@
   /* 手机端:同样的兜底逻辑 */
   @media (max-width: 768px) {
     .tabbar-wrap {
-      padding-bottom: calc(env(safe-area-inset-bottom) + 30px);
+      padding-bottom: env(safe-area-inset-bottom);
     }
   }
 
@@ -2152,7 +2152,7 @@
   /* 公共牌 - 放在桌子中下部 */
   .community-cards {
     position: absolute;
-    top: 50%;       /* ⭐ v2.18 原56.9%(480/844),上移约60px远离自己手牌区 */
+    top: 51.2%;     /* ⭐ v2.18 在原50%基础上下移约10px(10/844≈1.2%) */
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -2419,13 +2419,38 @@
     pointer-events: none;
     white-space: nowrap;
   }
-  /* CSS 小筹码: 跟中央底池筹码同款(纯色径向渐变 + 白色虚线边)
-     ⭐ 红蓝双色叠放: 第1个红,第2个蓝叠在右上,中间显示 C 字母 */
+  /* CSS 单筹码: 红蓝四瓣交叉(conic-gradient) + 白色十字分界线 + 白色虚线边 + 中间 C 字母
+     ⭐ v2.18 从"双筹码叠放"改为"单筹码红蓝交叉",视觉更经典
+     ⭐ v2.18 加白色分界线让四瓣更清晰 */
   .seat-chip-icon {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, #e84444, #a01818);
+    background:
+      /* 顶层:中央高光 */
+      radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 50%),
+      /* 中层:白色十字分界(在四瓣交界处) */
+      conic-gradient(
+        from 45deg,
+        transparent 0deg 1.5deg,
+        white 1.5deg 3deg,
+        transparent 3deg 88.5deg,
+        white 88.5deg 91.5deg,
+        transparent 91.5deg 178.5deg,
+        white 178.5deg 181.5deg,
+        transparent 181.5deg 268.5deg,
+        white 268.5deg 271.5deg,
+        transparent 271.5deg 358.5deg,
+        white 358.5deg 360deg
+      ),
+      /* 底层:红蓝四瓣 */
+      conic-gradient(
+        from 45deg,
+        #e84444 0deg 90deg,
+        #2b6fd6 90deg 180deg,
+        #e84444 180deg 270deg,
+        #2b6fd6 270deg 360deg
+      );
     border: 2px dashed white;
     box-shadow: 0 1px 3px rgba(0,0,0,0.5);
     flex-shrink: 0;
@@ -2434,18 +2459,8 @@
     justify-content: center;
     color: white;
     font-size: 11px;
-    font-weight: 700;
-  }
-  .seat-chip-icon:nth-child(2) {
-    margin-left: -10px;
-    background: radial-gradient(circle at 30% 30%, #4488e8, #1850a8);
-  }
-  /* 右半边座位反向叠放时,第2个改成左叠(因为整体被 row-reverse 翻转了) */
-  .seat.s3 .seat-bet .seat-chip-icon:nth-child(2),
-  .seat.s4 .seat-bet .seat-chip-icon:nth-child(2),
-  .seat.s5 .seat-bet .seat-chip-icon:nth-child(2) {
-    margin-left: 0;
-    margin-right: -10px;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   }
   .seat-bet-amount {
     font-size: 12px;
@@ -2471,7 +2486,7 @@
   .seat.s7 .seat-bet,
   .seat.s8 .seat-bet {
     top: 20px;
-    left: 88px;
+    left: 80px;     /* ⭐ v2.18 原88px,往左移动8px */
   }
   /* 右半边座位(s3/s4/s5): 头像左侧,朝中央
      用 right 定位,内部 flex-direction:row-reverse 让筹码图标贴中央 */
@@ -2479,7 +2494,7 @@
   .seat.s4 .seat-bet,
   .seat.s5 .seat-bet {
     top: 20px;
-    right: 88px;
+    right: 80px;    /* ⭐ v2.18 原88px,往右移动8px */
     flex-direction: row-reverse;
   }
   /* 自己(my-seat): 头像上方 */
@@ -2828,8 +2843,8 @@
     /* action-area 是 300px 宽居中,要跳出到牌桌左下角:
        用负 left 把它推到 action-area 外侧的左边
        同时 z-index 高,确保不被加注区按钮遮挡 */
-    left: -5px;     /* ⭐ v2.18 原-30px,防iPhone左边屏幕边缘裁切 */
-    bottom: -32px;
+    left: -20px;    /* ⭐ v2.18 累计往左移动15px */
+    bottom: -17px;  /* ⭐ v2.18 累计往上移动15px */
     width: 50px;
     display: flex;
     flex-direction: column;
@@ -8466,13 +8481,14 @@
         <div class="card red" data-suit="♦"><span class="rank">J</span><span class="suit">♦</span></div>
         <div class="card black" data-suit="♣"><span class="rank">7</span><span class="suit">♣</span></div>
         <div class="card red" data-suit="♥"><span class="rank">K</span><span class="suit">♥</span></div>
+        <div class="card black" data-suit="♠"><span class="rank">A</span><span class="suit">♠</span></div>
+        <div class="card red" data-suit="♦"><span class="rank">5</span><span class="suit">♦</span></div>
       </div>
 
       <!-- 自己(底部) - 乱凌 K♥ 10♦ ⭐ 翻牌阶段演示,还没摊牌,无牌型标签 -->
       <div class="my-seat">
-        <!-- ⭐ 自己的下注筹码块(头像上方) -->
+        <!-- ⭐ 自己的下注筹码块(头像上方) ⭐ v2.18 单筹码红蓝交叉 -->
         <div class="seat-bet">
-          <div class="seat-chip-icon">C</div>
           <div class="seat-chip-icon">C</div>
           <div class="seat-bet-amount">20</div>
         </div>
@@ -10686,7 +10702,6 @@
           <div class="seat-chips">${player.chips}</div>
           ${player.bet ? `
             <div class="seat-bet">
-              <div class="seat-chip-icon">C</div>
               <div class="seat-chip-icon">C</div>
               <div class="seat-bet-amount">${player.bet}</div>
             </div>` : ''}

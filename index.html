@@ -2107,7 +2107,7 @@
   /* 桌中央信息 - 上移到牌桌中央 */
   .table-center {
     position: absolute;
-    top: 40.3%;     /* 340/844 */
+    top: 30%;       /* ⭐ v2.18 原40.3%(340/844),上移约60px远离公共牌区 */
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
@@ -2152,7 +2152,7 @@
   /* 公共牌 - 放在桌子中下部 */
   .community-cards {
     position: absolute;
-    top: 56.9%;     /* 480/844 */
+    top: 50%;       /* ⭐ v2.18 原56.9%(480/844),上移约60px远离自己手牌区 */
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -2681,7 +2681,7 @@
   /* 自己的座位(底部) */
   .my-seat {
     position: absolute;
-    top: 82.9%;     /* 700/844 */
+    top: 78%;       /* ⭐ v2.18 原82.9%(700/844),上移约35px避开行动按钮区 */
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
@@ -2713,7 +2713,7 @@
      - state="check"  让牌预选弹窗(没轮到我):弃牌+让牌(都灰色70%) */
   .action-area {
     position: absolute;
-    bottom: 96px;
+    bottom: 70px;     /* ⭐ v2.18 原96px,下沉26px压缩垂直空间(适配iPhone 660 可用高) */
     left: 50%;
     transform: translateX(-50%);
     width: 300px;          /* 缩窄,让按钮整体靠中央 */
@@ -2828,7 +2828,7 @@
     /* action-area 是 300px 宽居中,要跳出到牌桌左下角:
        用负 left 把它推到 action-area 外侧的左边
        同时 z-index 高,确保不被加注区按钮遮挡 */
-    left: -30px;
+    left: -5px;     /* ⭐ v2.18 原-30px,防iPhone左边屏幕边缘裁切 */
     bottom: -32px;
     width: 50px;
     display: flex;
@@ -16155,27 +16155,18 @@
       // ⭐ v2.18 兼容 Claude 预览框 / iframe 等场景:
       //   优先用 visualViewport(最精准,iOS 13+/Android Chrome 全支持)
       //   退而用 documentElement.clientWidth/Height(比 window.innerWidth/Height 更稳)
-      //   原因:某些 iframe/嵌入环境下 window.innerHeight 拿到的不是用户实际可见高度
       const vv = window.visualViewport;
       const w = vv ? vv.width : (document.documentElement.clientWidth || window.innerWidth);
       const h = vv ? vv.height : (document.documentElement.clientHeight || window.innerHeight);
-      // ⭐ v2.17 自适应缩放(智能判断视口宽高比)
-      //   - 手机竖屏(h > w):宽度优先 scale=w/390,phone-wrap高度跟随视口,无黑边
-      //   - 电脑/横屏/方屏(h ≤ w):完整显示 min(w/390, h/844),固定844高度,可能有黑边
-      const isPortrait = h > w;  // 竖屏:高 > 宽
-
-      let scale, logicalH;
-      if (isPortrait) {
-        // 手机竖屏:宽度优先,跟 TGPoker 一致(无黑边)
-        scale = w / DESIGN_W;
-        if (scale > MAX_SCALE) scale = MAX_SCALE;
-        logicalH = h / scale;
-      } else {
-        // 电脑/横屏:完整显示,固定 844 逻辑高度,可能有上下/两侧黑边
-        scale = Math.min(w / DESIGN_W, h / DESIGN_H);
-        if (scale > MAX_SCALE) scale = MAX_SCALE;
-        logicalH = DESIGN_H;
-      }
+      // ⭐ v2.18 简化版:只支持竖屏(Telegram Mini App 目标场景)
+      //   - scale = w/390 撑满屏宽,无黑边(跟 TGPoker 一致)
+      //   - phone-wrap 高度跟随视口,无黑边
+      //   - 大屏封顶 2.0
+      //   - 不再做"横屏 min 算法"分支,Claude 预览框/横屏浏览器看着可能怪,但不作为视觉基准
+      //   - 试运营后如需支持浏览器横屏,再加回来
+      let scale = w / DESIGN_W;
+      if (scale > MAX_SCALE) scale = MAX_SCALE;
+      const logicalH = h / scale;
       document.documentElement.style.setProperty('--app-scale', scale.toFixed(4));
       document.documentElement.style.setProperty('--phone-h', logicalH.toFixed(2) + 'px');
     }

@@ -2768,7 +2768,7 @@
   .ab-raise {
     width: 54px; height: 54px;
     background: radial-gradient(circle at 35% 30%, #ffb050 0%, #f08a28 50%, #c46818 100%);
-    bottom: 60px;
+    bottom: 35px;     /* ⭐ v2.18.1 原60px,下移25px远离自己手牌 */
     left: 50%;
     transform: translateX(-50%);
     color: #2a1500;
@@ -2843,13 +2843,13 @@
     /* action-area 是 300px 宽居中,要跳出到牌桌左下角:
        用负 left 把它推到 action-area 外侧的左边
        同时 z-index 高,确保不被加注区按钮遮挡 */
-    left: -20px;    /* ⭐ v2.18 累计往左移动15px */
-    bottom: -17px;  /* ⭐ v2.18 累计往上移动15px */
-    width: 50px;
+    left: -35px;    /* ⭐ v2.18 累计往左移动30px */
+    bottom: -7px;   /* ⭐ v2.18 累计往上移动25px */
+    width: 45px;    /* ⭐ v2.18 原50px,整体缩小5px */
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 1px;       /* ⭐ v2.18 原2px,跟随缩小 */
     background: transparent;
     border: none;
     padding: 0;
@@ -2863,7 +2863,7 @@
 
   /* 顶部:+15S 文字 */
   .ab-add-time .att-label {
-    font-size: 10px;
+    font-size: 9px;   /* ⭐ v2.18 原10px */
     font-weight: 800;
     color: #ffd86a;
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
@@ -2872,8 +2872,8 @@
   }
   /* 中间:闹钟图标 */
   .ab-add-time .att-clock {
-    width: 32px;
-    height: 32px;
+    width: 28px;    /* ⭐ v2.18 原32px,缩小4px */
+    height: 28px;
     border-radius: 50%;
     background: radial-gradient(circle at 30% 30%, #3a2e1a, #1a1208);
     border: 2px solid #e8c265;
@@ -2885,26 +2885,26 @@
     position: relative;
   }
   .ab-add-time .att-clock svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;    /* ⭐ v2.18 原18px */
+    height: 16px;
   }
   /* 底部:黑底胶囊 红筹码 + 免费 */
   .ab-add-time .att-cost {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 2px;       /* ⭐ v2.18 原3px */
     background: rgba(0, 0, 0, 0.75);
     border-radius: 10px;
-    padding: 2px 6px 2px 3px;
-    font-size: 10px;
+    padding: 2px 5px 2px 3px;  /* ⭐ v2.18 原 2px 6px 2px 3px */
+    font-size: 9px; /* ⭐ v2.18 原10px */
     font-weight: 700;
     color: white;
     line-height: 1;
     white-space: nowrap;
   }
   .ab-add-time .att-cost-chip {
-    width: 11px;
-    height: 11px;
+    width: 10px;    /* ⭐ v2.18 原11px */
+    height: 10px;
     border-radius: 50%;
     background: radial-gradient(circle at 30% 30%, #e84444, #a01818);
     border: 1px dashed white;
@@ -2986,17 +2986,18 @@
     color: #e8c265;
     font-weight: 700;
   }
-  /* 5 个快捷键位置:4 个外围按钮向中央横向收拢 10px */
-  .ab-tile.tile-1 { bottom: 88px;  left: 28px;  }   /* 1/5 底池(右移10) */
-  .ab-tile.tile-2 { bottom: 118px; left: 72px;  }   /* 1/3 底池(右移10) */
+  /* 5 个快捷键位置:4 个外围按钮向中央横向收拢 10px
+     ⭐ v2.18.1 全部下移25px(原 88/118/140 → 63/93/115),远离自己手牌 */
+  .ab-tile.tile-1 { bottom: 63px;  left: 28px;  }   /* 1/5 底池(右移10) */
+  .ab-tile.tile-2 { bottom: 93px;  left: 72px;  }   /* 1/3 底池(右移10) */
   .ab-tile.tile-3 {                                 /* All-In 不动 */
-    bottom: 140px;
+    bottom: 115px;
     left: 50%;
     transform: translateX(-50%);
   }
   .ab-tile.tile-3:active { transform: translateX(-50%) scale(0.92); }
-  .ab-tile.tile-4 { bottom: 118px; right: 72px; }   /* 1 底池(左移10) */
-  .ab-tile.tile-5 { bottom: 88px;  right: 28px; }   /* 1/2 底池(左移10) */
+  .ab-tile.tile-4 { bottom: 93px;  right: 72px; }   /* 1 底池(左移10) */
+  .ab-tile.tile-5 { bottom: 63px;  right: 28px; }   /* 1/2 底池(左移10) */
 
   /* =====================================================
      ⭐ v2.16 三态切换:data-state="raise" / "call" / "check"

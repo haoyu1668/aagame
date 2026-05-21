@@ -3047,6 +3047,7 @@
     white-space: nowrap;
     box-shadow: 0 3px 8px rgba(0,0,0,0.5);
     transition: bottom 0.05s linear;
+    z-index: 10;     /* ⭐ v2.18.1 高于thumb(5),保证可点击 */
   }
   .raise-slider-cancel:active { transform: translateY(50%) scale(0.95); }
 
@@ -3070,6 +3071,7 @@
     text-shadow: 0 1px 0 rgba(255,255,255,0.25);
     min-width: 100px;
     transition: bottom 0.05s linear;
+    z-index: 10;     /* ⭐ v2.18.1 高于thumb(5),保证可点击 */
   }
   .raise-slider-confirm:active { transform: translateY(50%) scale(0.95); }
 
@@ -11889,37 +11891,69 @@
     });
 
     // 滑杆拖动:支持鼠标 + 触摸
+    // ⭐ v2.18.1 修复:1) 取消/加注按钮要能正常点击,不能被拖动拦截
+    //                   2) 拖动用 rAF 节流避免卡顿
+    //                   3) 拖动只能从 thumb 或 track 空白处触发(不能从按钮触发)
     let dragging = false;
+    let pendingY = null;
+    let rafId = null;
+
     function getYFromEvent(e) {
       if (e.touches && e.touches[0]) return e.touches[0].clientY;
+      if (e.changedTouches && e.changedTouches[0]) return e.changedTouches[0].clientY;
       return e.clientY;
     }
-    function onDragMove(e) {
-      if (!dragging) return;
+
+    // rAF 节流的实际更新函数
+    function applyDrag() {
+      rafId = null;
+      if (pendingY == null) return;
       const rect = track.getBoundingClientRect();
-      const y = getYFromEvent(e);
-      // y 在 rect.top(顶) ~ rect.bottom(底),反转:bottom=0 top=100
+      // y 在 rect.top(顶) ~ rect.bottom(底),反转:bottom=0% top=100%
       const pct = Math.max(0, Math.min(100,
-        (rect.bottom - y) / rect.height * 100
+        (rect.bottom - pendingY) / rect.height * 100
       ));
       const amount = MIN_RAISE + (MAX_RAISE - MIN_RAISE) * pct / 100;
       setAmount(amount);
-      e.preventDefault();
+      pendingY = null;
+    }
+
+    function onDragMove(e) {
+      if (!dragging) return;
+      pendingY = getYFromEvent(e);
+      if (rafId == null) rafId = requestAnimationFrame(applyDrag);
+      // 阻止页面滚动(touchmove 必须 preventDefault)
+      if (e.cancelable) e.preventDefault();
     }
     function onDragEnd() {
       dragging = false;
+      if (rafId != null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      pendingY = null;
       document.removeEventListener('mousemove', onDragMove);
       document.removeEventListener('mouseup', onDragEnd);
       document.removeEventListener('touchmove', onDragMove);
       document.removeEventListener('touchend', onDragEnd);
+      document.removeEventListener('touchcancel', onDragEnd);
     }
     function startDrag(e) {
+      // ⭐ 关键:点击在按钮(取消/加注)上时,不要启动拖动
+      // 让按钮的 click 事件正常触发
+      if (e.target.closest('.raise-slider-cancel') ||
+          e.target.closest('.raise-slider-confirm')) {
+        return;
+      }
       dragging = true;
-      onDragMove(e);   // 先把滑杆定位到当前点击位置
+      pendingY = getYFromEvent(e);
+      if (rafId == null) rafId = requestAnimationFrame(applyDrag);
       document.addEventListener('mousemove', onDragMove);
       document.addEventListener('mouseup', onDragEnd);
       document.addEventListener('touchmove', onDragMove, { passive: false });
       document.addEventListener('touchend', onDragEnd);
+      document.addEventListener('touchcancel', onDragEnd);
+      if (e.cancelable) e.preventDefault();
     }
     // 滑杆轨道 + 把手 都支持点击/拖动
     track.addEventListener('mousedown', startDrag);

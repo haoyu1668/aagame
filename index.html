@@ -2931,6 +2931,158 @@
     display: none;
   }
 
+  /* ========== ⭐ v2.18.1 加注滑杆精调弹窗(Step 3) ==========
+     点中央"加注"橘按钮触发,全屏遮罩,垂直滑杆(上高下低)
+     ⭐ v2.18.1 简化版:无5预设,无+/-,取消和加注按钮跟随把手上下同步 */
+  .raise-slider-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .raise-slider-overlay.show {
+    display: flex;
+  }
+  .raise-slider-panel {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 0 80px 0;
+    box-sizing: border-box;
+  }
+
+  /* 顶部金额数字 + BB 倍率(绝对定位贴轨道上方10px) */
+  .raise-slider-top {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 10px);   /* ⭐ v2.18.1 轨道顶部往上10px */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  /* 中央:垂直滑杆容器 */
+  .raise-slider-track-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    /* 顶部留 80px 给金额数字,底部留 0(轨道贴近底部) */
+    padding-top: 80px;
+  }
+  .raise-slider-track {
+    position: relative;
+    width: 38px;
+    height: 100%;
+    max-height: 480px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 19px;
+    border: 1.5px solid rgba(255,255,255,0.35);
+    cursor: pointer;
+    touch-action: none;
+  }
+  /* 已选金额填充(从底部往上) */
+  .raise-slider-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, #5fe88a, #3aaf60);
+    border-radius: 19px;
+    transition: height 0.05s linear;
+  }
+  /* 滑杆把手(橘色椭圆) */
+  .raise-slider-thumb {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, 50%);
+    width: 48px;
+    height: 28px;
+    background: radial-gradient(circle at 35% 30%, #ffb050 0%, #f08a28 60%, #c46818 100%);
+    border-radius: 14px;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    touch-action: none;
+    cursor: grab;
+    z-index: 5;
+    transition: bottom 0.05s linear;
+  }
+  .raise-slider-thumb:active { cursor: grabbing; }
+
+  /* 取消按钮:贴滑杆左侧10px,跟把手同步 bottom */
+  .raise-slider-cancel {
+    position: absolute;
+    right: calc(100% + 10px);    /* ⭐ v2.18.1 原50px,改为10px贴近滑杆 */
+    transform: translateY(50%);
+    width: 80px;
+    height: 44px;
+    border-radius: 22px;
+    background: rgba(40, 40, 40, 0.9);
+    border: 1.5px solid rgba(255,255,255,0.55);
+    color: white;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+    transition: bottom 0.05s linear;
+  }
+  .raise-slider-cancel:active { transform: translateY(50%) scale(0.95); }
+
+  /* 加注按钮:贴滑杆右侧10px,跟把手同步 bottom */
+  .raise-slider-confirm {
+    position: absolute;
+    left: calc(100% + 10px);     /* ⭐ v2.18.1 原50px,改为10px贴近滑杆 */
+    transform: translateY(50%);
+    height: 44px;
+    padding: 0 18px;
+    border-radius: 22px;
+    background: radial-gradient(circle at 35% 30%, #ffb050 0%, #f08a28 50%, #c46818 100%);
+    border: 1.5px solid rgba(255,255,255,0.4);
+    color: #2a1500;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+    min-width: 100px;
+    transition: bottom 0.05s linear;
+  }
+  .raise-slider-confirm:active { transform: translateY(50%) scale(0.95); }
+
+  .raise-slider-amount {
+    font-size: 36px;
+    font-weight: 900;
+    color: #ffd86a;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.85);
+    line-height: 1;
+  }
+  .raise-slider-multi {
+    font-size: 13px;
+    color: rgba(255,255,255,0.75);
+    font-weight: 600;
+  }
+
   /* ========== 5 个快捷加注键(43px 灰白色 75% 透明) ========== */
   /* ⭐ 圈内只显示两行: 分数(1/5) + "底池"小字
      金额数字溢出到圆形按钮外的底部 */
@@ -8571,6 +8723,28 @@
         </button>
       </div>
 
+      <!-- ⭐ v2.18.1 加注滑杆精调弹窗(Step 3) -->
+      <div class="raise-slider-overlay" id="raise-slider-overlay">
+        <div class="raise-slider-panel">
+          <!-- 中央:垂直滑杆(上 高额, 下 低额) + 跟随把手的取消/加注按钮 -->
+          <div class="raise-slider-track-wrap">
+            <div class="raise-slider-track" id="raise-slider-track">
+              <!-- 顶部金额数字(绝对定位贴轨道上方10px) -->
+              <div class="raise-slider-top">
+                <div class="raise-slider-amount" id="raise-slider-amount">120</div>
+                <div class="raise-slider-multi" id="raise-slider-multi">3 BB</div>
+              </div>
+
+              <div class="raise-slider-fill" id="raise-slider-fill" style="height: 40%;"></div>
+              <!-- 跟随把手的左右按钮(绝对定位,跟 thumb 同步 bottom) -->
+              <button class="raise-slider-cancel" id="raise-slider-cancel" style="bottom: 40%;">取消</button>
+              <button class="raise-slider-confirm" id="raise-slider-confirm" style="bottom: 40%;">加注 <span id="raise-slider-confirm-amount">120</span></button>
+              <div class="raise-slider-thumb" id="raise-slider-thumb" style="bottom: 40%;">●</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 底部工具栏 -->
       <div class="table-bottombar">
         <div class="bb-left">
@@ -11623,6 +11797,134 @@
     if (typeof showToast === 'function') showToast('新一轮:+15S 已重置,倒计时重启');
   });
   if (devSwitcher) devSwitcher.appendChild(devNewRoundBtn);
+
+  // ⭐ v2.18.1 加注滑杆精调弹窗(Step 3)
+  // 点中央加注按钮 → 弹全屏遮罩 + 垂直滑杆
+  // ⭐ v2.18.1 简化版:无5预设,无+/-,取消和加注按钮跟随把手上下同步
+  (function setupRaiseSlider() {
+    const overlay = document.getElementById('raise-slider-overlay');
+    if (!overlay) return;
+    const raiseBtn = document.getElementById('ab-raise-btn');
+    const track = document.getElementById('raise-slider-track');
+    const thumb = document.getElementById('raise-slider-thumb');
+    const fill = document.getElementById('raise-slider-fill');
+    const amountEl = document.getElementById('raise-slider-amount');
+    const multiEl = document.getElementById('raise-slider-multi');
+    const confirmAmountEl = document.getElementById('raise-slider-confirm-amount');
+    const cancelBtn = document.getElementById('raise-slider-cancel');
+    const confirmBtn = document.getElementById('raise-slider-confirm');
+
+    // 配置参数(真实业务由后端传入)
+    const BB = 40;              // 大盲 = 40(对应跟注金额)
+    const MY_CHIPS = 1400;      // 自己筹码(演示, 1.4K)
+    const MIN_RAISE = BB * 2;   // 最小加注 = 2 BB = 80
+    const MAX_RAISE = MY_CHIPS; // All-In
+
+    let currentAmount = 120;    // 当前金额
+
+    // 更新 UI(滑杆位置 + 金额数字 + BB 倍率 + 左右按钮同步)
+    function updateUI() {
+      // 滑杆位置百分比(从底部往上,0% = MIN, 100% = MAX)
+      const pct = Math.max(0, Math.min(100,
+        (currentAmount - MIN_RAISE) / (MAX_RAISE - MIN_RAISE) * 100
+      ));
+      const pctStr = pct + '%';
+      thumb.style.bottom = pctStr;
+      fill.style.height = pctStr;
+      // ⭐ 取消和加注按钮跟随把手同步 bottom
+      cancelBtn.style.bottom = pctStr;
+      confirmBtn.style.bottom = pctStr;
+      // ⭐ v2.18.1 滑到最顶 = All-In,显示文字而非数字
+      const isAllIn = currentAmount >= MAX_RAISE;
+      if (isAllIn) {
+        amountEl.textContent = 'All-In';
+        multiEl.textContent = MAX_RAISE + ' 筹码';
+        confirmAmountEl.textContent = 'All-In';
+      } else {
+        amountEl.textContent = currentAmount;
+        confirmAmountEl.textContent = currentAmount;
+        const bbMulti = (currentAmount / BB).toFixed(1).replace(/\.0$/, '');
+        multiEl.textContent = bbMulti + ' BB';
+      }
+    }
+
+    // 设置金额(带边界检查)
+    function setAmount(amount) {
+      currentAmount = Math.max(MIN_RAISE, Math.min(MAX_RAISE, Math.round(amount)));
+      updateUI();
+    }
+
+    // 点中央加注按钮 → 打开弹窗
+    if (raiseBtn) {
+      raiseBtn.addEventListener('click', (e) => {
+        // 只在 raise 态下弹滑杆(call/check 态点加注没意义,且按钮已隐藏)
+        const state = actionArea && actionArea.dataset.state;
+        if (state !== 'raise') return;
+        e.stopPropagation();
+        // 默认金额 = MIN_RAISE * 1.5(可改成上次的金额或推荐值)
+        setAmount(MIN_RAISE * 1.5);
+        overlay.classList.add('show');
+      });
+    }
+
+    // 取消按钮 → 关弹窗
+    cancelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      overlay.classList.remove('show');
+    });
+    // 点遮罩空白处 → 关弹窗(但点滑杆轨道不算关)
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.classList.remove('show');
+    });
+
+    // 确认加注按钮 → 关弹窗 + 发送(当前 toast 演示)
+    confirmBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      overlay.classList.remove('show');
+      if (typeof showToast === 'function') showToast(`加注 ${currentAmount}`);
+      // 真实业务:发送 player:raise + amount 给服务端
+    });
+
+    // 滑杆拖动:支持鼠标 + 触摸
+    let dragging = false;
+    function getYFromEvent(e) {
+      if (e.touches && e.touches[0]) return e.touches[0].clientY;
+      return e.clientY;
+    }
+    function onDragMove(e) {
+      if (!dragging) return;
+      const rect = track.getBoundingClientRect();
+      const y = getYFromEvent(e);
+      // y 在 rect.top(顶) ~ rect.bottom(底),反转:bottom=0 top=100
+      const pct = Math.max(0, Math.min(100,
+        (rect.bottom - y) / rect.height * 100
+      ));
+      const amount = MIN_RAISE + (MAX_RAISE - MIN_RAISE) * pct / 100;
+      setAmount(amount);
+      e.preventDefault();
+    }
+    function onDragEnd() {
+      dragging = false;
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragEnd);
+      document.removeEventListener('touchmove', onDragMove);
+      document.removeEventListener('touchend', onDragEnd);
+    }
+    function startDrag(e) {
+      dragging = true;
+      onDragMove(e);   // 先把滑杆定位到当前点击位置
+      document.addEventListener('mousemove', onDragMove);
+      document.addEventListener('mouseup', onDragEnd);
+      document.addEventListener('touchmove', onDragMove, { passive: false });
+      document.addEventListener('touchend', onDragEnd);
+    }
+    // 滑杆轨道 + 把手 都支持点击/拖动
+    track.addEventListener('mousedown', startDrag);
+    track.addEventListener('touchstart', startDrag, { passive: false });
+
+    // 初始化 UI
+    updateUI();
+  })();
 
   // ⭐ v2.16 预选高亮逻辑:仅在 call/check 态下,点弃牌/跟注/让牌按钮 → 切换 .preselected
   // ⭐ 互斥规则:弃牌 vs 跟注/让牌 只能二选一,点新的自动清旧的

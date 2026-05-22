@@ -444,9 +444,34 @@
     font-weight: 600;
     color: var(--white);
     margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+  }
+  .room-name-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+  }
+  /* ⭐ v2.18.6 房间名后"游戏中"标签(从牌桌返回大厅时显示) */
+  .room-ingame-tag {
+    display: inline-block;
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #ff5a5a, #e63946);
+    padding: 1px 6px;
+    border-radius: 8px;
+    line-height: 1.4;
+    box-shadow: 0 0 6px rgba(230,57,70,0.5);
+    animation: ingamePulse 1.6s ease-in-out infinite;
+  }
+  @keyframes ingamePulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(230,57,70,0.5); }
+    50%      { box-shadow: 0 0 10px rgba(230,57,70,0.9); }
   }
   .room-meta {
     font-size: 12px;
@@ -2183,6 +2208,278 @@
   .card.red { color: #d33; }
   .card.black { color: #000; }
 
+  /* ⭐ v2.18.7 公共牌动态切换 - 子项 2/4: 翻面动画 + 子项 5: 中牌高亮
+     每张公共牌做 rotateY 翻面: 起始 180°(牌背) → 0°(正面),250ms
+     未翻面的牌显示牌背覆盖层(::before)
+     中牌高亮: 加 .winning 类 → 金色描边 + 发光 */
+  .community-cards .card {
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 250ms ease-out, box-shadow 200ms ease-out;
+    /* 默认正面朝外 */
+  }
+  .community-cards .card.flip-back {
+    transform: rotateY(180deg);
+  }
+  .community-cards .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #d63232, #8a1818);
+    border: 1.5px solid white;
+    border-radius: 5px;
+    backface-visibility: hidden;
+    transform: rotateY(180deg);
+    background-image:
+      linear-gradient(135deg, #d63232, #8a1818),
+      repeating-linear-gradient(
+        45deg,
+        transparent 0,
+        transparent 3px,
+        rgba(255,255,255,0.08) 3px,
+        rgba(255,255,255,0.08) 6px
+      );
+    background-blend-mode: overlay;
+  }
+  .community-cards .card .rank,
+  .community-cards .card .suit {
+    backface-visibility: hidden;
+  }
+  /* 中牌高亮(参与组成牌型的公共牌) */
+  .community-cards .card.winning {
+    box-shadow:
+      0 0 0 2px #d9a629,
+      0 0 12px 2px rgba(217, 166, 41, 0.7),
+      0 3px 8px rgba(0,0,0,0.5);
+    transform: translateY(-3px);
+  }
+  /* 烧牌:一张牌从牌堆飞出再淡出消失(子项 3) */
+  .burned-card {
+    position: absolute;
+    width: 32px;
+    height: 44px;
+    background: linear-gradient(135deg, #d63232, #8a1818);
+    border: 1.5px solid white;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    z-index: 7;
+    pointer-events: none;
+    transition: transform 300ms ease-out, opacity 200ms ease-in 200ms;
+  }
+  .burned-card.burned {
+    opacity: 0;
+  }
+
+  /* ⭐ v2.18.7 板块 C: 筹码动画
+     - 飞行筹码: 红蓝双色叠放,从座位下注块飞到中央底池
+     - 底池筹码堆: 中央底池上方堆叠,显示当前归拢的筹码量
+     - 派奖筹码: 从底池飞回赢家头像,落位时绿色发光 */
+  .flying-chip {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #e84444, #a01818);
+    border: 2px dashed white;
+    z-index: 8;
+    pointer-events: none;
+    transition: transform 350ms cubic-bezier(0.55, 0, 0.45, 1), opacity 200ms ease-in 300ms;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .flying-chip::before {
+    content: 'C';
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .flying-chip.blue {
+    background: radial-gradient(circle at 30% 30%, #4488e8, #1850a8);
+  }
+  .flying-chip.gold {
+    /* 派奖筹码:金色 */
+    background: radial-gradient(circle at 30% 30%, #ffd66b, #b88a30);
+    box-shadow: 0 0 8px rgba(255, 200, 60, 0.6), 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .flying-chip.arrived {
+    opacity: 0;
+  }
+
+  /* 顶部4个图标(2左 + 2右) */
+     位置: 介于底池(top:30%)和公共牌(top:51.2%)之间的留白带
+     水平方向左偏 90px,避开中央底池/公共牌居中线
+     视觉: 4 张牌背错位叠放,营造"一沓牌"的厚度感
+     z-index: 3(低于公共牌4,看起来"压在桌面上") */
+  .card-deck {
+    position: absolute;
+    top: 41%;
+    left: 50%;
+    transform: translateX(calc(-50% - 90px));
+    width: 32px;
+    height: 44px;
+    z-index: 3;
+    pointer-events: none;  /* 牌堆不响应点击 */
+  }
+  .card-deck .deck-card {
+    position: absolute;
+    width: 32px;
+    height: 44px;
+    background: linear-gradient(135deg, #d63232, #8a1818);
+    border: 1.5px solid white;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  /* 4 张牌错位叠放,每张偏移 1-2px */
+  .card-deck .deck-card:nth-child(1) { top: 0;    left: 0;    }
+  .card-deck .deck-card:nth-child(2) { top: -1px; left: 1px;  }
+  .card-deck .deck-card:nth-child(3) { top: -2px; left: 2px;  }
+  .card-deck .deck-card:nth-child(4) { top: -3px; left: 3px;  }
+  /* 最顶部那张加一道斜线纹饰,跟现有座位牌背风格呼应 */
+  .card-deck .deck-card:nth-child(4)::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 2px;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent 0,
+      transparent 2px,
+      rgba(255,255,255,0.08) 2px,
+      rgba(255,255,255,0.08) 4px
+    );
+  }
+  /* 发牌中状态:整副牌堆隐藏(子项 3 用) */
+  .card-deck.dealing-done {
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  /* ⭐ v2.18.7 发牌动画 - 子项 3: 发牌中临时隐藏现有牌背
+     发牌前给座位 .seat-cards-back 加 .dealing 类 → 内部 mini-card 隐藏
+     发牌完成移除 .dealing → mini-card 出现(视觉上"飞行牌变牌背")
+     同时清掉飞行牌完成视觉接力 */
+  .seat-cards-back.dealing .mini-card {
+    opacity: 0;
+  }
+  .my-cards.dealing .card {
+    opacity: 0;
+  }
+
+  /* ⭐ v2.18.7 发牌动画 - 子项 4: 自己手牌 3D 翻面
+     翻面前: 给 .my-cards 加 .flip-pending 类
+       → 每张 .card 显示牌背覆盖层(::before),正面藏在 backface-visibility:hidden 后
+     翻面中: 加 .flipping 类 → rotateY 0° → 180°,250ms ease-out
+     翻面后: 移除 .flip-pending 和 .flipping → 正面常态显示
+     两张牌同时翻面(节奏紧凑) */
+  .my-cards .card {
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 250ms ease-out;
+  }
+  .my-cards.flip-pending .card {
+    /* 翻面起始状态: 翻 180°,这时候 ::before(牌背)朝外,正面藏在背后 */
+    transform: rotateY(180deg);
+  }
+  .my-cards.flip-pending.flipping .card {
+    /* 翻面过程: 从 180° 转到 0°,正面出现 */
+    transform: rotateY(0deg);
+  }
+  .my-cards .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #d63232, #8a1818);
+    border-radius: 5px;
+    backface-visibility: hidden;
+    /* 牌背朝向自己(rotateY 180° 后才能看到正面) */
+    transform: rotateY(180deg);
+    /* 同样的斜纹纹饰 */
+    background-image:
+      linear-gradient(135deg, #d63232, #8a1818),
+      repeating-linear-gradient(
+        45deg,
+        transparent 0,
+        transparent 3px,
+        rgba(255,255,255,0.08) 3px,
+        rgba(255,255,255,0.08) 6px
+      );
+    background-blend-mode: overlay;
+    border: 1.5px solid white;
+    /* 默认透明,不影响日常显示 */
+    opacity: 0;
+  }
+  /* 翻面阶段才显示牌背覆盖层 */
+  .my-cards.flip-pending .card::before {
+    opacity: 1;
+  }
+  /* 正面文字(rank/suit)也需要 backface-visibility,翻到背面时藏起来 */
+  .my-cards .card .rank,
+  .my-cards .card .suit {
+    backface-visibility: hidden;
+  }
+
+  /* 牌堆里每发一张少一张:用 .deck-cards-left-N 控制可见数量 */
+  .card-deck[data-cards-left="3"] .deck-card:nth-child(1) { opacity: 0; }
+  .card-deck[data-cards-left="2"] .deck-card:nth-child(1),
+  .card-deck[data-cards-left="2"] .deck-card:nth-child(2) { opacity: 0; }
+  .card-deck[data-cards-left="1"] .deck-card:nth-child(1),
+  .card-deck[data-cards-left="1"] .deck-card:nth-child(2),
+  .card-deck[data-cards-left="1"] .deck-card:nth-child(3) { opacity: 0; }
+  .card-deck[data-cards-left="0"] .deck-card { opacity: 0; }
+  .card-deck .deck-card { transition: opacity 0.15s; }
+
+  /* ⭐ v2.18.7 发牌动画 - 子项 2: 飞行牌(原子动画)
+     从牌堆位置飞向指定座位手牌位置
+     起始: 牌堆中心,缩小0.7倍,旋转-180°(背面翻转中)
+     落位: 座位手牌位置,1倍大小,旋转0°(背面朝上落定)
+     时长: 250ms 飞行 + 120ms 弹一下
+     z-index: 8 飞越所有座位/中央元素,低于弹窗(50+)和topbar(10) */
+  .flying-card {
+    position: absolute;
+    width: 32px;
+    height: 44px;
+    background: linear-gradient(135deg, #d63232, #8a1818);
+    border: 1.5px solid white;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    z-index: 8;
+    pointer-events: none;
+    /* 起始位置和状态(由 JS 设置 left/top 为牌堆坐标) */
+    transform: translate(0, 0) rotate(-180deg) scale(0.7);
+    transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+  }
+  /* 加 .flying 类:触发飞行(JS 同时设置 transform 目标值) */
+  /* 加 .landed 类:落位后微弹一下 */
+  .flying-card.landed {
+    animation: card-land-bounce 120ms ease-out;
+  }
+  @keyframes card-land-bounce {
+    0%   { /* 当前 transform 由 inline style 决定,继承落位状态 */ }
+    50%  { box-shadow: 0 4px 10px rgba(0,0,0,0.7); }
+    100% { box-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+  }
+  /* 落位后顶张牌纹饰(跟牌堆顶张一致) */
+  .flying-card::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 2px;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent 0,
+      transparent 2px,
+      rgba(255,255,255,0.08) 2px,
+      rgba(255,255,255,0.08) 4px
+    );
+  }
+
   /* 顶部4个图标(2左 + 2右) */
   .table-topbar {
     position: absolute;
@@ -3340,12 +3637,14 @@
   .action-area[data-state="s2"] .ab-raise {
     display: none;
   }
-  /* P4:加注按钮变灰禁用 */
+  /* P4 All-In 跟:加注按钮完全隐藏(此时只能选弃牌或全下跟,没有加注空间) */
   .action-area[data-state="p4"] .ab-raise {
-    background: rgba(120, 120, 120, 0.5);
-    color: rgba(255,255,255,0.4);
-    pointer-events: none;
-    box-shadow: none;
+    display: none;
+  }
+  /* ⭐ v2.18.6 P4 All-In 跟弹窗:隐藏自己的下注筹码气泡(还没行动不该显示)
+     由 JS 在切到 P4 时给 #page-table 加 .state-p4 class 触发 */
+  #page-table.state-p4 .my-seat .seat-bet {
+    display: none;
   }
 
   /* ---------- 中央按钮文字:P1/P4=加注 P2=下注 P3=加注 ---------- */
@@ -3579,7 +3878,7 @@
     flex-direction: column;
     gap: 4px;
   }
-  /* ⭐ v2.18.4 DEV 分组小标题 */
+  /* ⭐ v2.18.4 DEV 分组小标题(旧版兼容保留,新版用 dev-section-header) */
   .dev-group-title {
     color: #ff5;
     font-size: 8px;
@@ -3589,6 +3888,48 @@
     margin-bottom: 1px;
     opacity: 0.7;
     letter-spacing: 1px;
+  }
+  /* ⭐ v2.18.6 DEV 切换器分段折叠(手风琴模式) */
+  .dev-section {
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 2px;
+  }
+  .dev-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,77,0.08);
+    color: #ff5;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 6px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    border-radius: 4px;
+    user-select: none;
+  }
+  .dev-section-header:hover {
+    background: rgba(255,255,77,0.15);
+  }
+  .dev-section-arrow {
+    font-size: 8px;
+    transition: transform 0.18s;
+    opacity: 0.7;
+  }
+  .dev-section.open .dev-section-arrow {
+    transform: rotate(180deg);
+  }
+  .dev-section-body {
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px 0 2px;
+  }
+  .dev-section.open .dev-section-body {
+    display: flex;
   }
   /* ⭐ v2.18.6 座位测试快捷区 */
   .dev-seat-row {
@@ -4735,6 +5076,25 @@
     color: #5a9bff;
   }
 
+  /* ⭐ v2.18.6 子项 7:自动补码抽屉开关项 */
+  .drawer-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .drawer-toggle-state {
+    font-size: 12px;
+    color: rgba(255,255,255,0.45);
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+  }
+  .drawer-toggle.active .drawer-toggle-state {
+    color: var(--green-main);
+    background: rgba(77,255,77,0.15);
+    border: 1px solid rgba(77,255,77,0.4);
+  }
+
   /* ===================================================
      ====== 牌桌通用居中弹窗(牌局信息/规则说明等) ======
      =================================================== */
@@ -5079,6 +5439,300 @@
   }
   .center-modal-mask.show .entry-modal {
     animation: buyinFadeIn 0.18s ease-out;
+  }
+
+  /* ⭐ v2.18.6 子项 6:离座确认弹窗 */
+  .leave-seat-modal {
+    width: 300px;
+  }
+  .leave-seat-modal .cm-body {
+    padding: 20px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .leave-seat-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+  .leave-seat-name {
+    font-size: 16px;
+    color: #fff;
+    font-weight: 600;
+  }
+  .leave-seat-name #leave-seat-player {
+    color: var(--green-main);
+  }
+  .leave-seat-chips {
+    font-size: 13px;
+    color: rgba(255,255,255,0.7);
+  }
+  .leave-seat-chips #leave-seat-amount {
+    color: #fff;
+    font-weight: 700;
+  }
+  .leave-seat-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+  }
+  .leave-seat-footer {
+    display: flex;
+    gap: 10px;
+  }
+  /* 离座按钮:红色,跟"买入"绿色区分(危险操作) */
+  .leave-seat-confirm {
+    background: #e85a5a;
+    color: #fff;
+  }
+  .leave-seat-confirm:hover {
+    background: #f06868;
+  }
+  .center-modal-mask.show .leave-seat-modal {
+    animation: buyinFadeIn 0.18s ease-out;
+  }
+
+  /* ⭐ v2.18.6 子项 9:抽屉补码入口(右侧显示余额) */
+  .drawer-rebuy {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .drawer-rebuy-state {
+    font-size: 12px;
+    color: rgba(255,255,255,0.45);
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+  }
+  .drawer-rebuy.affordable .drawer-rebuy-state {
+    color: var(--green-main);
+  }
+  .drawer-rebuy.unaffordable {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .drawer-rebuy.unaffordable .drawer-rebuy-state {
+    color: #ff8a8a;
+  }
+
+  /* ⭐ v2.18.6 子项 9:余额不足留桌弹窗 */
+  .lowbal-modal {
+    width: 300px;
+  }
+  .lowbal-modal .cm-body {
+    padding: 20px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .lowbal-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+  }
+  .lowbal-icon {
+    font-size: 32px;
+    margin-bottom: 4px;
+  }
+  .lowbal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .lowbal-desc {
+    font-size: 13px;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 8px;
+  }
+  .lowbal-countdown {
+    font-size: 14px;
+    color: rgba(255,255,255,0.85);
+    background: rgba(255,180,0,0.12);
+    border: 1px solid rgba(255,180,0,0.35);
+    border-radius: 8px;
+    padding: 8px 16px;
+    margin: 4px 0;
+  }
+  .lowbal-timer {
+    color: #ffb400;
+    font-weight: 700;
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+  }
+  .lowbal-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+  }
+  .center-modal-mask.show .lowbal-modal {
+    animation: buyinFadeIn 0.18s ease-out;
+  }
+
+  /* ⭐ v2.18.6 子项 9:顶部余额+补码▼快捷入口(在 s1 和 s2 中间) */
+  .topbar-rebuy {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    z-index: 9;
+    height: 18px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 0;
+    overflow: visible;
+  }
+  /* ⭐ v2.18.6 充值 + 号按钮(跳充值页) */
+  .topbar-recharge-btn {
+    background: transparent;
+    color: var(--green-main);
+    border: none;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    padding: 0 6px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .topbar-recharge-btn:hover {
+    color: #fff;
+    background: rgba(77,255,77,0.15);
+  }
+  .topbar-recharge-btn:active {
+    transform: scale(0.92);
+  }
+  /* 余额块 */
+  .topbar-balance {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 6px 0 8px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.65);
+    border-right: 1px solid rgba(255,255,255,0.1);
+  }
+  .topbar-balance-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.55);
+  }
+  .topbar-balance-value {
+    color: var(--green-main);
+    font-weight: 700;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* 补码主按钮 */
+  .topbar-rebuy-btn {
+    background: transparent;
+    color: #fff;
+    border: none;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1;
+  }
+  .topbar-rebuy-btn:hover {
+    color: var(--green-main);
+  }
+  .topbar-rebuy-btn:active {
+    transform: scale(0.96);
+  }
+  /* 下拉箭头按钮 */
+  .topbar-rebuy-arrow {
+    background: transparent;
+    color: rgba(255,255,255,0.6);
+    border: none;
+    border-left: 1px solid rgba(255,255,255,0.1);
+    padding: 0 5px;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+  }
+  .topbar-rebuy-arrow:hover {
+    color: #fff;
+  }
+  .topbar-arrow-icon {
+    font-size: 8px;
+    transition: transform 0.18s;
+    display: inline-block;
+  }
+  .topbar-rebuy.open .topbar-arrow-icon {
+    transform: rotate(180deg);
+  }
+  /* 下拉面板(默认隐藏) */
+  .topbar-rebuy-dropdown {
+    position: absolute;
+    top: 24px;
+    right: 0;
+    background: rgba(20, 22, 30, 0.96);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 2px 0;
+    display: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    white-space: nowrap;
+  }
+  .topbar-rebuy.open .topbar-rebuy-dropdown {
+    display: block;
+    animation: buyinFadeIn 0.15s ease-out;
+  }
+  .topbar-dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: #fff;
+    cursor: pointer;
+    gap: 3px;
+  }
+  .topbar-dropdown-item:hover {
+    background: rgba(255,255,255,0.06);
+  }
+  /* ⭐ v2.18.6 自定义勾选框(代替"未启用/已启用"文字) */
+  .topbar-dropdown-checkbox {
+    width: 12px;
+    height: 12px;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 3px;
+    background: transparent;
+    position: relative;
+    flex-shrink: 0;
+    margin-left: 3px;
+  }
+  .topbar-dropdown-item.active .topbar-dropdown-checkbox {
+    background: var(--green-main);
+    border-color: var(--green-main);
+  }
+  .topbar-dropdown-item.active .topbar-dropdown-checkbox::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 0px;
+    width: 4px;
+    height: 7px;
+    border: solid #000;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  /* 余额不足时整个组件变红色提示 */
+  .topbar-rebuy.unaffordable .topbar-balance-value {
+    color: #ff8a8a;
+  }
+  .topbar-rebuy.unaffordable .topbar-rebuy-btn {
+    color: #ff8a8a;
   }
 
   /* 牌局信息表格 */
@@ -9258,7 +9912,7 @@
     </div>
 
     <!-- ============ 子页面：牌桌界面 ============ -->
-    <div class="page table-9seats poker-color4" id="page-table">
+    <div class="page table-9seats poker-color4 state-p1" id="page-table">
       <!-- 牌桌椭圆 -->
       <div class="table-ellipse">
         <div class="table-watermark">C</div>
@@ -9281,10 +9935,30 @@
             <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
           </svg>
         </div>
-        <!-- ⭐ v2.15 可存证按钮(占位:等设计师/AE 出透明 GIF 后,直接换成 <img>) -->
+        <!-- ⭐ v2.18 可存证按钮(占位:等设计师/AE 出透明 GIF 后,直接换成 <img>) -->
         <div class="evidence-box" id="evidence-box">
           <div class="ev-card-placeholder"></div>
           <div class="ev-label" id="ev-label">可存证</div>
+        </div>
+
+        <!-- ⭐ v2.18.6 子项 9:顶部余额+补码快捷入口(s1 和 s2 中间偏上) -->
+        <div class="topbar-rebuy" id="topbar-rebuy">
+          <button class="topbar-recharge-btn" id="topbar-recharge-btn" aria-label="充值">+</button>
+          <div class="topbar-balance">
+            <span class="topbar-balance-label">余额</span>
+            <span class="topbar-balance-value" id="topbar-balance-value">50,000</span>
+          </div>
+          <button class="topbar-rebuy-btn" id="topbar-rebuy-btn">补码</button>
+          <button class="topbar-rebuy-arrow" id="topbar-rebuy-arrow" aria-label="更多选项">
+            <span class="topbar-arrow-icon">▼</span>
+          </button>
+          <!-- 下拉面板(默认隐藏) -->
+          <div class="topbar-rebuy-dropdown" id="topbar-rebuy-dropdown">
+            <div class="topbar-dropdown-item" id="topbar-toggle-autorebuy">
+              <span>自动补码</span>
+              <div class="topbar-dropdown-checkbox" id="topbar-autorebuy-state"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -9321,14 +9995,16 @@
         </div>
       </div>
 
-      <!-- ⭐ 翻牌阶段(Flop)演示: 3 张公共牌 J♦ 7♣ K♥ -->
-      <div class="community-cards">
-        <div class="card red" data-suit="♦"><span class="rank">J</span><span class="suit">♦</span></div>
-        <div class="card black" data-suit="♣"><span class="rank">7</span><span class="suit">♣</span></div>
-        <div class="card red" data-suit="♥"><span class="rank">K</span><span class="suit">♥</span></div>
-        <div class="card black" data-suit="♠"><span class="rank">A</span><span class="suit">♠</span></div>
-        <div class="card red" data-suit="♦"><span class="rank">5</span><span class="suit">♦</span></div>
+      <!-- ⭐ v2.18.7 发牌动画 - 子项 1: 牌堆(4 张牌背错位叠放) -->
+      <div class="card-deck" id="card-deck">
+        <div class="deck-card"></div>
+        <div class="deck-card"></div>
+        <div class="deck-card"></div>
+        <div class="deck-card"></div>
       </div>
+
+      <!-- ⭐ v2.18.7 公共牌区: 由 JS 动态渲染(默认翻牌阶段 3 张演示) -->
+      <div class="community-cards" id="community-cards"></div>
 
       <!-- 自己(底部) - 乱凌 K♥ 10♦ ⭐ 翻牌阶段演示,还没摊牌,无牌型标签 -->
       <div class="my-seat">
@@ -9359,54 +10035,201 @@
           <span class="dev-header-toggle" id="dev-header-toggle">▼</span>
         </div>
         <div class="dev-body" id="dev-body">
-        <!-- 轮到我 4 态 -->
-        <div class="dev-group-title">轮到我</div>
-        <button class="dev-state-btn active" data-dev-state="p1">P1 加注</button>
-        <button class="dev-state-btn" data-dev-state="p2">P2 下注</button>
-        <button class="dev-state-btn" data-dev-state="p3">P3 过牌-加注</button>
-        <button class="dev-state-btn" data-dev-state="p4">P4 All-In跟</button>
-        <!-- 预选 4 态 -->
-        <div class="dev-group-title">预选</div>
-        <button class="dev-state-btn" data-dev-state="y1">Y1 跟注预选</button>
-        <button class="dev-state-btn" data-dev-state="y2">Y2 过牌预选</button>
-        <button class="dev-state-btn" data-dev-state="y3">Y3 过/弃预选</button>
-        <!-- 滑杆 2 态 -->
-        <div class="dev-group-title">滑杆</div>
-        <button class="dev-state-btn" data-dev-state="s1">S1 加注滑杆</button>
-        <button class="dev-state-btn" data-dev-state="s2">S2 下注滑杆</button>
-        <!-- 动作型 -->
-        <div class="dev-group-title">动作</div>
-        <button class="dev-state-btn" id="dev-sim-raise">模拟上家加注</button>
-        <button class="dev-state-btn" id="dev-acting-other">模拟他人行动</button>
-        <!-- ⭐ v2.18.6 座位人数测试快捷区 -->
-        <div class="dev-group-title">座位测试 7人桌</div>
-        <div class="dev-seat-row">
-          <button class="dev-seat-btn" data-dev-seats="1/7">1/7</button>
-          <button class="dev-seat-btn" data-dev-seats="2/7">2/7</button>
-          <button class="dev-seat-btn" data-dev-seats="3/7">3/7</button>
-          <button class="dev-seat-btn" data-dev-seats="4/7">4/7</button>
+        <!-- ⭐ v2.18.6 5 段折叠下拉(手风琴模式,同时只展开一段) -->
+        <!-- 段 1:轮到我 4 态 -->
+        <div class="dev-section open" data-dev-section="turn">
+          <div class="dev-section-header">
+            <span>轮到我</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <button class="dev-state-btn active" data-dev-state="p1">P1 加注</button>
+            <button class="dev-state-btn" data-dev-state="p2">P2 下注</button>
+            <button class="dev-state-btn" data-dev-state="p3">P3 过牌-加注</button>
+            <button class="dev-state-btn" data-dev-state="p4">P4 All-In跟</button>
+          </div>
         </div>
-        <div class="dev-seat-row">
-          <button class="dev-seat-btn" data-dev-seats="5/7">5/7</button>
-          <button class="dev-seat-btn" data-dev-seats="6/7">6/7</button>
-          <button class="dev-seat-btn" data-dev-seats="7/7">7/7</button>
+        <!-- 段 2:预选 -->
+        <div class="dev-section" data-dev-section="pre">
+          <div class="dev-section-header">
+            <span>预选</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <button class="dev-state-btn" data-dev-state="y1">Y1 跟注预选</button>
+            <button class="dev-state-btn" data-dev-state="y2">Y2 过牌预选</button>
+            <button class="dev-state-btn" data-dev-state="y3">Y3 过/弃预选</button>
+          </div>
         </div>
-        <div class="dev-group-title">座位测试 9人桌</div>
-        <div class="dev-seat-row">
-          <button class="dev-seat-btn" data-dev-seats="0/9">0/9</button>
-          <button class="dev-seat-btn" data-dev-seats="1/9">1/9</button>
-          <button class="dev-seat-btn" data-dev-seats="2/9">2/9</button>
-          <button class="dev-seat-btn" data-dev-seats="3/9">3/9</button>
+        <!-- 段 3:滑杆 -->
+        <div class="dev-section" data-dev-section="slider">
+          <div class="dev-section-header">
+            <span>滑杆</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <button class="dev-state-btn" data-dev-state="s1">S1 加注滑杆</button>
+            <button class="dev-state-btn" data-dev-state="s2">S2 下注滑杆</button>
+          </div>
         </div>
-        <div class="dev-seat-row">
-          <button class="dev-seat-btn" data-dev-seats="4/9">4/9</button>
-          <button class="dev-seat-btn" data-dev-seats="5/9">5/9</button>
-          <button class="dev-seat-btn" data-dev-seats="6/9">6/9</button>
-          <button class="dev-seat-btn" data-dev-seats="7/9">7/9</button>
+        <!-- 段 4:动作 -->
+        <div class="dev-section" data-dev-section="action">
+          <div class="dev-section-header">
+            <span>动作</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <button class="dev-state-btn" id="dev-sim-raise">模拟上家加注</button>
+            <button class="dev-state-btn" id="dev-acting-other">模拟他人行动</button>
+            <button class="dev-state-btn" id="dev-sim-rebuy">模拟手动补码</button>
+            <button class="dev-state-btn" id="dev-sim-lowbal">模拟余额不足</button>
+          </div>
         </div>
-        <div class="dev-seat-row">
-          <button class="dev-seat-btn" data-dev-seats="8/9">8/9</button>
-          <button class="dev-seat-btn" data-dev-seats="9/9">9/9</button>
+        <!-- 段 5:座位测试 7人桌 -->
+        <div class="dev-section" data-dev-section="seat7">
+          <div class="dev-section-header">
+            <span>座位测试 7人桌</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-dev-seats="1/7">1/7</button>
+              <button class="dev-seat-btn" data-dev-seats="2/7">2/7</button>
+              <button class="dev-seat-btn" data-dev-seats="3/7">3/7</button>
+              <button class="dev-seat-btn" data-dev-seats="4/7">4/7</button>
+            </div>
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-dev-seats="5/7">5/7</button>
+              <button class="dev-seat-btn" data-dev-seats="6/7">6/7</button>
+              <button class="dev-seat-btn" data-dev-seats="7/7">7/7</button>
+            </div>
+          </div>
+        </div>
+        <!-- 段 6:座位测试 9人桌 -->
+        <div class="dev-section" data-dev-section="seat9">
+          <div class="dev-section-header">
+            <span>座位测试 9人桌</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-dev-seats="0/9">0/9</button>
+              <button class="dev-seat-btn" data-dev-seats="1/9">1/9</button>
+              <button class="dev-seat-btn" data-dev-seats="2/9">2/9</button>
+              <button class="dev-seat-btn" data-dev-seats="3/9">3/9</button>
+            </div>
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-dev-seats="4/9">4/9</button>
+              <button class="dev-seat-btn" data-dev-seats="5/9">5/9</button>
+              <button class="dev-seat-btn" data-dev-seats="6/9">6/9</button>
+              <button class="dev-seat-btn" data-dev-seats="7/9">7/9</button>
+            </div>
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-dev-seats="8/9">8/9</button>
+              <button class="dev-seat-btn" data-dev-seats="9/9">9/9</button>
+            </div>
+          </div>
+        </div>
+        <!-- ⭐ v2.18.7 段 7:发牌动画(子项 6 DEV 按钮) -->
+        <div class="dev-section" data-dev-section="deal">
+          <div class="dev-section-header">
+            <span>发牌动画</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <!-- 单座位发牌 9 个 -->
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-deal-to="s1">→s1</button>
+              <button class="dev-seat-btn" data-deal-to="s2">→s2</button>
+              <button class="dev-seat-btn" data-deal-to="s3">→s3</button>
+              <button class="dev-seat-btn" data-deal-to="s4">→s4</button>
+            </div>
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-deal-to="s5">→s5</button>
+              <button class="dev-seat-btn" data-deal-to="s6">→s6</button>
+              <button class="dev-seat-btn" data-deal-to="s7">→s7</button>
+              <button class="dev-seat-btn" data-deal-to="s8">→s8</button>
+            </div>
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-deal-to="s9">→s9</button>
+              <button class="dev-seat-btn" data-deal-to="my-seat">→自己</button>
+            </div>
+            <!-- 组合动作 -->
+            <button class="dev-state-btn" id="dev-deal-all-once">全员各 1 张</button>
+            <button class="dev-state-btn" id="dev-deal-full">完整 2 圈(标准发牌)</button>
+            <!-- 速度档位 -->
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn dev-deal-speed-btn" data-deal-speed="slow">慢</button>
+              <button class="dev-seat-btn dev-deal-speed-btn" data-deal-speed="normal">标准</button>
+              <button class="dev-seat-btn dev-deal-speed-btn" data-deal-speed="fast">快</button>
+            </div>
+            <button class="dev-state-btn" id="dev-deal-clear">清掉飞行牌</button>
+            <button class="dev-state-btn" id="dev-deal-reset">重置牌堆</button>
+          </div>
+        </div>
+        <!-- ⭐ v2.18.7 段 8:公共牌切换(板块 A 子项 6 DEV 按钮) -->
+        <div class="dev-section" data-dev-section="board">
+          <div class="dev-section-header">
+            <span>公共牌切换</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <!-- 街况快速切换(无动画) -->
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-set-street="preflop">翻前0</button>
+              <button class="dev-seat-btn" data-set-street="flop">翻牌3</button>
+              <button class="dev-seat-btn" data-set-street="turn">转牌4</button>
+              <button class="dev-seat-btn" data-set-street="river">河牌5</button>
+            </div>
+            <!-- 带动画的发牌 -->
+            <button class="dev-state-btn" id="dev-deal-flop">发翻牌(动画)</button>
+            <button class="dev-state-btn" id="dev-deal-turn">发转牌(动画)</button>
+            <button class="dev-state-btn" id="dev-deal-river">发河牌(动画)</button>
+            <!-- 中牌高亮测试 -->
+            <button class="dev-state-btn" id="dev-highlight-winning">高亮中牌(示例:1,3,5)</button>
+            <button class="dev-state-btn" id="dev-clear-winning">清掉高亮</button>
+          </div>
+        </div>
+        <!-- ⭐ v2.18.7 段 9:完整手牌演示(板块 B 状态机串联) -->
+        <div class="dev-section" data-dev-section="handflow">
+          <div class="dev-section-header">
+            <span>完整手牌演示</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <button class="dev-state-btn" id="dev-flow-full">▶ 一键完整一手</button>
+            <button class="dev-state-btn" id="dev-flow-reset">重置到翻前</button>
+          </div>
+        </div>
+        <!-- ⭐ v2.18.7 段 10:筹码动画(板块 C) -->
+        <div class="dev-section" data-dev-section="chips">
+          <div class="dev-section-header">
+            <span>筹码动画</span>
+            <span class="dev-section-arrow">▼</span>
+          </div>
+          <div class="dev-section-body">
+            <!-- 单座位下注飞行 -->
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-chip-from="s1">s1→池</button>
+              <button class="dev-seat-btn" data-chip-from="s2">s2→池</button>
+              <button class="dev-seat-btn" data-chip-from="s3">s3→池</button>
+              <button class="dev-seat-btn" data-chip-from="s4">s4→池</button>
+            </div>
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-chip-from="s5">s5→池</button>
+              <button class="dev-seat-btn" data-chip-from="s6">s6→池</button>
+              <button class="dev-seat-btn" data-chip-from="s7">s7→池</button>
+              <button class="dev-seat-btn" data-chip-from="s8">s8→池</button>
+            </div>
+            <div class="dev-seat-row">
+              <button class="dev-seat-btn" data-chip-from="s9">s9→池</button>
+              <button class="dev-seat-btn" data-chip-from="my-seat">我→池</button>
+            </div>
+            <!-- 收筹码(全员→池)/ 派奖(池→赢家) -->
+            <button class="dev-state-btn" id="dev-chip-collect-all">收筹码(全员→池)</button>
+            <button class="dev-state-btn" id="dev-chip-award-s3">派奖(池→s3)</button>
+            <button class="dev-state-btn" id="dev-chip-award-my">派奖(池→我)</button>
+          </div>
         </div>
         </div>
       </div>
@@ -10124,6 +10947,90 @@
         </div>
       </div>
 
+      <!-- ⭐ v2.18.6 子项 9:手动补码弹窗(结构跟买入弹窗几乎一样,默认补到 100 大盲) -->
+      <div class="center-modal-mask" id="rebuy-modal-mask">
+        <div class="center-modal buyin-modal">
+          <div class="cm-header">
+            <span class="cm-title">补码</span>
+            <span class="cm-close" data-close-modal="rebuy-modal-mask">✕</span>
+          </div>
+          <div class="cm-body">
+            <!-- 余额行 -->
+            <div class="buyin-row">
+              <span class="buyin-label">钱包余额</span>
+              <span class="buyin-balance" id="rebuy-balance">50,000</span>
+            </div>
+            <!-- 当前筹码行 -->
+            <div class="buyin-row">
+              <span class="buyin-label">当前筹码</span>
+              <span class="buyin-blinds" id="rebuy-current-chips">0</span>
+            </div>
+            <!-- 盲注信息 -->
+            <div class="buyin-row">
+              <span class="buyin-label">盲注</span>
+              <span class="buyin-blinds" id="rebuy-blinds">0.5/1</span>
+            </div>
+            <!-- 金额滑杆 -->
+            <div class="buyin-amount-section">
+              <div class="buyin-amount-display">
+                <span class="buyin-amount-label">补码金额</span>
+                <span class="buyin-amount-meta">
+                  <span class="buyin-amount-value" id="rebuy-amount-value">100</span>
+                  <span class="buyin-amount-units">(<span id="rebuy-amount-units">1</span> 个买入)</span>
+                </span>
+              </div>
+              <div class="buyin-slider-track" id="rebuy-slider-track">
+                <div class="buyin-slider-fill" id="rebuy-slider-fill"></div>
+                <div class="buyin-slider-thumb" id="rebuy-slider-thumb"></div>
+              </div>
+              <div class="buyin-slider-scale">
+                <span><span id="rebuy-slider-min-units">1</span> 个</span>
+                <span><span id="rebuy-slider-max-units">50</span> 个</span>
+              </div>
+              <div class="buyin-hint" id="rebuy-hint">1 个买入 = 100 大盲</div>
+            </div>
+            <!-- 5 个快捷按钮 -->
+            <div class="buyin-quick-row">
+              <button class="buyin-quick-btn active" data-rebuy-buyins="1">1个</button>
+              <button class="buyin-quick-btn" data-rebuy-buyins="3">3个</button>
+              <button class="buyin-quick-btn" data-rebuy-buyins="5">5个</button>
+              <button class="buyin-quick-btn" data-rebuy-buyins="10">10个</button>
+              <button class="buyin-quick-btn" data-rebuy-buyins="max">最大</button>
+            </div>
+            <!-- 底部按钮 -->
+            <div class="buyin-footer">
+              <button class="buyin-btn buyin-btn-cancel" data-close-modal="rebuy-modal-mask">取消</button>
+              <button class="buyin-btn buyin-btn-confirm" id="rebuy-confirm-btn">补码</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.18.6 子项 9:余额不足留桌弹窗(筹码=0 且余额<1 个买入时触发,120 秒倒计时) -->
+      <div class="center-modal-mask" id="lowbal-modal-mask">
+        <div class="center-modal lowbal-modal">
+          <div class="cm-header">
+            <span class="cm-title">余额不足</span>
+            <span class="cm-close" data-close-modal="lowbal-modal-mask">✕</span>
+          </div>
+          <div class="cm-body">
+            <div class="lowbal-info">
+              <div class="lowbal-icon">⚠️</div>
+              <div class="lowbal-title">筹码已用完</div>
+              <div class="lowbal-desc">钱包余额不足 1 个买入</div>
+              <div class="lowbal-countdown">
+                座位保留 <span class="lowbal-timer" id="lowbal-timer">120</span> 秒
+              </div>
+              <div class="lowbal-hint">倒计时归零后自动离座</div>
+            </div>
+            <div class="buyin-footer">
+              <button class="buyin-btn buyin-btn-cancel" id="lowbal-leave-btn">离座</button>
+              <button class="buyin-btn buyin-btn-confirm" id="lowbal-recharge-btn">去充值</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ⭐ v2.18.6 子项 5:入局选择弹窗(坐下后立即弹) -->
       <div class="center-modal-mask" id="entry-modal-mask">
         <div class="center-modal entry-modal">
@@ -10147,6 +11054,31 @@
                 <div class="entry-option-desc" id="entry-post-desc">补一个大盲入局,下一手即开始</div>
               </div>
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.18.6 子项 6:离座确认弹窗 -->
+      <div class="center-modal-mask" id="leave-seat-mask">
+        <div class="center-modal leave-seat-modal">
+          <div class="cm-header">
+            <span class="cm-title">确认离座</span>
+            <span class="cm-close" data-close-modal="leave-seat-mask">✕</span>
+          </div>
+          <div class="cm-body">
+            <div class="leave-seat-info">
+              <div class="leave-seat-name">
+                <span id="leave-seat-player">玩家</span> 离开座位?
+              </div>
+              <div class="leave-seat-chips">
+                当前筹码 <span id="leave-seat-amount">0</span>
+              </div>
+              <div class="leave-seat-hint">离座后筹码自动带走</div>
+            </div>
+            <div class="leave-seat-footer">
+              <button class="buyin-btn buyin-btn-cancel" data-close-modal="leave-seat-mask">取消</button>
+              <button class="buyin-btn buyin-btn-confirm leave-seat-confirm" id="leave-seat-confirm-btn">离座</button>
+            </div>
           </div>
         </div>
       </div>
@@ -11595,6 +12527,8 @@
       const ratio = r.seats / total;
       const offset = (CIRC * (1 - ratio)).toFixed(1);
       const full = r.seats >= total ? ' full' : '';
+      // ⭐ v2.18.6 标记"游戏中":如果上次进过这个房间(出来又回到大厅)
+      const inGame = (window.lastVisitedRoom === r.name) ? '<span class="room-ingame-tag">游戏中</span>' : '';
       return `
         <div class="room-row">
           <div class="progress-ring">
@@ -11607,7 +12541,7 @@
             <div class="ring-time">${r.time}</div>
           </div>
           <div class="room-info">
-            <div class="room-name">${r.name}</div>
+            <div class="room-name"><span class="room-name-text">${r.name}</span>${inGame}</div>
             <div class="room-meta">${r.blinds} · ${r.type}</div>
             <div class="room-tags">
               <span class="insurance-tag">${SHIELD_SVG} 保险</span>
@@ -11629,6 +12563,8 @@
       row.addEventListener('click', () => {
         tableEntryFrom = 'game';
         currentTableRoom = filtered[idx];
+        // ⭐ v2.18.6 记录最后进入的房间,大厅返回时显示"游戏中"标识
+        window.lastVisitedRoom = filtered[idx].name;
         fillTableCenter(currentTableRoom);
         showSubPage('table');
       });
@@ -11814,13 +12750,14 @@
   // ⭐ v2.15 空座点击监听(事件委托,绑在牌桌容器上)
   // 真实业务:点空座 → 弹"坐下买入"弹窗 → 后端 /api/table/sit
   // ⭐ v2.18.6 子项 2:点空座 → 弹买入弹窗
+  // ⭐ v2.18.6 子项 6:点已坐头像 → 弹离座确认
   const pageTableEl = document.getElementById('page-table');
   if (pageTableEl) {
     pageTableEl.addEventListener('click', (e) => {
       // 找到被点击的座位
       const seat = e.target.closest('.seat');
       if (!seat) return;
-      // 满员/已坐玩家不响应
+      // 满员位置不响应
       if (seat.classList.contains('full')) {
         if (typeof showToast === 'function') showToast('该座位已满员');
         return;
@@ -11828,6 +12765,14 @@
       if (seat.classList.contains('empty')) {
         // 空座可坐 → 打开买入弹窗
         openBuyinModal(seat);
+        return;
+      }
+      // 已坐玩家 → 打开离座确认弹窗
+      // 只响应点击头像区域,避免误触下注筹码等其他元素
+      const seatAvatar = e.target.closest('.seat-avatar, .seat-name-chip, .seat-chips, .seat-cards-back');
+      if (seatAvatar) {
+        const seatId = seat.className.match(/s\d+/)?.[0];
+        if (seatId) openLeaveSeatModal(seatId);
       }
     });
   }
@@ -11901,6 +12846,10 @@
     buyinQuickBtns.forEach(b => {
       b.classList.toggle('active', b.dataset.buyins === String(buyinState.currentUnits));
     });
+
+    // ⭐ v2.18.6 子项 7:每次打开买入弹窗,自动补码勾选框默认重置为未勾
+    const autoRebuyCb = document.getElementById('buyin-autorebuy');
+    if (autoRebuyCb) autoRebuyCb.checked = false;
 
     buyinMask.classList.add('show');
   }
@@ -12095,11 +13044,15 @@
         : DEMO_PLAYER_POOL[Math.floor(Math.random() * DEMO_PLAYER_POOL.length)];
       // 新坐下的玩家:用买入金额作为筹码,无 action 标签(还没行动)
       // 真实业务:由后端推送 player:sit 事件,字段从服务端来
+      // ⭐ v2.18.6 子项 7:从买入弹窗勾选框读取自动补码状态
+      const autoRebuyCheckbox = document.getElementById('buyin-autorebuy');
+      const autoRebuyEnabled = !!(autoRebuyCheckbox && autoRebuyCheckbox.checked);
       const newPlayer = {
         name: picked.name,
         avatar: picked.avatar,
         chips: formatAmount(amount),
-        bet: 0
+        bet: 0,
+        autoRebuy: autoRebuyEnabled  // ⭐ 子项 7:自动补码状态
       };
       currentTableRoom.occupiedSeats[seatId] = newPlayer;
       // 已坐人数 +1(含乱凌仍然在 my-seat,所以 seats 也要 +1)
@@ -12108,6 +13061,8 @@
       if (typeof renderSeats === 'function') {
         renderSeats(currentTableRoom);
       }
+      // ⭐ v2.18.6 子项 9:刷新顶部余额显示(包括自动补码状态)
+      if (typeof refreshTopbarRebuy === 'function') refreshTopbarRebuy();
       // 关闭买入弹窗
       buyinMask.classList.remove('show');
       // ⭐ v2.18.6 子项 5:坐下后立即弹入局选择弹窗
@@ -12185,6 +13140,372 @@
       if (typeof showToast === 'function') {
         showToast(`已补 ${formatAmount(bbValue)} 大盲,下一手入局`);
       }
+    });
+  }
+
+  // ⭐ v2.18.6 子项 6:离座确认弹窗
+  // 真实业务:发送 /api/table/leave { seatId } → 后端校验 + 处理筹码归还
+  const leaveSeatMask = document.getElementById('leave-seat-mask');
+  const leavePlayerEl = document.getElementById('leave-seat-player');
+  const leaveAmountEl = document.getElementById('leave-seat-amount');
+  const leaveConfirmBtn = document.getElementById('leave-seat-confirm-btn');
+  let leavePendingSeat = null;
+
+  function openLeaveSeatModal(seatId) {
+    if (!leaveSeatMask || !currentTableRoom || !currentTableRoom.occupiedSeats) return;
+    const player = currentTableRoom.occupiedSeats[seatId];
+    if (!player) return;
+    leavePendingSeat = seatId;
+    if (leavePlayerEl) leavePlayerEl.textContent = player.name || '玩家';
+    if (leaveAmountEl) leaveAmountEl.textContent = player.chips || '0';
+    leaveSeatMask.classList.add('show');
+  }
+
+  if (leaveConfirmBtn) {
+    leaveConfirmBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!leavePendingSeat || !currentTableRoom || !currentTableRoom.occupiedSeats) {
+        leaveSeatMask.classList.remove('show');
+        return;
+      }
+      const player = currentTableRoom.occupiedSeats[leavePendingSeat];
+      const playerName = player ? player.name : '玩家';
+      // 删除该座位的玩家
+      delete currentTableRoom.occupiedSeats[leavePendingSeat];
+      // 已坐人数 -1(不能小于 0)
+      currentTableRoom.seats = Math.max(0, (currentTableRoom.seats || 0) - 1);
+      // 重新渲染
+      if (typeof renderSeats === 'function') {
+        renderSeats(currentTableRoom);
+      }
+      leaveSeatMask.classList.remove('show');
+      if (typeof showToast === 'function') {
+        showToast(`${playerName} 已离座`);
+      }
+      leavePendingSeat = null;
+    });
+  }
+
+  // ⭐ v2.18.6 子项 9:手动补码弹窗 + 余额不足留桌弹窗
+  // 业务规则:
+  //   手动补码:抽屉点"补码" → 滑杆默认 1 个买入(100大盲) → 余额够直接补,不够 toast 提示
+  //   余额不足:筹码=0 且余额<1 个买入时,120 秒倒计时,座位保留
+  // 真实业务:筹码扣减由"行动板块"触发,这里 DEV 按钮模拟
+
+  // ---- 手动补码弹窗 ----
+  const rebuyMask = document.getElementById('rebuy-modal-mask');
+  const rebuyValueEl = document.getElementById('rebuy-amount-value');
+  const rebuyUnitsEl = document.getElementById('rebuy-amount-units');
+  const rebuyMinUnitsEl = document.getElementById('rebuy-slider-min-units');
+  const rebuyMaxUnitsEl = document.getElementById('rebuy-slider-max-units');
+  const rebuyHint = document.getElementById('rebuy-hint');
+  const rebuyConfirm = document.getElementById('rebuy-confirm-btn');
+  const rebuyBalance = document.getElementById('rebuy-balance');
+  const rebuyBlindsEl = document.getElementById('rebuy-blinds');
+  const rebuyCurrentChipsEl = document.getElementById('rebuy-current-chips');
+  const rebuyTrack = document.getElementById('rebuy-slider-track');
+  const rebuyFill = document.getElementById('rebuy-slider-fill');
+  const rebuyThumb = document.getElementById('rebuy-slider-thumb');
+  const rebuyQuickBtns = document.querySelectorAll('[data-rebuy-buyins]');
+
+  let rebuyState = { bb: 1, perUnit: 100, maxUnits: 50, currentUnits: 1, targetSeatId: null };
+
+  function openRebuyModal() {
+    if (!rebuyMask) return;
+    // 用"最近坐下的玩家"作为补码对象(乱凌重构后改成乱凌自己)
+    const latest = getLatestSittingPlayer();
+    if (!latest) {
+      if (typeof showToast === 'function') showToast('当前没有坐下的玩家');
+      return;
+    }
+    const blindsStr = (currentTableRoom && currentTableRoom.blinds) || '0.5/1';
+    const bb = parseBigBlind(blindsStr);
+    const perUnit = bb * 100;
+    const roomMaxBuyins = (currentTableRoom && currentTableRoom.maxBuyins) || 100;
+    const affordableUnits = Math.floor(demoUserBalance / perUnit);
+    const maxUnits = Math.max(0, Math.min(roomMaxBuyins, affordableUnits));
+
+    if (maxUnits === 0) {
+      // 余额不够 1 个买入 → 触发余额不足弹窗
+      openLowbalModal();
+      return;
+    }
+
+    rebuyState = {
+      bb, perUnit, maxUnits,
+      currentUnits: Math.min(1, maxUnits),  // 默认 1 个
+      targetSeatId: latest.seatId
+    };
+
+    if (rebuyBalance) rebuyBalance.textContent = formatAmount(demoUserBalance);
+    if (rebuyBlindsEl) rebuyBlindsEl.textContent = blindsStr;
+    if (rebuyCurrentChipsEl) rebuyCurrentChipsEl.textContent = latest.player.chips || '0';
+    if (rebuyMinUnitsEl) rebuyMinUnitsEl.textContent = '1';
+    if (rebuyMaxUnitsEl) rebuyMaxUnitsEl.textContent = maxUnits;
+
+    renderRebuyTicks();
+    setRebuyUnits(rebuyState.currentUnits);
+    rebuyQuickBtns.forEach(b => {
+      b.classList.toggle('active', b.dataset.rebuyBuyins === '1');
+    });
+    rebuyMask.classList.add('show');
+  }
+
+  function renderRebuyTicks() {
+    if (!rebuyTrack) return;
+    rebuyTrack.querySelectorAll('.buyin-slider-tick').forEach(t => t.remove());
+    const { maxUnits, currentUnits } = rebuyState;
+    if (maxUnits <= 1 || maxUnits > 30) return;
+    for (let i = 1; i <= maxUnits; i++) {
+      const tick = document.createElement('div');
+      tick.className = 'buyin-slider-tick';
+      if (i <= currentUnits) tick.classList.add('passed');
+      const pct = ((i - 1) / (maxUnits - 1)) * 100;
+      tick.style.left = pct + '%';
+      rebuyTrack.appendChild(tick);
+    }
+  }
+
+  function setRebuyUnits(units) {
+    const { maxUnits, perUnit } = rebuyState;
+    units = Math.max(0, Math.min(maxUnits, Math.round(units)));
+    rebuyState.currentUnits = units;
+    const amount = units * perUnit;
+    if (rebuyValueEl) rebuyValueEl.textContent = formatAmount(amount);
+    if (rebuyUnitsEl) rebuyUnitsEl.textContent = units;
+    let pct = 0;
+    if (maxUnits >= 1) {
+      pct = maxUnits === 1 ? 100 : ((units - 1) / (maxUnits - 1)) * 100;
+      if (units === 0) pct = 0;
+    }
+    if (rebuyFill) rebuyFill.style.width = pct + '%';
+    if (rebuyThumb) rebuyThumb.style.left = pct + '%';
+    if (rebuyTrack) {
+      rebuyTrack.querySelectorAll('.buyin-slider-tick').forEach((t, idx) => {
+        t.classList.toggle('passed', (idx + 1) <= units);
+      });
+    }
+    if (rebuyHint && rebuyConfirm) {
+      if (units === 0) {
+        rebuyHint.textContent = '请选择补码个数';
+        rebuyHint.classList.add('error');
+        rebuyConfirm.classList.add('disabled');
+      } else {
+        rebuyHint.textContent = `补码 ${formatAmount(amount)} (1 个买入 = ${formatAmount(perUnit)})`;
+        rebuyHint.classList.remove('error');
+        rebuyConfirm.classList.remove('disabled');
+      }
+    }
+  }
+
+  // 滑杆拖动(rAF 节流)
+  let rebuyDrag = null, rebuyRafId = null, rebuyPendingUnits = null;
+  function applyRebuyUnits() {
+    rebuyRafId = null;
+    if (rebuyPendingUnits != null) {
+      setRebuyUnits(rebuyPendingUnits);
+      rebuyPendingUnits = null;
+      rebuyQuickBtns.forEach(b => b.classList.remove('active'));
+    }
+  }
+  function rebuyUpdateFromX(clientX) {
+    if (!rebuyTrack) return;
+    const { maxUnits } = rebuyState;
+    if (maxUnits === 0) return;
+    const rect = rebuyTrack.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    let targetUnits = maxUnits === 1 ? 1 : Math.round(1 + pct * (maxUnits - 1));
+    rebuyPendingUnits = targetUnits;
+    if (rebuyRafId == null) rebuyRafId = requestAnimationFrame(applyRebuyUnits);
+  }
+  function onRebuyStart(e) {
+    if (!rebuyTrack || rebuyState.maxUnits === 0) return;
+    rebuyDrag = true;
+    rebuyUpdateFromX(getEventX(e));
+    if (e.cancelable) e.preventDefault();
+    document.addEventListener('mousemove', onRebuyMove);
+    document.addEventListener('mouseup', onRebuyEnd);
+    document.addEventListener('touchmove', onRebuyMove, { passive: false });
+    document.addEventListener('touchend', onRebuyEnd);
+    document.addEventListener('touchcancel', onRebuyEnd);
+  }
+  function onRebuyMove(e) {
+    if (!rebuyDrag) return;
+    if (e.cancelable) e.preventDefault();
+    rebuyUpdateFromX(getEventX(e));
+  }
+  function onRebuyEnd() {
+    rebuyDrag = null;
+    document.removeEventListener('mousemove', onRebuyMove);
+    document.removeEventListener('mouseup', onRebuyEnd);
+    document.removeEventListener('touchmove', onRebuyMove);
+    document.removeEventListener('touchend', onRebuyEnd);
+    document.removeEventListener('touchcancel', onRebuyEnd);
+  }
+  if (rebuyTrack) {
+    rebuyTrack.addEventListener('mousedown', onRebuyStart);
+    rebuyTrack.addEventListener('touchstart', onRebuyStart, { passive: false });
+  }
+
+  // 快捷按钮
+  rebuyQuickBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = btn.dataset.rebuyBuyins;
+      let targetUnits = val === 'max' ? rebuyState.maxUnits : Math.min(parseInt(val, 10), rebuyState.maxUnits);
+      setRebuyUnits(targetUnits);
+      rebuyQuickBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // 补码确认
+  if (rebuyConfirm) {
+    rebuyConfirm.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (rebuyConfirm.classList.contains('disabled')) return;
+      const { currentUnits, perUnit, targetSeatId } = rebuyState;
+      const amount = currentUnits * perUnit;
+      if (!targetSeatId || !currentTableRoom || !currentTableRoom.occupiedSeats) {
+        rebuyMask.classList.remove('show');
+        return;
+      }
+      const player = currentTableRoom.occupiedSeats[targetSeatId];
+      if (player) {
+        // 加到当前筹码上
+        const oldChips = parseFloat(String(player.chips).replace(/,/g, '')) || 0;
+        player.chips = formatAmount(oldChips + amount);
+        // 余额扣减
+        demoUserBalance = Math.max(0, demoUserBalance - amount);
+        // 真实业务:发送 /api/table/rebuy { seatId, amount }
+      }
+      if (typeof renderSeats === 'function') renderSeats(currentTableRoom);
+      // ⭐ v2.18.6 子项 9:刷新顶部余额显示
+      if (typeof refreshTopbarRebuy === 'function') refreshTopbarRebuy();
+      rebuyMask.classList.remove('show');
+      if (typeof showToast === 'function') {
+        showToast(`已补码 ${formatAmount(amount)},筹码 ${player ? player.chips : ''}`);
+      }
+    });
+  }
+
+  // ---- 余额不足留桌弹窗 ----
+  const lowbalMask = document.getElementById('lowbal-modal-mask');
+  const lowbalTimerEl = document.getElementById('lowbal-timer');
+  const lowbalLeaveBtn = document.getElementById('lowbal-leave-btn');
+  const lowbalRechargeBtn = document.getElementById('lowbal-recharge-btn');
+  let lowbalCountdownId = null;
+  let lowbalRemaining = 120;
+  let lowbalTargetSeatId = null;
+
+  function openLowbalModal() {
+    if (!lowbalMask) return;
+    const latest = getLatestSittingPlayer();
+    lowbalTargetSeatId = latest ? latest.seatId : null;
+    lowbalRemaining = 120;
+    if (lowbalTimerEl) lowbalTimerEl.textContent = lowbalRemaining;
+    lowbalMask.classList.add('show');
+    // 启动倒计时
+    if (lowbalCountdownId) clearInterval(lowbalCountdownId);
+    lowbalCountdownId = setInterval(() => {
+      lowbalRemaining--;
+      if (lowbalTimerEl) lowbalTimerEl.textContent = lowbalRemaining;
+      if (lowbalRemaining <= 0) {
+        // 自动离座
+        clearInterval(lowbalCountdownId);
+        lowbalCountdownId = null;
+        autoLeaveSeatFromLowbal();
+      }
+    }, 1000);
+  }
+
+  function closeLowbalModal() {
+    lowbalMask.classList.remove('show');
+    if (lowbalCountdownId) {
+      clearInterval(lowbalCountdownId);
+      lowbalCountdownId = null;
+    }
+  }
+
+  function autoLeaveSeatFromLowbal() {
+    if (!lowbalTargetSeatId || !currentTableRoom || !currentTableRoom.occupiedSeats) {
+      closeLowbalModal();
+      return;
+    }
+    const player = currentTableRoom.occupiedSeats[lowbalTargetSeatId];
+    const playerName = player ? player.name : '玩家';
+    delete currentTableRoom.occupiedSeats[lowbalTargetSeatId];
+    currentTableRoom.seats = Math.max(0, (currentTableRoom.seats || 0) - 1);
+    if (typeof renderSeats === 'function') renderSeats(currentTableRoom);
+    closeLowbalModal();
+    if (typeof showToast === 'function') {
+      showToast(`${playerName} 倒计时归零自动离座`);
+    }
+  }
+
+  // 离座按钮
+  if (lowbalLeaveBtn) {
+    lowbalLeaveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      autoLeaveSeatFromLowbal();
+    });
+  }
+  // 去充值按钮:关闭弹窗 + 跳转充值页(座位保留,等用户充完回来)
+  if (lowbalRechargeBtn) {
+    lowbalRechargeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeLowbalModal();
+      // 记录来源,充值页返回时用
+      window.rechargeEntryFrom = 'table';
+      // 真实业务:跳充值页后,充值成功 → 弹补码弹窗
+      if (typeof showSubPage === 'function') {
+        showSubPage('recharge');
+      }
+    });
+  }
+  // 点蒙版关闭时也清倒计时
+  if (lowbalMask) {
+    lowbalMask.addEventListener('click', (e) => {
+      if (e.target === lowbalMask) closeLowbalModal();
+    });
+  }
+  // ✕ 关闭按钮也清倒计时(覆盖通用关闭机制)
+  const lowbalCloseBtn = lowbalMask ? lowbalMask.querySelector('.cm-close') : null;
+  if (lowbalCloseBtn) {
+    lowbalCloseBtn.addEventListener('click', () => {
+      if (lowbalCountdownId) {
+        clearInterval(lowbalCountdownId);
+        lowbalCountdownId = null;
+      }
+    });
+  }
+
+  // ---- DEV 按钮模拟触发 ----
+  const devSimRebuy = document.getElementById('dev-sim-rebuy');
+  if (devSimRebuy) {
+    devSimRebuy.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openRebuyModal();
+      devSimRebuy.classList.remove('flash');
+      void devSimRebuy.offsetWidth;
+      devSimRebuy.classList.add('flash');
+      setTimeout(() => devSimRebuy.classList.remove('flash'), 600);
+    });
+  }
+  const devSimLowbal = document.getElementById('dev-sim-lowbal');
+  if (devSimLowbal) {
+    devSimLowbal.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 临时把余额改成 0 模拟
+      const savedBalance = demoUserBalance;
+      demoUserBalance = 0;
+      openLowbalModal();
+      // 恢复余额(让用户能继续测试其他功能)
+      demoUserBalance = savedBalance;
+      devSimLowbal.classList.remove('flash');
+      void devSimLowbal.offsetWidth;
+      devSimLowbal.classList.add('flash');
+      setTimeout(() => devSimLowbal.classList.remove('flash'), 600);
     });
   }
 
@@ -12918,23 +14239,36 @@
       document.removeEventListener('touchmove', onDragMove);
       document.removeEventListener('touchend', onDragEnd);
       document.removeEventListener('touchcancel', onDragEnd);
-      // 如果发生了拖动:保存位置
+      // 如果发生了拖动:保存位置 + 设标记给 click 看
       if (wasMoved) {
         const left = parseFloat(devSwitcher.style.left) || 0;
         const top = parseFloat(devSwitcher.style.top) || 0;
         try {
           localStorage.setItem(STORAGE_KEY_POS, JSON.stringify({ left, top }));
         } catch (e) {}
-      } else {
-        // 没拖动 → 当作点击,切换折叠态
-        devSwitcher.classList.toggle('collapsed');
-        const collapsed = devSwitcher.classList.contains('collapsed');
-        try {
-          localStorage.setItem(STORAGE_KEY_COLLAPSED, collapsed ? '1' : '0');
-        } catch (e) {}
+        devHeader._justDragged = true;   // ⭐ 标记给 click 监听看,跳过这次 click
       }
+      // 注意:折叠态切换由 click 监听单独处理(避免 mousedown+click 双触发)
       dragState = null;
     }
+    // ⭐ v2.18.6 修复:折叠态切换改由 click 单独处理
+    // 之前在 onDragEnd 里 toggle,会跟浏览器后续触发的 click 事件互相干扰
+    devHeader.addEventListener('click', (e) => {
+      // 如果刚刚拖动过(dragState 还在 = move 事件触发的),不切换折叠
+      // dragState 在 onDragEnd 里设为 null,但 click 在 mouseup 后才触发,所以这里检查 wasMoved 不够
+      // 用一个临时标记:onDragEnd 里如果 wasMoved=true,记录一个标记给 click 看
+      if (devHeader._justDragged) {
+        devHeader._justDragged = false;
+        e.stopPropagation();
+        return;
+      }
+      e.stopPropagation();
+      devSwitcher.classList.toggle('collapsed');
+      const collapsed = devSwitcher.classList.contains('collapsed');
+      try {
+        localStorage.setItem(STORAGE_KEY_COLLAPSED, collapsed ? '1' : '0');
+      } catch (e2) {}
+    });
     devHeader.addEventListener('mousedown', onDragStart);
     devHeader.addEventListener('touchstart', onDragStart, { passive: true });
 
@@ -12950,6 +14284,34 @@
       const stateObserver = new MutationObserver(syncCurrentLabel);
       stateObserver.observe(actionArea, { attributes: true, attributeFilter: ['data-state'] });
     }
+
+    // ⭐ v2.18.6 分段折叠(手风琴模式:同时只展开一段)
+    const STORAGE_KEY_SECTION = 'aagame_dev_section';
+    const savedSection = localStorage.getItem(STORAGE_KEY_SECTION);
+    if (savedSection) {
+      // 恢复上次展开的段
+      devSwitcher.querySelectorAll('.dev-section').forEach(s => {
+        s.classList.toggle('open', s.dataset.devSection === savedSection);
+      });
+    }
+    // 段标题点击切换
+    devSwitcher.querySelectorAll('.dev-section-header').forEach(header => {
+      header.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const section = header.closest('.dev-section');
+        if (!section) return;
+        const isOpen = section.classList.contains('open');
+        // 关掉其他段
+        devSwitcher.querySelectorAll('.dev-section').forEach(s => s.classList.remove('open'));
+        // 点击的段:如果原本是关的就开,原本是开的就保持关(全收起)
+        if (!isOpen) {
+          section.classList.add('open');
+          try { localStorage.setItem(STORAGE_KEY_SECTION, section.dataset.devSection); } catch (e2) {}
+        } else {
+          try { localStorage.removeItem(STORAGE_KEY_SECTION); } catch (e2) {}
+        }
+      });
+    });
   }
 
   if (devSwitcher && actionArea) {
@@ -12965,6 +14327,14 @@
         //   Y1 跟注预选 / Y2 过牌预选 / Y3 过/弃预选 (没轮到我,无倒计时)
         //   S1 加注滑杆 / S2 下注滑杆 (二级弹窗)
         actionArea.dataset.state = newState;
+        // ⭐ v2.18.6 同步 page-table 的状态 class(用于 P4 隐藏 my-seat 下注气泡等)
+        const pageTableForState = document.getElementById('page-table');
+        if (pageTableForState) {
+          ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => {
+            pageTableForState.classList.remove('state-' + s);
+          });
+          pageTableForState.classList.add('state-' + newState);
+        }
         // 中央按钮文字:p2/s2=下注,其他=加注
         if (raiseBtnForBet) {
           raiseBtnForBet.dataset.action = (newState === 'p2' || newState === 's2') ? 'bet' : 'raise';
@@ -13012,6 +14382,432 @@
       if (typeof showToast === 'function') showToast(`轮到 ${target} 行动`);
     });
   }
+
+  // =====================================================================
+  // ⭐ v2.18.7 发牌动画 - 子项 6: DEV 按钮绑定
+  // ---------------------------------------------------------------------
+  // 段 7 "发牌动画" 段所有按钮的事件绑定
+  // 包含: 单座位发牌 / 全员各 1 张 / 完整 2 圈 / 清飞行牌 / 重置牌堆
+  // =====================================================================
+
+  // 单座位发牌按钮(10 个: s1~s9 + my-seat)
+  document.querySelectorAll('.dev-seat-btn[data-deal-to]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const seatId = btn.dataset.dealTo;
+      if (typeof dealOneCard === 'function') {
+        dealOneCard(seatId);
+      }
+      // 闪绿反馈
+      btn.classList.remove('flash');
+      void btn.offsetWidth;
+      btn.classList.add('flash');
+      setTimeout(() => btn.classList.remove('flash'), 600);
+    });
+  });
+
+  // 全员各 1 张:9 个座位按顺序连发,间隔 80ms(子项 3 没做完前先用这个测试)
+  // 顺序: SB 开始绕一圈(s1→s2→...→s9 简化版,真正的牌序由子项 3 按 D 位推算)
+  const devDealAllOnce = document.getElementById('dev-deal-all-once');
+  if (devDealAllOnce) {
+    devDealAllOnce.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      // 找当前有人的座位(过滤 empty/full)
+      const allSeats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
+        const seat = document.querySelector(`.seat.${id}`);
+        return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
+      });
+      // 加上自己
+      const order = [...allSeats, 'my-seat'];
+      // 间隔 80ms 触发(不等上一张落位,模拟"流畅发牌")
+      order.forEach((seatId, idx) => {
+        setTimeout(() => dealOneCard(seatId), idx * 80);
+      });
+      devDealAllOnce.classList.remove('flash');
+      void devDealAllOnce.offsetWidth;
+      devDealAllOnce.classList.add('flash');
+      setTimeout(() => devDealAllOnce.classList.remove('flash'), 600);
+    });
+  }
+
+  // 完整 2 圈(标准发牌):子项 3 实现后接入,目前先占位调用全员 × 2
+  const devDealFull = document.getElementById('dev-deal-full');
+  if (devDealFull) {
+    devDealFull.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      // 子项 3 完成后会改成调用 window.dealHoleCards()(完整带 D 位推算的标准发牌)
+      // 目前占位:全员 1 张 → 等 1 秒 → 全员再 1 张
+      if (typeof window.dealHoleCards === 'function') {
+        // 子项 3 完成,走真实流程
+        window.dealHoleCards();
+      } else {
+        // 子项 3 未完成,临时简化版
+        const allSeats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
+          const seat = document.querySelector(`.seat.${id}`);
+          return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
+        });
+        const order = [...allSeats, 'my-seat'];
+        // 第一圈
+        order.forEach((seatId, idx) => {
+          setTimeout(() => dealOneCard(seatId), idx * 80);
+        });
+        // 第二圈(延迟到第一圈大致结束)
+        const round2Start = order.length * 80 + 200;
+        order.forEach((seatId, idx) => {
+          setTimeout(() => dealOneCard(seatId), round2Start + idx * 80);
+        });
+      }
+      devDealFull.classList.remove('flash');
+      void devDealFull.offsetWidth;
+      devDealFull.classList.add('flash');
+      setTimeout(() => devDealFull.classList.remove('flash'), 600);
+    });
+  }
+
+  // 清掉所有飞行牌
+  const devDealClear = document.getElementById('dev-deal-clear');
+  if (devDealClear) {
+    devDealClear.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof window.clearFlyingCards === 'function') window.clearFlyingCards();
+      devDealClear.classList.remove('flash');
+      void devDealClear.offsetWidth;
+      devDealClear.classList.add('flash');
+      setTimeout(() => devDealClear.classList.remove('flash'), 600);
+    });
+  }
+
+  // 重置牌堆:清飞行牌 + 牌堆 opacity 恢复
+  const devDealReset = document.getElementById('dev-deal-reset');
+  if (devDealReset) {
+    devDealReset.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof window.clearFlyingCards === 'function') window.clearFlyingCards();
+      const deck = document.getElementById('card-deck');
+      if (deck) deck.classList.remove('dealing-done');
+      devDealReset.classList.remove('flash');
+      void devDealReset.offsetWidth;
+      devDealReset.classList.add('flash');
+      setTimeout(() => devDealReset.classList.remove('flash'), 600);
+    });
+  }
+
+  // ⭐ 子项 5: 速度档位按钮(slow/normal/fast)
+  document.querySelectorAll('.dev-deal-speed-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const speed = btn.dataset.dealSpeed;
+      if (typeof window.setDealSpeed === 'function') {
+        window.setDealSpeed(speed);
+      }
+    });
+  });
+  // 初始化:把当前档位的按钮高亮
+  (function initDealSpeedBtn() {
+    const cur = window.DEAL_SPEED || 'normal';
+    document.querySelectorAll('.dev-deal-speed-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.dealSpeed === cur);
+    });
+  })();
+
+  // =====================================================================
+  // ⭐ v2.18.7 板块 A: 公共牌切换 DEV 按钮(子项 6)
+  // =====================================================================
+
+  // 街况快速切换(无动画)
+  document.querySelectorAll('.dev-seat-btn[data-set-street]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const street = btn.dataset.setStreet;
+      if (typeof window.setStreet === 'function') window.setStreet(street);
+      btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+      setTimeout(() => btn.classList.remove('flash'), 600);
+    });
+  });
+  // 带动画的发牌
+  const devDealFlop = document.getElementById('dev-deal-flop');
+  if (devDealFlop) devDealFlop.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (typeof window.dealFlop === 'function') await window.dealFlop();
+    devDealFlop.classList.remove('flash'); void devDealFlop.offsetWidth; devDealFlop.classList.add('flash');
+    setTimeout(() => devDealFlop.classList.remove('flash'), 600);
+  });
+  const devDealTurn = document.getElementById('dev-deal-turn');
+  if (devDealTurn) devDealTurn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (typeof window.dealTurn === 'function') await window.dealTurn();
+    devDealTurn.classList.remove('flash'); void devDealTurn.offsetWidth; devDealTurn.classList.add('flash');
+    setTimeout(() => devDealTurn.classList.remove('flash'), 600);
+  });
+  const devDealRiver = document.getElementById('dev-deal-river');
+  if (devDealRiver) devDealRiver.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (typeof window.dealRiver === 'function') await window.dealRiver();
+    devDealRiver.classList.remove('flash'); void devDealRiver.offsetWidth; devDealRiver.classList.add('flash');
+    setTimeout(() => devDealRiver.classList.remove('flash'), 600);
+  });
+  // 中牌高亮
+  const devHighlightWinning = document.getElementById('dev-highlight-winning');
+  if (devHighlightWinning) devHighlightWinning.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof window.highlightWinningCards === 'function') {
+      window.highlightWinningCards([0, 2, 4]);  // 示例:第 1/3/5 张高亮
+    }
+    devHighlightWinning.classList.remove('flash'); void devHighlightWinning.offsetWidth; devHighlightWinning.classList.add('flash');
+    setTimeout(() => devHighlightWinning.classList.remove('flash'), 600);
+  });
+  const devClearWinning = document.getElementById('dev-clear-winning');
+  if (devClearWinning) devClearWinning.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof window.clearWinningCards === 'function') window.clearWinningCards();
+    devClearWinning.classList.remove('flash'); void devClearWinning.offsetWidth; devClearWinning.classList.add('flash');
+    setTimeout(() => devClearWinning.classList.remove('flash'), 600);
+  });
+
+  // =====================================================================
+  // ⭐ v2.18.7 板块 C: 筹码动画
+  // ---------------------------------------------------------------------
+  // 接口:
+  //   window.flyChipToPot(seatId)        // 单座位下注筹码 → 中央底池
+  //   window.collectChipsToPot()         // 全员下注筹码归拢 → 底池(每个 80ms 间隔)
+  //   window.awardChipsToWinner(seatId)  // 底池筹码 → 赢家(金色,带发光)
+  // =====================================================================
+
+  // 飞行筹码原子动画:从起点飞到终点
+  function flyChipBase(startX, startY, endX, endY, opts = {}) {
+    return new Promise(resolve => {
+      const tableArea = document.querySelector('.table-area');
+      if (!tableArea) { resolve(); return; }
+      const chip = document.createElement('div');
+      chip.className = 'flying-chip' + (opts.blue ? ' blue' : '') + (opts.gold ? ' gold' : '');
+      chip.style.left = startX + 'px';
+      chip.style.top = startY + 'px';
+      chip.style.transform = 'translate(0,0)';
+      tableArea.appendChild(chip);
+      void chip.offsetWidth;
+      chip.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
+      setTimeout(() => chip.classList.add('arrived'), 350);
+      setTimeout(() => { chip.remove(); resolve(); }, 600);
+    });
+  }
+
+  // 计算座位下注块/头像中心相对 table-area 的坐标
+  function getElementCenterInTable(el) {
+    const tableArea = document.querySelector('.table-area');
+    if (!tableArea || !el) return null;
+    const tableRect = tableArea.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const scale = tableRect.width / tableArea.offsetWidth || 1;
+    return {
+      x: (elRect.left - tableRect.left) / scale + (elRect.width / scale) / 2 - 12,  // 12 = 筹码 24 一半
+      y: (elRect.top  - tableRect.top ) / scale + (elRect.height / scale) / 2 - 12
+    };
+  }
+
+  // 单座位下注筹码飞向底池
+  function flyChipToPot(seatId) {
+    // 起点:座位下注块(.seat-bet),没有就用座位头像
+    let startEl;
+    if (seatId === 'my-seat') {
+      startEl = document.querySelector('.my-seat .seat-bet') || document.querySelector('.my-seat .seat-avatar');
+    } else {
+      startEl = document.querySelector(`.seat.${seatId} .seat-bet`) || document.querySelector(`.seat.${seatId} .seat-avatar`);
+    }
+    // 终点:底池(table-center 的 pot-chips)
+    const potEl = document.querySelector('.pot-chips') || document.querySelector('.table-center');
+    if (!startEl || !potEl) return Promise.resolve();
+    const start = getElementCenterInTable(startEl);
+    const end = getElementCenterInTable(potEl);
+    if (!start || !end) return Promise.resolve();
+    // 红蓝两片错开 60ms,营造"叠筹码"感
+    flyChipBase(start.x, start.y, end.x, end.y);
+    setTimeout(() => flyChipBase(start.x + 4, start.y + 2, end.x, end.y, { blue: true }), 60);
+    return new Promise(res => setTimeout(res, 420));
+  }
+  window.flyChipToPot = flyChipToPot;
+
+  // 全员下注筹码归拢到底池
+  function collectChipsToPot() {
+    return new Promise(async (resolve) => {
+      const seats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
+        const seat = document.querySelector(`.seat.${id}`);
+        return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
+      });
+      seats.push('my-seat');
+      // 只对有下注的座位飞(简化:只要有 .seat-bet 就飞)
+      let lastDelay = 0;
+      seats.forEach((seatId, idx) => {
+        const hasBet = (seatId === 'my-seat')
+          ? document.querySelector('.my-seat .seat-bet')
+          : document.querySelector(`.seat.${seatId} .seat-bet`);
+        if (!hasBet) return;
+        lastDelay = idx * 80;
+        setTimeout(() => flyChipToPot(seatId), lastDelay);
+      });
+      setTimeout(resolve, lastDelay + 500);
+    });
+  }
+  window.collectChipsToPot = collectChipsToPot;
+
+  // 派奖:底池筹码飞向赢家
+  function awardChipsToWinner(seatId) {
+    return new Promise(async (resolve) => {
+      const potEl = document.querySelector('.pot-chips') || document.querySelector('.table-center');
+      let endEl;
+      if (seatId === 'my-seat') {
+        endEl = document.querySelector('.my-seat .seat-avatar') || document.querySelector('.my-seat');
+      } else {
+        endEl = document.querySelector(`.seat.${seatId} .seat-avatar`) || document.querySelector(`.seat.${seatId}`);
+      }
+      if (!potEl || !endEl) { resolve(); return; }
+      const start = getElementCenterInTable(potEl);
+      const end = getElementCenterInTable(endEl);
+      if (!start || !end) { resolve(); return; }
+      // 4 颗金色筹码连飞(节奏 80ms)
+      for (let i = 0; i < 4; i++) {
+        setTimeout(() => {
+          flyChipBase(start.x + (i % 2) * 4, start.y + (i % 2) * 2, end.x, end.y, { gold: true });
+        }, i * 80);
+      }
+      setTimeout(resolve, 4 * 80 + 500);
+    });
+  }
+  window.awardChipsToWinner = awardChipsToWinner;
+
+  // 板块 C DEV 按钮
+  document.querySelectorAll('.dev-seat-btn[data-chip-from]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const seatId = btn.dataset.chipFrom;
+      if (typeof window.flyChipToPot === 'function') window.flyChipToPot(seatId);
+      btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+      setTimeout(() => btn.classList.remove('flash'), 600);
+    });
+  });
+  const devChipCollectAll = document.getElementById('dev-chip-collect-all');
+  if (devChipCollectAll) devChipCollectAll.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof window.collectChipsToPot === 'function') window.collectChipsToPot();
+    devChipCollectAll.classList.remove('flash'); void devChipCollectAll.offsetWidth; devChipCollectAll.classList.add('flash');
+    setTimeout(() => devChipCollectAll.classList.remove('flash'), 600);
+  });
+  const devChipAwardS3 = document.getElementById('dev-chip-award-s3');
+  if (devChipAwardS3) devChipAwardS3.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof window.awardChipsToWinner === 'function') window.awardChipsToWinner('s3');
+    devChipAwardS3.classList.remove('flash'); void devChipAwardS3.offsetWidth; devChipAwardS3.classList.add('flash');
+    setTimeout(() => devChipAwardS3.classList.remove('flash'), 600);
+  });
+  const devChipAwardMy = document.getElementById('dev-chip-award-my');
+  if (devChipAwardMy) devChipAwardMy.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof window.awardChipsToWinner === 'function') window.awardChipsToWinner('my-seat');
+    devChipAwardMy.classList.remove('flash'); void devChipAwardMy.offsetWidth; devChipAwardMy.classList.add('flash');
+    setTimeout(() => devChipAwardMy.classList.remove('flash'), 600);
+  });
+
+  // =====================================================================
+  // ⭐ v2.18.7 板块 B: 状态机 JS 全链路渲染(一键完整一手)
+  // ---------------------------------------------------------------------
+  // 接口: window.runFullHand()
+  //   流程:
+  //   1. 重置(回到翻前) → 牌堆满 / 公共牌 0 张 / 飞行牌清空
+  //   2. 发底牌(dealHoleCards) → 等翻面完成
+  //   3. dealFlop → 等 600ms(模拟翻前行动轮)
+  //   4. dealTurn → 等 600ms(模拟翻牌行动轮)
+  //   5. dealRiver → 等 600ms(模拟转牌行动轮)
+  //   6. 高亮中牌(示例 [1,3]) + 派奖到 s3 + 收筹码到 s3
+  //
+  // 真实业务:WebSocket 推送 street:flop/turn/river/showdown 事件触发对应步骤
+  // 现阶段:DEV 按钮一键演示串联效果
+  // =====================================================================
+
+  async function runFullHand() {
+    // 1. 重置
+    document.querySelectorAll('.flying-card').forEach(el => el.remove());
+    document.querySelectorAll('.flying-chip').forEach(el => el.remove());
+    document.querySelectorAll('.burned-card').forEach(el => el.remove());
+    if (typeof window.clearWinningCards === 'function') window.clearWinningCards();
+    window.currentStreet = 'preflop';
+    if (typeof window.renderBoard === 'function') window.renderBoard();
+    const deck = document.getElementById('card-deck');
+    if (deck) {
+      deck.classList.remove('dealing-done');
+      deck.removeAttribute('data-cards-left');
+    }
+    await new Promise(r => setTimeout(r, 300));
+
+    // 2. 发底牌(标准 2 圈)
+    if (typeof window.dealHoleCards === 'function') {
+      await window.dealHoleCards();
+    }
+    await new Promise(r => setTimeout(r, 400));
+
+    // 3. Flop
+    if (typeof window.dealFlop === 'function') await window.dealFlop();
+    await new Promise(r => setTimeout(r, 600));
+
+    // 4. Turn
+    if (typeof window.dealTurn === 'function') await window.dealTurn();
+    await new Promise(r => setTimeout(r, 600));
+
+    // 5. River
+    if (typeof window.dealRiver === 'function') await window.dealRiver();
+    await new Promise(r => setTimeout(r, 600));
+
+    // 6. 中牌高亮 + 派奖
+    if (typeof window.highlightWinningCards === 'function') {
+      window.highlightWinningCards([1, 3]);  // 示例
+    }
+    await new Promise(r => setTimeout(r, 400));
+    if (typeof window.collectChipsToPot === 'function') {
+      await window.collectChipsToPot();
+    }
+    await new Promise(r => setTimeout(r, 200));
+    if (typeof window.awardChipsToWinner === 'function') {
+      await window.awardChipsToWinner('s3');  // 示例:s3 赢
+    }
+  }
+  window.runFullHand = runFullHand;
+
+  // 重置到翻前
+  function resetToPreflop() {
+    document.querySelectorAll('.flying-card').forEach(el => el.remove());
+    document.querySelectorAll('.flying-chip').forEach(el => el.remove());
+    document.querySelectorAll('.burned-card').forEach(el => el.remove());
+    if (typeof window.clearWinningCards === 'function') window.clearWinningCards();
+    window.currentStreet = 'preflop';
+    if (typeof window.renderBoard === 'function') window.renderBoard();
+    const deck = document.getElementById('card-deck');
+    if (deck) {
+      deck.classList.remove('dealing-done');
+      deck.removeAttribute('data-cards-left');
+    }
+    // 恢复 seat-cards-back 和 my-cards 显示
+    document.querySelectorAll('.seat-cards-back.dealing').forEach(el => el.classList.remove('dealing'));
+    document.querySelectorAll('.my-cards.dealing').forEach(el => el.classList.remove('dealing'));
+    document.querySelectorAll('.my-cards.flip-pending').forEach(el => {
+      el.classList.remove('flip-pending');
+      el.classList.remove('flipping');
+    });
+  }
+  window.resetToPreflop = resetToPreflop;
+
+  // 板块 B DEV 按钮
+  const devFlowFull = document.getElementById('dev-flow-full');
+  if (devFlowFull) devFlowFull.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (typeof window.runFullHand === 'function') await window.runFullHand();
+    devFlowFull.classList.remove('flash'); void devFlowFull.offsetWidth; devFlowFull.classList.add('flash');
+    setTimeout(() => devFlowFull.classList.remove('flash'), 600);
+  });
+  const devFlowReset = document.getElementById('dev-flow-reset');
+  if (devFlowReset) devFlowReset.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof window.resetToPreflop === 'function') window.resetToPreflop();
+    devFlowReset.classList.remove('flash'); void devFlowReset.offsetWidth; devFlowReset.classList.add('flash');
+    setTimeout(() => devFlowReset.classList.remove('flash'), 600);
+  });
 
   // ⭐ v2.18.6 座位人数测试快捷区(DEV 用,真实业务删)
   // 点击 X/Y 按钮 → 修改 currentTableRoom 的 seats/maxSeats → 重新渲染座位
@@ -13108,6 +14904,504 @@
   }
   // 暴露到 window 供 DEV 测试
   window.setActingSeat = setActingSeat;
+
+  // =====================================================================
+  // ⭐ v2.18.7 发牌动画 - 子项 5: 发牌速度档位
+  // ---------------------------------------------------------------------
+  // 三档速度: slow / normal / fast,影响飞行时长和发牌间隔
+  // 全局变量 window.DEAL_SPEED 存当前档位,localStorage 持久化
+  // dealOneCard 和 dealHoleCards 自动读这个变量算时长
+  // =====================================================================
+  const DEAL_SPEED_PROFILES = {
+    slow:   { flyDuration: 350, landBounce: 168, interval: 140 },
+    normal: { flyDuration: 250, landBounce: 120, interval: 100 },
+    fast:   { flyDuration: 150, landBounce: 72,  interval: 60  }
+  };
+  // 从 localStorage 读初始档位(默认 normal)
+  window.DEAL_SPEED = localStorage.getItem('aagame_deal_speed') || 'normal';
+  if (!DEAL_SPEED_PROFILES[window.DEAL_SPEED]) window.DEAL_SPEED = 'normal';
+  function getDealSpeedProfile() {
+    return DEAL_SPEED_PROFILES[window.DEAL_SPEED] || DEAL_SPEED_PROFILES.normal;
+  }
+  window.setDealSpeed = function(speed) {
+    if (!DEAL_SPEED_PROFILES[speed]) {
+      console.warn('[setDealSpeed] 未知档位:', speed);
+      return;
+    }
+    window.DEAL_SPEED = speed;
+    localStorage.setItem('aagame_deal_speed', speed);
+    // 同步 DEV 按钮选中态
+    document.querySelectorAll('.dev-deal-speed-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.dealSpeed === speed);
+    });
+    if (typeof showToast === 'function') showToast(`发牌速度: ${speed}`);
+  };
+
+  // =====================================================================
+  // ⭐ v2.18.7 发牌动画 - 子项 2: 单张牌飞行原子动画
+  // ---------------------------------------------------------------------
+  // 接口: window.dealOneCard(seatId)
+  //   seatId: 's1' ~ 's9' 或 'my-seat'
+  //   返回 Promise,飞行+落位动画全部结束 resolve
+  //
+  // 实现思路:
+  //   1. 在牌桌容器(.table-area)内创建一个 .flying-card 元素
+  //   2. 用 getBoundingClientRect() 算出牌堆中心 → 座位手牌位置的相对位移
+  //      (适配 transform: scale 自适应缩放)
+  //   3. 飞行牌起始 left/top 用牌堆中心位置(绝对定位)
+  //   4. 触发 transform 跑到目标位置(transition 自动跑 250ms)
+  //   5. 250ms 后加 .landed 弹一下,370ms 后整体 resolve
+  //
+  // 备注:
+  //   - 落位后牌"留在"目标位置(不消失),供后续子项 3 序列发牌串接
+  //   - 子项 3 完成后会做"清理"(发牌完毕 → 飞行牌全部移除,替换成 seat-cards-back)
+  //   - 当前子项 2 阶段先保留落位牌,方便用 DEV 测试看效果
+  // =====================================================================
+
+  function dealOneCard(seatId) {
+    return new Promise((resolve) => {
+      // ⭐ 子项 5: 读取当前速度档位
+      const speed = getDealSpeedProfile();
+      const flyDuration = speed.flyDuration;
+      const landBounce = speed.landBounce;
+
+      const tableArea = document.querySelector('.table-area');
+      const deckEl = document.getElementById('card-deck');
+      if (!tableArea || !deckEl) {
+        console.warn('[dealOneCard] table-area 或 card-deck 不存在');
+        resolve();
+        return;
+      }
+
+      // 找目标座位的"落牌点":
+      // - my-seat: 用 .my-cards 区作目标
+      // - 其他座位: 用 .seat-cards-back(已锁的牌位置)
+      let targetEl;
+      if (seatId === 'my-seat') {
+        targetEl = document.querySelector('.my-seat .my-cards');
+      } else {
+        // 优先用 seat-cards-back,如果没有(座位空着没发牌),用座位头像位置
+        targetEl = document.querySelector(`.seat.${seatId} .seat-cards-back`)
+                || document.querySelector(`.seat.${seatId} .seat-avatar`);
+      }
+      if (!targetEl) {
+        console.warn(`[dealOneCard] 找不到座位 ${seatId} 的目标位置`);
+        resolve();
+        return;
+      }
+
+      // 用 getBoundingClientRect 算位移(适配 scale 自适应)
+      const deckRect = deckEl.getBoundingClientRect();
+      const tableRect = tableArea.getBoundingClientRect();
+      const targetRect = targetEl.getBoundingClientRect();
+
+      // 起始位置:牌堆中心,相对 tableArea 左上角
+      // 注意:.table-area 用 transform: scale,getBoundingClientRect 返回缩放后尺寸
+      // 用比例换算回原始坐标系
+      const tableScale = tableRect.width / tableArea.offsetWidth || 1;
+      const startX = (deckRect.left - tableRect.left) / tableScale + (deckRect.width / tableScale) / 2 - 16;  // 16 = 飞行牌宽 32 的一半
+      const startY = (deckRect.top  - tableRect.top ) / tableScale + (deckRect.height / tableScale) / 2 - 22; // 22 = 飞行牌高 44 的一半
+      const endX   = (targetRect.left - tableRect.left) / tableScale + (targetRect.width / tableScale) / 2 - 16;
+      const endY   = (targetRect.top  - tableRect.top ) / tableScale + (targetRect.height / tableScale) / 2 - 22;
+
+      const dx = endX - startX;
+      const dy = endY - startY;
+
+      // 创建飞行牌
+      const card = document.createElement('div');
+      card.className = 'flying-card';
+      card.style.left = startX + 'px';
+      card.style.top  = startY + 'px';
+      // ⭐ 子项 5: 用速度档位的 flyDuration 动态设置 transition
+      card.style.transition = `transform ${flyDuration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+      // 初始 transform 已经在 CSS 里设了 translate(0,0) rotate(-180deg) scale(0.7)
+      tableArea.appendChild(card);
+
+      // 强制 reflow,然后触发 transition
+      void card.offsetWidth;
+      card.style.transform = `translate(${dx}px, ${dy}px) rotate(0deg) scale(1)`;
+
+      // flyDuration 后落位 → 加 landed 弹一下
+      setTimeout(() => {
+        card.classList.add('landed');
+      }, flyDuration);
+
+      // flyDuration + landBounce 后总动画结束 → resolve
+      setTimeout(() => {
+        resolve(card);  // 把飞行牌元素也返回,方便子项 3 后续清理
+      }, flyDuration + landBounce);
+    });
+  }
+  window.dealOneCard = dealOneCard;
+
+  // DEV 辅助:一键清掉所有飞行牌(子项 2 阶段测试用,子项 3 会接管清理)
+  window.clearFlyingCards = function() {
+    document.querySelectorAll('.flying-card').forEach(el => el.remove());
+  };
+
+  // =====================================================================
+  // ⭐ v2.18.7 发牌动画 - 子项 3: 底牌发牌序列(标准德州 2 圈)
+  // ---------------------------------------------------------------------
+  // 接口: window.dealHoleCards(options?)
+  //   options.dealerSeat: D 位座位 ID(默认 's5')
+  //   options.interval: 每张牌间隔 ms(默认 100)
+  //   返回 Promise,所有牌发完 resolve
+  //
+  // 标准规则:
+  //   1. 从 D 位的下一个玩家(SB)开始,逆时针绕一圈每人 1 张
+  //   2. 同样起点同样方向再绕一圈,每人发第 2 张
+  //   3. 间隔 100ms,不等上一张落位(流畅感)
+  //   4. 牌堆视觉同步减少(4→3→2→1→0,简化为 data-cards-left)
+  //
+  // 生命周期:
+  //   - 发牌前: 所有座位的 .seat-cards-back 加 .dealing 类隐藏现有牌背
+  //            所有 .my-cards 加 .dealing 隐藏自己手牌
+  //            清掉所有残留飞行牌
+  //   - 发牌中: 飞行牌一张张飞出
+  //   - 发牌后: 移除 .dealing 类(牌背出现) + 清飞行牌(接力)
+  //            牌堆加 .dealing-done 类淡出
+  //
+  // 视角顺序简化:
+  //   目前阶段按 s1→s2→s3→s4→s5→s6→s7→s8→s9→my-seat 当作"逆时针"
+  //   真实业务: 行动板块做 D 位坐标映射时会精细化
+  // =====================================================================
+
+  // 9 人桌的"绕桌顺序"(简化版,真实业务从 D 位推算)
+  const SEAT_ORDER_9 = ['s1','s2','s3','s4','s5','s6','s7','s8','s9','my-seat'];
+
+  function dealHoleCards(options = {}) {
+    return new Promise(async (resolve) => {
+      const dealerSeat = options.dealerSeat || 's5';
+      // ⭐ 子项 5: interval 默认从速度档位读
+      const interval = options.interval || getDealSpeedProfile().interval;
+      // 算总时长时用的单张动画时长(飞行+弹一下)
+      const singleCardDuration = getDealSpeedProfile().flyDuration + getDealSpeedProfile().landBounce;
+
+      // 1. 找当前有人的座位(过滤 empty/full)
+      const activeSeats = SEAT_ORDER_9.filter(id => {
+        if (id === 'my-seat') {
+          const my = document.querySelector('.my-seat');
+          return my && my.style.display !== 'none';
+        }
+        const seat = document.querySelector(`.seat.${id}`);
+        return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
+      });
+      if (activeSeats.length === 0) {
+        console.warn('[dealHoleCards] 没有可发牌的座位');
+        resolve();
+        return;
+      }
+
+      // 2. 算起始位置: D 位的"下一个"玩家(SB)
+      // 简化逻辑: 在 activeSeats 数组中找 D 位的下一个
+      let startIdx = 0;
+      const dealerIdx = activeSeats.indexOf(dealerSeat);
+      if (dealerIdx >= 0) {
+        startIdx = (dealerIdx + 1) % activeSeats.length;
+      }
+      // 重排为"从 startIdx 开始"的顺序
+      const dealOrder = [];
+      for (let i = 0; i < activeSeats.length; i++) {
+        dealOrder.push(activeSeats[(startIdx + i) % activeSeats.length]);
+      }
+
+      // 3. 发牌前清理:
+      // 3.1 清掉所有现有飞行牌
+      document.querySelectorAll('.flying-card').forEach(el => el.remove());
+      // 3.2 给所有座位 seat-cards-back 加 .dealing 隐藏牌背
+      document.querySelectorAll('.seat-cards-back').forEach(el => el.classList.add('dealing'));
+      // 3.3 给 my-cards 加 .dealing 隐藏自己的手牌
+      document.querySelectorAll('.my-cards').forEach(el => el.classList.add('dealing'));
+      // 3.4 牌堆重置为满
+      const deck = document.getElementById('card-deck');
+      if (deck) {
+        deck.classList.remove('dealing-done');
+        deck.removeAttribute('data-cards-left');
+      }
+
+      // 4. 标准 2 圈发牌
+      const totalCards = dealOrder.length * 2;
+      let dealtCount = 0;
+      const flyingCards = [];  // 收集所有飞行牌元素,发完统一清
+
+      // 牌堆视觉:发完一定数量后递减(简化:每 1/4 减 1)
+      function updateDeckVisual() {
+        if (!deck) return;
+        const ratio = dealtCount / totalCards;
+        let left = 4;
+        if (ratio > 0.25) left = 3;
+        if (ratio > 0.5)  left = 2;
+        if (ratio > 0.75) left = 1;
+        if (ratio >= 1)   left = 0;
+        deck.setAttribute('data-cards-left', left);
+      }
+
+      // 第一圈
+      for (let i = 0; i < dealOrder.length; i++) {
+        const seatId = dealOrder[i];
+        setTimeout(async () => {
+          const cardEl = await dealOneCard(seatId);
+          if (cardEl) flyingCards.push(cardEl);
+          dealtCount++;
+          updateDeckVisual();
+        }, i * interval);
+      }
+
+      // 第二圈(第一圈完全发完后再开始)
+      const round2Start = dealOrder.length * interval + 50;
+      for (let i = 0; i < dealOrder.length; i++) {
+        const seatId = dealOrder[i];
+        setTimeout(async () => {
+          const cardEl = await dealOneCard(seatId);
+          if (cardEl) flyingCards.push(cardEl);
+          dealtCount++;
+          updateDeckVisual();
+        }, round2Start + i * interval);
+      }
+
+      // 5. 全部发完后清理+显示牌背
+      // 总时长 = round2Start + 最后一张牌触发时间 + 单张完整动画(飞行+弹)
+      const totalDuration = round2Start + (dealOrder.length - 1) * interval + singleCardDuration + 50;
+      setTimeout(() => {
+        // 5.1 移除 .dealing 让牌背显示
+        document.querySelectorAll('.seat-cards-back.dealing').forEach(el => el.classList.remove('dealing'));
+        // 自己的 my-cards 不直接移除 .dealing,改成走"翻面"流程(子项 4)
+        // 5.2 清掉所有飞行牌(视觉接力)
+        flyingCards.forEach(el => { if (el && el.parentNode) el.remove(); });
+        // 兜底: 清残留
+        document.querySelectorAll('.flying-card').forEach(el => el.remove());
+        // 5.3 牌堆淡出
+        if (deck) deck.classList.add('dealing-done');
+
+        // 5.4 ⭐ 子项 4: 自己的牌做翻面动画
+        // 第二圈最后一张如果是自己,等飞行牌落位再翻面(否则用户看到牌还在飞)
+        // 简化: 统一在所有发牌结束后 150ms 翻面
+        const myCards = document.querySelector('.my-cards');
+        if (myCards) {
+          // 5.4.1 准备翻面: 移除 .dealing(允许显示),加 .flip-pending(显示牌背)
+          myCards.classList.remove('dealing');
+          myCards.classList.add('flip-pending');
+          // 5.4.2 下一帧加 .flipping 触发翻面动画(rotateY 180° → 0°)
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              myCards.classList.add('flipping');
+            });
+          });
+          // 5.4.3 翻面结束(250ms)清掉两个类,恢复常态显示正面
+          setTimeout(() => {
+            myCards.classList.remove('flip-pending');
+            myCards.classList.remove('flipping');
+          }, 250 + 50);
+        }
+
+        resolve();
+      }, totalDuration);
+    });
+  }
+  window.dealHoleCards = dealHoleCards;
+
+  // =====================================================================
+  // ⭐ v2.18.7 公共牌动态切换 - 子项 1: 街况状态机 + 渲染
+  // ---------------------------------------------------------------------
+  // 接口:
+  //   window.setStreet(street)  // 'preflop' | 'flop' | 'turn' | 'river' | 'showdown'
+  //   window.setBoardCards(cards)  // 设置公共牌数据,如 [{r:'J', s:'♦', red:true}, ...]
+  //   window.renderBoard()  // 按当前 street + boardData 渲染
+  //   window.dealFlop() / dealTurn() / dealRiver()  // 子项 2/4: 翻牌带动画
+  //   window.highlightWinningCards(indices)  // 子项 5: 高亮中牌
+  //
+  // 街况对应公共牌数量:
+  //   preflop  → 0 张
+  //   flop     → 3 张
+  //   turn     → 4 张
+  //   river    → 5 张
+  //   showdown → 5 张(同 river,只是逻辑流程不同)
+  // =====================================================================
+
+  // 默认演示牌(子项 1 阶段保留原有 5 张作为初始数据)
+  const DEFAULT_BOARD = [
+    { r: 'J',  s: '♦', red: true  },
+    { r: '7',  s: '♣', red: false },
+    { r: 'K',  s: '♥', red: true  },
+    { r: 'A',  s: '♠', red: false },
+    { r: '5',  s: '♦', red: true  }
+  ];
+
+  // 当前街况和公共牌数据(全局状态)
+  window.currentStreet = 'flop';  // 默认翻牌阶段(保持原 UI 演示效果)
+  window.boardCards = [...DEFAULT_BOARD];
+
+  // 街况 → 可见牌数
+  const STREET_TO_COUNT = {
+    preflop: 0,
+    flop: 3,
+    turn: 4,
+    river: 5,
+    showdown: 5
+  };
+
+  // 渲染公共牌(根据 currentStreet 决定显示几张,根据 boardCards 决定牌面)
+  function renderBoard(options = {}) {
+    const container = document.getElementById('community-cards');
+    if (!container) return;
+    const count = STREET_TO_COUNT[window.currentStreet] || 0;
+    const flipBack = options.flipBack || false;  // 是否所有牌以"牌背"状态出现(等翻面)
+    container.innerHTML = '';
+    for (let i = 0; i < count; i++) {
+      const c = window.boardCards[i];
+      if (!c) continue;
+      const cardEl = document.createElement('div');
+      cardEl.className = `card ${c.red ? 'red' : 'black'}`;
+      if (flipBack) cardEl.classList.add('flip-back');
+      cardEl.setAttribute('data-suit', c.s);
+      cardEl.setAttribute('data-board-idx', i);
+      cardEl.innerHTML = `<span class="rank">${c.r}</span><span class="suit">${c.s}</span>`;
+      container.appendChild(cardEl);
+    }
+  }
+  window.renderBoard = renderBoard;
+
+  // 切换街况(无动画版本,直接渲染对应数量)
+  function setStreet(street) {
+    if (!(street in STREET_TO_COUNT)) {
+      console.warn('[setStreet] 未知街况:', street);
+      return;
+    }
+    window.currentStreet = street;
+    renderBoard();
+  }
+  window.setStreet = setStreet;
+
+  // 设置公共牌数据(可选,默认用 DEFAULT_BOARD)
+  function setBoardCards(cards) {
+    window.boardCards = cards && cards.length ? [...cards] : [...DEFAULT_BOARD];
+    renderBoard();
+  }
+  window.setBoardCards = setBoardCards;
+
+  // 子项 3: 烧牌动画(从牌堆飞出一张,在公共牌区上方淡出)
+  // 每翻一街前调用一次
+  function burnCard() {
+    return new Promise(resolve => {
+      const tableArea = document.querySelector('.table-area');
+      const deckEl = document.getElementById('card-deck');
+      const boardEl = document.getElementById('community-cards');
+      if (!tableArea || !deckEl || !boardEl) { resolve(); return; }
+
+      const deckRect = deckEl.getBoundingClientRect();
+      const tableRect = tableArea.getBoundingClientRect();
+      const boardRect = boardEl.getBoundingClientRect();
+      const tableScale = tableRect.width / tableArea.offsetWidth || 1;
+
+      // 起点:牌堆中心
+      const startX = (deckRect.left - tableRect.left) / tableScale + (deckRect.width / tableScale) / 2 - 16;
+      const startY = (deckRect.top  - tableRect.top ) / tableScale + (deckRect.height / tableScale) / 2 - 22;
+      // 终点:公共牌区左侧旁边(模拟"烧到一边")
+      const endX = (boardRect.left - tableRect.left) / tableScale - 40;
+      const endY = (boardRect.top  - tableRect.top ) / tableScale - 8;
+
+      const burned = document.createElement('div');
+      burned.className = 'burned-card';
+      burned.style.left = startX + 'px';
+      burned.style.top = startY + 'px';
+      burned.style.transform = 'translate(0,0)';
+      tableArea.appendChild(burned);
+
+      void burned.offsetWidth;
+      burned.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
+
+      setTimeout(() => burned.classList.add('burned'), 200);
+      setTimeout(() => { burned.remove(); resolve(); }, 600);
+    });
+  }
+  window.burnCard = burnCard;
+
+  // 子项 2: 翻牌(Flop)- 3 张同时翻面
+  // 流程: 烧牌 → 公共牌区出现 3 张牌背 → 同时 rotateY 翻面
+  async function dealFlop() {
+    window.currentStreet = 'flop';
+    await burnCard();
+    renderBoard({ flipBack: true });  // 先牌背状态出现
+    // 下一帧统一移除 .flip-back 触发翻面动画
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.querySelectorAll('#community-cards .card.flip-back').forEach(el => {
+          el.classList.remove('flip-back');
+        });
+      });
+    });
+    // 等翻面完成(250ms)
+    return new Promise(res => setTimeout(res, 300));
+  }
+  window.dealFlop = dealFlop;
+
+  // 子项 4: 转牌(Turn)- 在原 3 张基础上 +1 张翻面
+  async function dealTurn() {
+    window.currentStreet = 'turn';
+    await burnCard();
+    // 追加第 4 张以牌背状态出现
+    const container = document.getElementById('community-cards');
+    if (!container) return;
+    const c = window.boardCards[3];
+    if (!c) return;
+    const cardEl = document.createElement('div');
+    cardEl.className = `card ${c.red ? 'red' : 'black'} flip-back`;
+    cardEl.setAttribute('data-suit', c.s);
+    cardEl.setAttribute('data-board-idx', 3);
+    cardEl.innerHTML = `<span class="rank">${c.r}</span><span class="suit">${c.s}</span>`;
+    container.appendChild(cardEl);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        cardEl.classList.remove('flip-back');
+      });
+    });
+    return new Promise(res => setTimeout(res, 300));
+  }
+  window.dealTurn = dealTurn;
+
+  // 子项 4: 河牌(River)- 在原 4 张基础上 +1 张翻面
+  async function dealRiver() {
+    window.currentStreet = 'river';
+    await burnCard();
+    const container = document.getElementById('community-cards');
+    if (!container) return;
+    const c = window.boardCards[4];
+    if (!c) return;
+    const cardEl = document.createElement('div');
+    cardEl.className = `card ${c.red ? 'red' : 'black'} flip-back`;
+    cardEl.setAttribute('data-suit', c.s);
+    cardEl.setAttribute('data-board-idx', 4);
+    cardEl.innerHTML = `<span class="rank">${c.r}</span><span class="suit">${c.s}</span>`;
+    container.appendChild(cardEl);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        cardEl.classList.remove('flip-back');
+      });
+    });
+    return new Promise(res => setTimeout(res, 300));
+  }
+  window.dealRiver = dealRiver;
+
+  // 子项 5: 高亮中牌(组成牌型的公共牌金色描边)
+  // indices: 数组,如 [0, 2, 4] 表示第 1/3/5 张公共牌参与中牌
+  function highlightWinningCards(indices) {
+    document.querySelectorAll('#community-cards .card.winning').forEach(el => el.classList.remove('winning'));
+    if (!indices || !indices.length) return;
+    indices.forEach(idx => {
+      const cardEl = document.querySelector(`#community-cards .card[data-board-idx="${idx}"]`);
+      if (cardEl) cardEl.classList.add('winning');
+    });
+  }
+  window.highlightWinningCards = highlightWinningCards;
+  window.clearWinningCards = () => highlightWinningCards([]);
+
+  // 初始化:渲染默认公共牌(flop 阶段 3 张,跟原 UI 一致)
+  // 在 DOMContentLoaded 或立即执行(因为 script 在 body 末尾)
+  setTimeout(() => {
+    if (document.getElementById('community-cards')) {
+      renderBoard();
+    }
+  }, 0);
 
   // 计时器状态
   const turnTimer = {
@@ -13463,6 +15757,16 @@
       btn.classList.add('preselected');
     }
     return true;
+  }
+
+  // ⭐ v2.18.6 修复:Y3 过/弃合并按钮的预选高亮
+  const abCheckFoldBtn = document.getElementById('ab-check-fold-btn');
+  if (abCheckFoldBtn) {
+    abCheckFoldBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (togglePreselect(abCheckFoldBtn)) return;
+      if (typeof showToast === 'function') showToast('过/弃预选(开发中)');
+    });
   }
 
   if (abFoldBtn) {
@@ -14428,6 +16732,8 @@
   const lobbyWithdrawBtn = document.getElementById('lobby-withdraw-btn');
   if (lobbyDepositBtn) {
     lobbyDepositBtn.addEventListener('click', () => {
+      // ⭐ v2.18.6 记录来源:从俱乐部大厅进入,返回时回俱乐部大厅
+      window.rechargeEntryFrom = 'lobby';
       showSubPage('recharge');
       // 触发二维码绘制
       setTimeout(drawFakeQR, 50);
@@ -14815,6 +17121,8 @@
   }
   if (clubaccDepositBtn) {
     clubaccDepositBtn.addEventListener('click', () => {
+      // ⭐ v2.18.6 记录来源:从俱乐部账户进入,返回时回俱乐部大厅
+      window.rechargeEntryFrom = 'lobby';
       showSubPage('recharge');
       setTimeout(drawFakeQR, 50);
     });
@@ -16459,12 +18767,195 @@
     });
   });
 
+  // ⭐ v2.18.6 子项 7:自动补码抽屉项相关函数
+  // 业务说明:抽屉显示"最近一个坐下玩家"的自动补码状态,点击关闭
+  // 真实业务:乱凌座位重构后改为读乱凌本人的 autoRebuy 状态
+  function getLatestSittingPlayer() {
+    if (!currentTableRoom || !currentTableRoom.occupiedSeats) return null;
+    // 找最后一个有 autoRebuy 字段的玩家(子项 4 主动坐下的会有这字段)
+    const seats = Object.keys(currentTableRoom.occupiedSeats);
+    for (let i = seats.length - 1; i >= 0; i--) {
+      const player = currentTableRoom.occupiedSeats[seats[i]];
+      if (player && typeof player.autoRebuy === 'boolean') {
+        return { seatId: seats[i], player };
+      }
+    }
+    return null;
+  }
+
+  function refreshAutoRebuyDrawerItem() {
+    const drawerItem = document.getElementById('drawer-autorebuy');
+    const stateEl = document.getElementById('drawer-autorebuy-state');
+    if (!drawerItem || !stateEl) return;
+    const latest = getLatestSittingPlayer();
+    if (!latest) {
+      // 还没有玩家主动坐下 → 显示"未启用"灰色
+      stateEl.textContent = '未启用';
+      drawerItem.classList.remove('active');
+      return;
+    }
+    if (latest.player.autoRebuy) {
+      stateEl.textContent = '已启用(点击关闭)';
+      drawerItem.classList.add('active');
+    } else {
+      stateEl.textContent = '未启用';
+      drawerItem.classList.remove('active');
+    }
+  }
+
+  function toggleAutoRebuyFromDrawer() {
+    const latest = getLatestSittingPlayer();
+    if (!latest) {
+      if (typeof showToast === 'function') {
+        showToast('当前没有坐下的玩家');
+      }
+      return;
+    }
+    // 只支持"关闭"(从开到关),不支持"开启"
+    // 开启必须在买入时勾选
+    if (!latest.player.autoRebuy) {
+      if (typeof showToast === 'function') {
+        showToast('需要在买入时勾选启用,坐下后只能关闭');
+      }
+      return;
+    }
+    // 关闭
+    latest.player.autoRebuy = false;
+    refreshAutoRebuyDrawerItem();
+    if (typeof showToast === 'function') {
+      showToast(`${latest.player.name} 已关闭自动补码`);
+    }
+  }
+
+  // ⭐ v2.18.6 子项 9:刷新抽屉补码入口的余额显示和可用状态
+  function refreshRebuyDrawerItem() {
+    const drawerItem = document.getElementById('drawer-rebuy');
+    const stateEl = document.getElementById('drawer-rebuy-state');
+    if (!drawerItem || !stateEl) return;
+    // 计算余额够不够 1 个买入
+    const blindsStr = (currentTableRoom && currentTableRoom.blinds) || '0.5/1';
+    const bb = parseBigBlind(blindsStr);
+    const perUnit = bb * 100;
+    const balance = (typeof demoUserBalance === 'number') ? demoUserBalance : 0;
+    stateEl.textContent = `余额 ${formatAmount(balance)}`;
+    if (balance >= perUnit) {
+      drawerItem.classList.add('affordable');
+      drawerItem.classList.remove('unaffordable');
+    } else {
+      drawerItem.classList.remove('affordable');
+      drawerItem.classList.add('unaffordable');
+    }
+  }
+
+  // ⭐ v2.18.6 子项 9:顶部余额+补码▼快捷入口
+  // 业务说明:取代抽屉里的"补码"和"自动补码"两项,把它们集中到牌桌顶部
+  const topbarRebuy = document.getElementById('topbar-rebuy');
+  const topbarRebuyBtn = document.getElementById('topbar-rebuy-btn');
+  const topbarRebuyArrow = document.getElementById('topbar-rebuy-arrow');
+  const topbarBalanceValue = document.getElementById('topbar-balance-value');
+  const topbarToggleAutoRebuy = document.getElementById('topbar-toggle-autorebuy');
+  const topbarAutoRebuyState = document.getElementById('topbar-autorebuy-state');
+
+  function refreshTopbarRebuy() {
+    if (!topbarRebuy || !topbarBalanceValue) return;
+    // 刷新余额显示
+    const balance = (typeof demoUserBalance === 'number') ? demoUserBalance : 0;
+    topbarBalanceValue.textContent = formatAmount(balance);
+    // 余额够不够 1 个买入(标红警示)
+    const blindsStr = (currentTableRoom && currentTableRoom.blinds) || '0.5/1';
+    const bb = parseBigBlind(blindsStr);
+    const perUnit = bb * 100;
+    topbarRebuy.classList.toggle('unaffordable', balance < perUnit);
+    // 刷新自动补码状态显示
+    refreshTopbarAutoRebuyState();
+  }
+
+  function refreshTopbarAutoRebuyState() {
+    if (!topbarToggleAutoRebuy) return;
+    const latest = getLatestSittingPlayer();
+    if (!latest) {
+      topbarToggleAutoRebuy.classList.remove('active');
+      return;
+    }
+    topbarToggleAutoRebuy.classList.toggle('active', !!latest.player.autoRebuy);
+  }
+
+  // 初次进入页面刷新一次
+  refreshTopbarRebuy();
+
+  // ⭐ v2.18.6 + 号按钮 → 跳充值页
+  const topbarRechargeBtn = document.getElementById('topbar-recharge-btn');
+  if (topbarRechargeBtn) {
+    topbarRechargeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 记录来源,充值页返回时用
+      window.rechargeEntryFrom = 'table';
+      if (typeof showSubPage === 'function') {
+        showSubPage('recharge');
+      }
+    });
+  }
+
+  // 主"补码"按钮 → 弹补码弹窗(余额不够则弹余额不足)
+  if (topbarRebuyBtn) {
+    topbarRebuyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 关闭下拉(如果开着)
+      if (topbarRebuy) topbarRebuy.classList.remove('open');
+      // openRebuyModal 内部会处理余额不足跳转
+      if (typeof openRebuyModal === 'function') openRebuyModal();
+    });
+  }
+
+  // ▼ 箭头 → 切换下拉展开/收起
+  if (topbarRebuyArrow) {
+    topbarRebuyArrow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!topbarRebuy) return;
+      // 打开前先刷新状态(其他地方可能改了 autoRebuy)
+      refreshTopbarAutoRebuyState();
+      topbarRebuy.classList.toggle('open');
+    });
+  }
+
+  // 下拉项:自动补码切换(可勾可取消)
+  if (topbarToggleAutoRebuy) {
+    topbarToggleAutoRebuy.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const latest = getLatestSittingPlayer();
+      if (!latest) {
+        if (typeof showToast === 'function') showToast('请先坐下');
+        return;
+      }
+      // ⭐ v2.18.6 修订:任何时候都可勾可取消,无需余额校验(只是设置,触发时再校验)
+      const newState = !latest.player.autoRebuy;
+      latest.player.autoRebuy = newState;
+      refreshTopbarAutoRebuyState();
+      if (typeof showToast === 'function') {
+        showToast(`${latest.player.name} 自动补码已${newState ? '开启' : '关闭'}`);
+      }
+    });
+  }
+
+  // 点击外部关闭下拉
+  document.addEventListener('click', (e) => {
+    if (!topbarRebuy) return;
+    if (!topbarRebuy.classList.contains('open')) return;
+    if (!topbarRebuy.contains(e.target)) {
+      topbarRebuy.classList.remove('open');
+    }
+  });
+
+  // 余额变化时(补码/坐下后)自动刷新顶部显示
+  // 通过给关键操作末尾追加 refreshTopbarRebuy 调用实现 — 见下面 patch
+
   const tableMenuBtn = document.getElementById('table-menu-btn');
   const drawerMask = document.getElementById('table-drawer-mask');
 
   if (tableMenuBtn && drawerMask) {
     // 点 ☰ 打开抽屉
     tableMenuBtn.addEventListener('click', () => {
+      // ⭐ v2.18.6 子项 9:补码和自动补码已挪到顶部组件,这里不再刷新抽屉
       drawerMask.classList.add('show');
     });
 
@@ -16479,6 +18970,9 @@
     drawerMask.querySelectorAll('.drawer-item').forEach(item => {
       item.addEventListener('click', () => {
         const action = item.dataset.drawerAction;
+        // ⭐ v2.18.6 子项 9:补码和自动补码已挪到顶部组件,这里不再处理
+        // 关闭抽屉
+        drawerMask.classList.remove('show');
         // 关闭抽屉
         drawerMask.classList.remove('show');
         // "退出房间" 根据来源返回
@@ -16699,20 +19193,28 @@
   const subPagesWithCS = ['club-lobby', 'members', 'records'];
 
   function showSubPage(pageId) {
+    const targetPage = document.getElementById('page-' + pageId);
+    if (!targetPage) {
+      console.warn('showSubPage: page-' + pageId + ' 不存在');
+      return;
+    }
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById('page-' + pageId).classList.add('active');
+    targetPage.classList.add('active');
     const csBtn = document.querySelector('.floating-cs');
     // 隐藏底部Tab
-    document.querySelector('.tabbar-wrap').style.display = 'none';
+    const tabbarWrap = document.querySelector('.tabbar-wrap');
+    if (tabbarWrap) tabbarWrap.style.display = 'none';
     // 客服按钮:大厅类页面显示且下移到屏幕右下,表单类隐藏
-    if (subPagesWithCS.includes(pageId)) {
-      csBtn.style.display = 'flex';
-      csBtn.classList.add('no-tabbar');
-    } else {
-      csBtn.style.display = 'none';
+    if (csBtn) {
+      if (subPagesWithCS.includes(pageId)) {
+        csBtn.style.display = 'flex';
+        csBtn.classList.add('no-tabbar');
+      } else {
+        csBtn.style.display = 'none';
+      }
     }
     // 回到顶部
-    document.getElementById('page-' + pageId).scrollTop = 0;
+    targetPage.scrollTop = 0;
   }
 
   function showMainPage(pageName) {
@@ -16739,6 +19241,21 @@
   // 点击返回箭头,回到指定主页面
   document.querySelectorAll('[data-back]').forEach(btn => {
     btn.addEventListener('click', () => {
+      // ⭐ v2.18.6 充值页特殊处理:根据进入来源决定返回到哪里
+      const pageEl = btn.closest('.page');
+      if (pageEl && pageEl.id === 'page-recharge') {
+        const from = window.rechargeEntryFrom;
+        window.rechargeEntryFrom = null;
+        if (from === 'table' && typeof showSubPage === 'function') {
+          showSubPage('table');
+          return;
+        }
+        if (from === 'lobby' && typeof showSubPage === 'function') {
+          showSubPage('club-lobby');
+          return;
+        }
+        // 其他来源(默认):按 data-back 的值返回
+      }
       showMainPage(btn.dataset.back);
     });
   });

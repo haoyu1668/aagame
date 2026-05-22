@@ -2316,14 +2316,25 @@
      视觉: 4 张牌背错位叠放,营造"一沓牌"的厚度感
      z-index: 3(低于公共牌4,看起来"压在桌面上") */
   .card-deck {
-    position: absolute;
-    top: 41%;
-    left: 50%;
-    transform: translateX(calc(-50% - 90px));
+    /* ⭐ 牌堆放在 table-center 内部 */
+    position: relative;
     width: 32px;
     height: 44px;
+    margin: 4px auto 8px;
+    transform: translate(100px, -50px) scale(0.6);
+    transform-origin: center center;
     z-index: 3;
-    pointer-events: none;  /* 牌堆不响应点击 */
+    pointer-events: none;
+    /* ⭐ 默认彻底隐藏(display:none !important 强制隐藏) */
+    display: none !important;
+    opacity: 0;
+    transition: opacity 200ms ease-out, transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  /* ⭐ 发牌中状态:牌堆显示+弹出(用 !important 强制覆盖默认) */
+  .card-deck.dealing-active {
+    display: block !important;
+    opacity: 1;
+    transform: translate(100px, -50px) scale(1);
   }
   .card-deck .deck-card {
     position: absolute;
@@ -9986,6 +9997,13 @@
           <div class="pot-chip">C</div>
           <div class="pot-chip">C</div>
         </div>
+        <!-- ⭐ v2.18.7 牌堆:跟底池文字同框,永远在中央 -->
+        <div class="card-deck" id="card-deck">
+          <div class="deck-card"></div>
+          <div class="deck-card"></div>
+          <div class="deck-card"></div>
+          <div class="deck-card"></div>
+        </div>
         <div class="pot-label">底池: <span id="table-pot">1.33K</span></div>
         <div class="table-meta">
           <span class="meta-row" id="table-hand-no">#992793</span>
@@ -9993,14 +10011,6 @@
           <span class="meta-row">止损上限 <span id="table-stoploss">50K</span></span>
           <span class="meta-row" id="table-timer">00:24:00</span>
         </div>
-      </div>
-
-      <!-- ⭐ v2.18.7 发牌动画 - 子项 1: 牌堆(4 张牌背错位叠放) -->
-      <div class="card-deck" id="card-deck">
-        <div class="deck-card"></div>
-        <div class="deck-card"></div>
-        <div class="deck-card"></div>
-        <div class="deck-card"></div>
       </div>
 
       <!-- ⭐ v2.18.7 公共牌区: 由 JS 动态渲染(默认翻牌阶段 3 张演示) -->
@@ -10151,7 +10161,6 @@
               <button class="dev-seat-btn" data-deal-to="s8">→s8</button>
             </div>
             <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-deal-to="s9">→s9</button>
               <button class="dev-seat-btn" data-deal-to="my-seat">→自己</button>
             </div>
             <!-- 组合动作 -->
@@ -10222,7 +10231,6 @@
               <button class="dev-seat-btn" data-chip-from="s8">s8→池</button>
             </div>
             <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-chip-from="s9">s9→池</button>
               <button class="dev-seat-btn" data-chip-from="my-seat">我→池</button>
             </div>
             <!-- 收筹码(全员→池)/ 派奖(池→赢家) -->
@@ -14474,6 +14482,7 @@
     const deck = document.getElementById('card-deck');
     if (deck) {
       deck.classList.remove('dealing-done');
+      deck.classList.remove('dealing-active');  // ⭐ 隐藏牌堆
       deck.removeAttribute('data-cards-left');
     }
     btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
@@ -14641,14 +14650,16 @@
   }
 
   // 计算元素中心相对 page-table 的坐标(用于筹码飞行起止点)
+  // ⭐ 需要用 scale 还原:.phone-wrap 有 scale 变换,getBoundingClientRect 返回缩放后坐标
   function getElementCenterInTable(el) {
     const tableArea = document.querySelector('#page-table');
     if (!tableArea || !el) return null;
     const tableRect = tableArea.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
+    const scale = tableRect.width / tableArea.offsetWidth || 1;
     return {
-      x: elRect.left - tableRect.left + elRect.width / 2 - 12,  // 12 = 筹码 24 一半
-      y: elRect.top  - tableRect.top  + elRect.height / 2 - 12
+      x: (elRect.left - tableRect.left) / scale + (elRect.width / scale) / 2 - 12,
+      y: (elRect.top  - tableRect.top ) / scale + (elRect.height / scale) / 2 - 12
     };
   }
 
@@ -14749,6 +14760,7 @@
     const deck = document.getElementById('card-deck');
     if (deck) {
       deck.classList.remove('dealing-done');
+      deck.classList.remove('dealing-active');  // ⭐ 起始隐藏,dealHoleCards 内部会自动弹出
       deck.removeAttribute('data-cards-left');
     }
     await new Promise(r => setTimeout(r, 300));
@@ -14797,6 +14809,7 @@
     const deck = document.getElementById('card-deck');
     if (deck) {
       deck.classList.remove('dealing-done');
+      deck.classList.remove('dealing-active');  // ⭐ 重置时让牌堆消失
       deck.removeAttribute('data-cards-left');
     }
     // 恢复 seat-cards-back 和 my-cards 显示
@@ -14972,6 +14985,7 @@
         resolve();
         return;
       }
+      // 注意:不在这里自动弹出牌堆,由调用方(dealHoleCards/dealFlop/dealTurn/dealRiver)统一控制
 
       // 找目标座位的"落牌点":
       // - my-seat: 用 .my-cards 区作目标
@@ -14990,17 +15004,22 @@
         return;
       }
 
-      // 用 getBoundingClientRect 算位移(直接用 rect 差值)
-      // page-table 是 position:relative 容器,绝对定位的子元素 left/top 就是相对它
+      // 用 getBoundingClientRect 算位移
+      // page-table 处在 .phone-wrap 内,.phone-wrap 有 scale 变换
+      // getBoundingClientRect 返回的是缩放后的视口坐标
+      // 但飞行牌作为 page-table 的子元素,用未缩放的本地坐标
+      // 所以需要用 scale 把坐标差还原
       const deckRect = deckEl.getBoundingClientRect();
       const tableRect = tableArea.getBoundingClientRect();
       const targetRect = targetEl.getBoundingClientRect();
+      // page-table offsetWidth 是原始宽,getBoundingClientRect.width 是缩放后宽
+      const scale = tableRect.width / tableArea.offsetWidth || 1;
 
-      // 起始位置:牌堆中心,相对 page-table 左上角
-      const startX = deckRect.left - tableRect.left + deckRect.width / 2 - 16;  // 16 = 飞行牌宽 32 的一半
-      const startY = deckRect.top  - tableRect.top  + deckRect.height / 2 - 22; // 22 = 飞行牌高 44 的一半
-      const endX   = targetRect.left - tableRect.left + targetRect.width / 2 - 16;
-      const endY   = targetRect.top  - tableRect.top  + targetRect.height / 2 - 22;
+      // 起始位置:牌堆中心,相对 page-table 左上角(还原到未缩放坐标)
+      const startX = (deckRect.left - tableRect.left) / scale + (deckRect.width / scale) / 2 - 16;
+      const startY = (deckRect.top  - tableRect.top ) / scale + (deckRect.height / scale) / 2 - 22;
+      const endX   = (targetRect.left - tableRect.left) / scale + (targetRect.width / scale) / 2 - 16;
+      const endY   = (targetRect.top  - tableRect.top ) / scale + (targetRect.height / scale) / 2 - 22;
 
       const dx = endX - startX;
       const dy = endY - startY;
@@ -15110,27 +15129,29 @@
       document.querySelectorAll('.seat-cards-back').forEach(el => el.classList.add('dealing'));
       // 3.3 给 my-cards 加 .dealing 隐藏自己的手牌
       document.querySelectorAll('.my-cards').forEach(el => el.classList.add('dealing'));
-      // 3.4 牌堆重置为满
+      // 3.4 牌堆重置为满 + 弹出显示
       const deck = document.getElementById('card-deck');
       if (deck) {
         deck.classList.remove('dealing-done');
         deck.removeAttribute('data-cards-left');
+        // ⭐ 弹出牌堆(从透明 + 缩小,过渡到不透明 + 原大)
+        deck.classList.add('dealing-active');
       }
+      // 弹出动画 200ms,等它先弹出再开始发牌
+      await new Promise(r => setTimeout(r, 250));
 
       // 4. 标准 2 圈发牌
       const totalCards = dealOrder.length * 2;
       let dealtCount = 0;
       const flyingCards = [];  // 收集所有飞行牌元素,发完统一清
 
-      // 牌堆视觉:发完一定数量后递减(简化:每 1/4 减 1)
+      // 牌堆视觉:发完一定数量后递减,但永远至少保留 2 张(让牌堆永远可见)
       function updateDeckVisual() {
         if (!deck) return;
         const ratio = dealtCount / totalCards;
         let left = 4;
-        if (ratio > 0.25) left = 3;
-        if (ratio > 0.5)  left = 2;
-        if (ratio > 0.75) left = 1;
-        if (ratio >= 1)   left = 0;
+        if (ratio > 0.3) left = 3;
+        if (ratio > 0.7) left = 2;  // ⭐ 最少保留 2 张,不再降到 1 或 0
         deck.setAttribute('data-cards-left', left);
       }
 
@@ -15168,8 +15189,8 @@
         flyingCards.forEach(el => { if (el && el.parentNode) el.remove(); });
         // 兜底: 清残留
         document.querySelectorAll('.flying-card').forEach(el => el.remove());
-        // 5.3 牌堆淡出
-        if (deck) deck.classList.add('dealing-done');
+        // 5.3 ⭐ 牌堆淡出消失(发完牌后)
+        if (deck) deck.classList.remove('dealing-active');
 
         // 5.4 ⭐ 子项 4: 自己的牌做翻面动画
         // 第二圈最后一张如果是自己,等飞行牌落位再翻面(否则用户看到牌还在飞)
@@ -15289,13 +15310,14 @@
       const deckRect = deckEl.getBoundingClientRect();
       const tableRect = tableArea.getBoundingClientRect();
       const boardRect = boardEl.getBoundingClientRect();
+      const scale = tableRect.width / tableArea.offsetWidth || 1;
 
       // 起点:牌堆中心
-      const startX = deckRect.left - tableRect.left + deckRect.width / 2 - 16;
-      const startY = deckRect.top  - tableRect.top  + deckRect.height / 2 - 22;
-      // 终点:公共牌区左侧旁边(模拟"烧到一边")
-      const endX = boardRect.left - tableRect.left - 40;
-      const endY = boardRect.top  - tableRect.top  - 8;
+      const startX = (deckRect.left - tableRect.left) / scale + (deckRect.width / scale) / 2 - 16;
+      const startY = (deckRect.top  - tableRect.top ) / scale + (deckRect.height / scale) / 2 - 22;
+      // 终点:公共牌区右侧旁边(模拟"烧到一边")
+      const endX = (boardRect.right - tableRect.left) / scale + 10;
+      const endY = (boardRect.top  - tableRect.top ) / scale - 8;
 
       const burned = document.createElement('div');
       burned.className = 'burned-card';
@@ -15317,6 +15339,10 @@
   // 流程: 烧牌 → 公共牌区出现 3 张牌背 → 同时 rotateY 翻面
   async function dealFlop() {
     window.currentStreet = 'flop';
+    // ⭐ 弹出牌堆
+    const deck = document.getElementById('card-deck');
+    if (deck) deck.classList.add('dealing-active');
+    await new Promise(r => setTimeout(r, 250));
     await burnCard();
     renderBoard({ flipBack: true });  // 先牌背状态出现
     // 下一帧统一移除 .flip-back 触发翻面动画
@@ -15328,19 +15354,25 @@
       });
     });
     // 等翻面完成(250ms)
-    return new Promise(res => setTimeout(res, 300));
+    await new Promise(res => setTimeout(res, 300));
+    // ⭐ 牌堆淡出消失
+    if (deck) deck.classList.remove('dealing-active');
   }
   window.dealFlop = dealFlop;
 
   // 子项 4: 转牌(Turn)- 在原 3 张基础上 +1 张翻面
   async function dealTurn() {
     window.currentStreet = 'turn';
+    // ⭐ 弹出牌堆
+    const deck = document.getElementById('card-deck');
+    if (deck) deck.classList.add('dealing-active');
+    await new Promise(r => setTimeout(r, 250));
     await burnCard();
     // 追加第 4 张以牌背状态出现
     const container = document.getElementById('community-cards');
-    if (!container) return;
+    if (!container) { if (deck) deck.classList.remove('dealing-active'); return; }
     const c = window.boardCards[3];
-    if (!c) return;
+    if (!c) { if (deck) deck.classList.remove('dealing-active'); return; }
     const cardEl = document.createElement('div');
     cardEl.className = `card ${c.red ? 'red' : 'black'} flip-back`;
     cardEl.setAttribute('data-suit', c.s);
@@ -15352,18 +15384,24 @@
         cardEl.classList.remove('flip-back');
       });
     });
-    return new Promise(res => setTimeout(res, 300));
+    await new Promise(res => setTimeout(res, 300));
+    // ⭐ 牌堆淡出消失
+    if (deck) deck.classList.remove('dealing-active');
   }
   window.dealTurn = dealTurn;
 
   // 子项 4: 河牌(River)- 在原 4 张基础上 +1 张翻面
   async function dealRiver() {
     window.currentStreet = 'river';
+    // ⭐ 弹出牌堆
+    const deck = document.getElementById('card-deck');
+    if (deck) deck.classList.add('dealing-active');
+    await new Promise(r => setTimeout(r, 250));
     await burnCard();
     const container = document.getElementById('community-cards');
-    if (!container) return;
+    if (!container) { if (deck) deck.classList.remove('dealing-active'); return; }
     const c = window.boardCards[4];
-    if (!c) return;
+    if (!c) { if (deck) deck.classList.remove('dealing-active'); return; }
     const cardEl = document.createElement('div');
     cardEl.className = `card ${c.red ? 'red' : 'black'} flip-back`;
     cardEl.setAttribute('data-suit', c.s);
@@ -15375,7 +15413,9 @@
         cardEl.classList.remove('flip-back');
       });
     });
-    return new Promise(res => setTimeout(res, 300));
+    await new Promise(res => setTimeout(res, 300));
+    // ⭐ 牌堆淡出消失
+    if (deck) deck.classList.remove('dealing-active');
   }
   window.dealRiver = dealRiver;
 
@@ -15392,11 +15432,16 @@
   window.highlightWinningCards = highlightWinningCards;
   window.clearWinningCards = () => highlightWinningCards([]);
 
-  // 初始化:渲染默认公共牌(flop 阶段 3 张,跟原 UI 一致)
-  // 在 DOMContentLoaded 或立即执行(因为 script 在 body 末尾)
+  // 初始化:渲染默认公共牌(flop 阶段 3 张,跟原 UI 一致) + 强制隐藏牌堆
   setTimeout(() => {
     if (document.getElementById('community-cards')) {
       renderBoard();
+    }
+    // ⭐ 强制初始化牌堆为隐藏状态(默认不显示,只在发牌时弹出)
+    const deck = document.getElementById('card-deck');
+    if (deck) {
+      deck.classList.remove('dealing-active');
+      deck.classList.remove('dealing-done');
     }
   }, 0);
 

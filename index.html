@@ -2286,8 +2286,45 @@
     color: white;
     font-size: 14px;
     font-weight: 700;
+    position: relative;   /* ⭐ v2.18.1 给绝对定位的倒计时环留参考 */
   }
   .seat-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* ⭐ v2.18.1 头像倒计时环(绕头像一圈,饱和绿色,尾部闪光)
+     用 SVG circle + stroke-dasharray 实现,从顶部 12 点位置开始顺时针消失
+     默认不显示,JS 加 .acting 给 .seat 时显示,JS 设 --turn-p 控制进度(0~100) */
+  .seat-turn-ring {
+    position: absolute;
+    inset: -4px;          /* 比头像稍大,环绕外圈 */
+    pointer-events: none;
+    display: none;        /* 默认隐藏 */
+    z-index: 5;
+    overflow: visible;
+  }
+  .seat.acting .seat-turn-ring {
+    display: block;
+  }
+  .seat-turn-ring circle {
+    fill: none;
+    stroke: #4dff4d;
+    stroke-width: 3;
+    stroke-linecap: round;
+    /* 圆周长 = 2π × 半径 ≈ 163.36(半径26)
+       dasharray:已走/未走  dashoffset 控制起点(初始在顶部12点) */
+    stroke-dasharray: 163.36;
+    stroke-dashoffset: calc(163.36 * var(--turn-p, 0) / 100);
+    /* 让环从 12 点开始顺时针消失 */
+    transform: rotate(-90deg);
+    transform-origin: center;
+    filter: drop-shadow(0 0 4px rgba(77,255,77,0.7));
+  }
+  /* 尾部闪光:用第二个 circle 模拟亮点,跟着进度走 */
+  .seat-turn-ring .turn-head-glow {
+    fill: white;
+    stroke: none;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.95)) drop-shadow(0 0 3px #4dff4d);
+    /* 位置由 JS 实时计算,默认 12 点 */
+  }
   .seat-name-chip {
     margin: -8px auto 0;
     background: rgba(0,0,0,0.65);
@@ -2402,6 +2439,22 @@
     border: 2px dashed rgba(255,255,255,0.35);
     color: rgba(255,255,255,0.5);
     font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    gap: 1px;
+  }
+  /* ⭐ v2.18.6 空座位 + 号和"坐下"文字 */
+  .seat.empty .empty-plus {
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1;
+  }
+  .seat.empty .empty-text {
+    font-size: 11px;
+    line-height: 1;
   }
   .seat.empty .seat-name-chip,
   .seat.empty .seat-chips,
@@ -2584,7 +2637,7 @@
   .seat-action-tag.action-call::after {
     border-top-color: #3ecf8e;
   }
-  /* ⭐ 让牌:浅蓝灰(跟跟注的绿明显区分) */
+  /* ⭐ 过牌:浅蓝灰(跟跟注的绿明显区分) */
   .seat-action-tag.action-check {
     background: #5b9fd1;
     color: white;
@@ -2608,6 +2661,16 @@
   }
   .seat-action-tag.action-raise::after {
     border-top-color: #f08a28;
+  }
+  /* ⭐ v2.18.1 下注:紫色(翻牌后第一个主动行为,跟加注区分)
+     翻牌后无人下注时,自己/他人主动放下第一笔筹码 = 下注(bet)
+     紫色避开:跟注绿/过牌蓝/抓头金/加注橘/All-In红/弃牌灰 */
+  .seat-action-tag.action-bet {
+    background: linear-gradient(135deg, #b88aff, #8b5cf6);
+    color: white;
+  }
+  .seat-action-tag.action-bet::after {
+    border-top-color: #8b5cf6;
   }
   /* ⭐ All-in:正红 + 脉冲 */
   .seat-action-tag.action-allin {
@@ -2650,6 +2713,29 @@
   }
   .seat-action-tag.action-fold::after {
     border-top-color: #b0b0b0;
+  }
+
+  /* ⭐ v2.18.6 等大盲:深灰(新坐下玩家等大盲位轮到自己时) */
+  .seat-action-tag.action-waitbb {
+    background: #6a6a6a;
+    color: white;
+  }
+  .seat-action-tag.action-waitbb::after {
+    border-top-color: #6a6a6a;
+  }
+  /* ⭐ v2.18.6 补大盲:深绿(立即下注大盲入局) */
+  .seat-action-tag.action-postbb {
+    background: linear-gradient(135deg, #2ecc4d, #1f8f3a);
+    color: white;
+  }
+  .seat-action-tag.action-postbb::after {
+    border-top-color: #1f8f3a;
+  }
+  /* ⭐ v2.18.6 等大盲座位整体半透明灰显(类似弃牌但保留筹码) */
+  .seat.waitbb .seat-avatar,
+  .seat.waitbb .seat-cards-back {
+    opacity: 0.55;
+    filter: grayscale(0.6);
   }
 
   /* ⭐ 弃牌灰显:头像+牌背+昵称+筹码整体半透明(气泡保留显示,不灰显) */
@@ -2725,7 +2811,7 @@
   /* 三种弹窗状态:
      - state="raise"  加注弹窗(轮到我):弃牌+加注+跟注+5快捷加注键
      - state="call"   跟注预选弹窗(没轮到我):弃牌+跟注(都灰色70%)
-     - state="check"  让牌预选弹窗(没轮到我):弃牌+让牌(都灰色70%) */
+     - state="check"  过牌预选弹窗(没轮到我):弃牌+过牌(都灰色70%) */
   .action-area {
     position: absolute;
     bottom: 70px;     /* ⭐ v2.18 原96px,下沉26px压缩垂直空间(适配iPhone 660 可用高) */
@@ -2764,6 +2850,43 @@
     bottom: 20px;
     left: 36px;
   }
+  /* ⭐ v2.18.3 弃牌按钮内:"弃牌"+ 倒计时秒数,垂直排列,间距 2px */
+  .ab-fold .ab-fold-label {
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 700;
+    /* 高于扇形蒙版,避免被遮黑 */
+    position: relative;
+    z-index: 2;
+  }
+  .ab-fold .ab-fold-seconds {
+    margin-top: 2px;          /* 跟"弃牌"间距 2px */
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 700;
+    color: #fff;
+    opacity: 0.95;
+    /* 秒数显示在扇形蒙版上方,需要高于 .ab-fold-timer */
+    position: relative;
+    z-index: 2;
+  }
+  /* ⭐ v2.18.3 过牌按钮秒数(跟弃牌同款,只在 check / bet 态显示) */
+  .ab-check .ab-check-seconds {
+    display: none;            /* 默认隐藏,只在 check / bet 态显示 */
+    margin-top: 2px;          /* 跟"过牌"间距 2px */
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 700;
+    color: #fff;
+    opacity: 0.95;
+    position: relative;
+    z-index: 2;
+  }
+  /* 过牌字也要高于蒙版 */
+  .ab-check .ab-check-label-check {
+    position: relative;
+    z-index: 2;
+  }
   /* 加注按钮(橘红色,中央,最大) */
   .ab-raise {
     width: 54px; height: 54px;
@@ -2776,7 +2899,18 @@
     text-shadow: 0 1px 0 rgba(255,255,255,0.25);
   }
   .ab-raise:active { transform: translateX(-50%) scale(0.94); }
-  /* 跟注/让牌按钮(绿色,右下,往中央靠拢) */
+  /* ⭐ v2.18.1 加注按钮两态文字:data-action="raise" 显"加注","bet" 显"下注" */
+  .ab-raise .ab-raise-text-bet { display: none; }
+  .ab-raise[data-action="bet"] .ab-raise-text-raise { display: none; }
+  .ab-raise[data-action="bet"] .ab-raise-text-bet { display: inline; }
+  /* ⭐ v2.18.3 下注按钮颜色统一为橘红色(跟加注按钮一致,不再用紫色)
+     座位上方的"下注"动作气泡仍保留紫色,只统一底部行动按钮本身 */
+  .ab-raise[data-action="bet"] {
+    background: radial-gradient(circle at 35% 30%, #ffb050 0%, #f08a28 50%, #c46818 100%);
+    color: #2a1500;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+  }
+  /* 跟注/过牌按钮(绿色,右下,往中央靠拢) */
   .ab-check {
     width: 50px; height: 50px;
     background: radial-gradient(circle at 35% 30%, #5fe88a 0%, #3aaf60 50%, #1a8040 100%);
@@ -2784,17 +2918,19 @@
     right: 36px;
   }
   .ab-check-amount {
+    display: none;          /* ⭐ v2.18.4 默认隐藏,只在需要的态(P1/P4/Y1/S1)显式 block */
     font-size: 12px;
     line-height: 1.1;
     font-weight: 700;
   }
   .ab-check-label {
+    display: none;          /* ⭐ v2.18.4 默认隐藏 */
     font-size: 10px;
     line-height: 1.1;
     margin-top: 1px;
     opacity: 0.95;
   }
-  /* ⭐ v2.16 让牌文案默认隐藏,只在 state="check" 时显示 */
+  /* ⭐ v2.16 过牌文案默认隐藏,只在 state="check" 时显示 */
   .ab-check-label-check {
     display: none;
     font-size: 17px;
@@ -2817,14 +2953,38 @@
     );
     box-shadow: inset 0 0 0 2px rgba(77,255,77,0.4);
   }
+  /* ⭐ v2.18.1 过牌按钮倒计时蒙版(同款扇形+绿光环) */
+  .ab-check-timer {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    background: conic-gradient(
+      from 0deg,
+      transparent calc(360deg * var(--p, 0) / 100),
+      rgba(0,0,0,0.55) calc(360deg * var(--p, 0) / 100)
+    );
+    box-shadow: inset 0 0 0 2px rgba(77,255,77,0.4);
+    display: none;   /* 默认隐藏,只在check态显示 */
+  }
+  /* P2 下注 / P3 过牌-加注 态:过牌按钮的蒙版显示 */
+  .action-area[data-state="p2"] .ab-check-timer,
+  .action-area[data-state="p3"] .ab-check-timer {
+    display: block;
+  }
+  /* check 态 ≤ 5秒警示态(同 fold 警示样式) */
+  .ab-check.timer-warn .ab-check-timer {
+    box-shadow: inset 0 0 0 2px rgba(255,180,0,0.9), 0 0 14px rgba(255,180,0,0.7);
+    animation: abFoldWarnPulse 0.6s ease-in-out infinite;
+  }
   /* 倒计时 ≤ 5 秒时:绿光环变红+脉冲(警示) */
   .ab-fold.timer-warn .ab-fold-timer {
-    box-shadow: inset 0 0 0 2px rgba(255,80,80,0.85), 0 0 14px rgba(255,80,80,0.6);
+    box-shadow: inset 0 0 0 2px rgba(255,180,0,0.9), 0 0 14px rgba(255,180,0,0.7);
     animation: abFoldWarnPulse 0.6s ease-in-out infinite;
   }
   @keyframes abFoldWarnPulse {
-    0%, 100% { box-shadow: inset 0 0 0 2px rgba(255,80,80,0.85), 0 0 8px rgba(255,80,80,0.3); }
-    50%      { box-shadow: inset 0 0 0 2px rgba(255,80,80,1), 0 0 18px rgba(255,80,80,0.85); }
+    0%, 100% { box-shadow: inset 0 0 0 2px rgba(255,180,0,0.9), 0 0 8px rgba(255,180,0,0.4); }
+    50%      { box-shadow: inset 0 0 0 2px rgba(255,200,40,1), 0 0 18px rgba(255,180,0,0.9); }
   }
   @property --p {
     syntax: '<number>';
@@ -2926,8 +3086,8 @@
     opacity: 0.5;
   }
 
-  /* 只在 raise 态显示 +15S */
-  .action-area:not([data-state="raise"]) .ab-add-time {
+  /* +15S 只在 P1-P4 轮到我的态显示(P 组都有倒计时) */
+  .action-area:not([data-state="p1"]):not([data-state="p2"]):not([data-state="p3"]):not([data-state="p4"]) .ab-add-time {
     display: none;
   }
 
@@ -3161,41 +3321,184 @@
      ⭐ v2.16 三态切换:data-state="raise" / "call" / "check"
      ===================================================== */
 
-  /* state="call" 跟注预选 + state="check" 让牌预选:
-     5 个快捷键全部隐藏 + 加注按钮隐藏 */
-  .action-area[data-state="call"]  .ab-tile,
-  .action-area[data-state="check"] .ab-tile,
-  .action-area[data-state="call"]  .ab-raise,
-  .action-area[data-state="check"] .ab-raise {
+  /* ============================================================
+     ⭐ v2.18.4 9 态弹窗 CSS(P1-P4 轮到我 / Y1-Y3 预选 / S1-S2 滑杆)
+     ============================================================ */
+
+  /* ---------- 通用:5 快捷键 / 加注按钮 的显隐 ---------- */
+  /* 只有 P1 加注、P2 下注、P3 过牌-加注 显示 5 快捷键 */
+  .action-area:not([data-state="p1"]):not([data-state="p2"]):not([data-state="p3"]) .ab-tile {
     display: none;
   }
-  /* 加注弹窗(state="raise")时:跟注按钮金额显示,让牌备用文案默认就 display:none */
-  /* 跟注预选(state="call")时:弃牌 + 跟注都灰色 70% 透明,无扇形蒙版 */
-  .action-area[data-state="call"] .ab-fold,
-  .action-area[data-state="call"] .ab-check {
-    background: rgba(120, 120, 120, 0.7);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    opacity: 1;   /* 显式覆盖,避免被父态影响 */
-  }
-  /* 跟注预选态下,隐藏扇形倒计时蒙版 */
-  .action-area[data-state="call"] .ab-fold-timer,
-  .action-area[data-state="check"] .ab-fold-timer {
+  /* P4 All-In 跟注:加注按钮变灰禁用(规则上仍可加,但筹码可能不够;产品上变灰)
+     Y1-Y3 预选:加注按钮隐藏
+     S1/S2 滑杆:加注按钮隐藏(被滑杆面板覆盖) */
+  .action-area[data-state="y1"] .ab-raise,
+  .action-area[data-state="y2"] .ab-raise,
+  .action-area[data-state="y3"] .ab-raise,
+  .action-area[data-state="s1"] .ab-raise,
+  .action-area[data-state="s2"] .ab-raise {
     display: none;
   }
-  /* 让牌预选(state="check"):弃牌 + 跟注按钮变让牌,也都灰色 70% */
-  .action-area[data-state="check"] .ab-fold,
-  .action-area[data-state="check"] .ab-check {
+  /* P4:加注按钮变灰禁用 */
+  .action-area[data-state="p4"] .ab-raise {
+    background: rgba(120, 120, 120, 0.5);
+    color: rgba(255,255,255,0.4);
+    pointer-events: none;
+    box-shadow: none;
+  }
+
+  /* ---------- 中央按钮文字:P1/P4=加注 P2=下注 P3=加注 ---------- */
+  /* P2 中央显"下注" */
+  .action-area[data-state="p2"] .ab-raise[data-action="raise"] .ab-raise-text-raise { display: none; }
+  .action-area[data-state="p2"] .ab-raise .ab-raise-text-bet { display: inline; }
+  /* 默认 P1/P3/P4 显"加注"(基础类已处理) */
+
+  /* ---------- 右下按钮(.ab-check)文字切换 ---------- */
+  /* 默认所有备用文案隐藏 */
+  .ab-check-label-check,
+  .ab-check-label-allin {
+    display: none;
+  }
+
+  /* P1 加注弹窗:显"金额 + 跟注" */
+  .action-area[data-state="p1"] .ab-check-amount,
+  .action-area[data-state="p1"] .ab-check-label {
+    display: block;
+  }
+
+  /* P2 下注弹窗:显"过牌" + 倒计时秒数 + 蒙版,按钮保持绿色 */
+  .action-area[data-state="p2"] .ab-check-amount,
+  .action-area[data-state="p2"] .ab-check-label {
+    display: none;
+  }
+  .action-area[data-state="p2"] .ab-check-label-check {
+    display: block;
+  }
+  .action-area[data-state="p2"] .ab-check-timer { display: block; }
+  .action-area[data-state="p2"] .ab-check-seconds { display: block; }
+
+  /* P3 过牌-加注弹窗(翻前大盲):右下显"过牌"+ 倒计时,按钮保持绿色 */
+  .action-area[data-state="p3"] .ab-check-amount,
+  .action-area[data-state="p3"] .ab-check-label {
+    display: none;
+  }
+  .action-area[data-state="p3"] .ab-check-label-check {
+    display: block;
+  }
+  .action-area[data-state="p3"] .ab-check-timer { display: block; }
+  .action-area[data-state="p3"] .ab-check-seconds { display: block; }
+
+  /* P4 All-In跟注:显"金额 + 全下"(把"跟注"换成"全下") */
+  .action-area[data-state="p4"] .ab-check-amount,
+  .action-area[data-state="p4"] .ab-check-label-allin {
+    display: block;
+  }
+  .action-area[data-state="p4"] .ab-check-label { display: none; }
+  /* P4 跟注按钮变红色(警示这是 All-In) */
+  .action-area[data-state="p4"] .ab-check {
+    background: radial-gradient(circle at 35% 30%, #ff7a4a 0%, #e54a28 50%, #b02810 100%);
+  }
+
+  /* ---------- 预选 Y1-Y3:弃牌+目标按钮灰 70%,无倒计时 ---------- */
+  .action-area[data-state="y1"] .ab-fold,
+  .action-area[data-state="y1"] .ab-check,
+  .action-area[data-state="y2"] .ab-fold,
+  .action-area[data-state="y2"] .ab-check {
     background: rgba(120, 120, 120, 0.7);
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     opacity: 1;
   }
-  /* state="check" 时:跟注按钮的"金额+跟注"隐藏,只显示"让牌" */
-  .action-area[data-state="check"] .ab-check-amount,
-  .action-area[data-state="check"] .ab-check-label {
+  /* Y1-Y3 弃牌按钮:隐藏倒计时秒数和扇形蒙版 */
+  /* ⭐ v2.18.4 弃牌按钮倒计时显隐:
+     - Y1-Y3 预选态:无倒计时(没轮到我)
+     - P2 下注 / P3 过牌-加注:倒计时挪到过牌按钮,弃牌按钮不重复显示
+     - 只有 P1 加注 / P4 All-In 跟注:弃牌按钮显示倒计时(因为右下是"跟注+金额",蒙版放跟注上不合适) */
+  .action-area[data-state="y1"] .ab-fold-seconds,
+  .action-area[data-state="y2"] .ab-fold-seconds,
+  .action-area[data-state="y3"] .ab-fold-seconds,
+  .action-area[data-state="p2"] .ab-fold-seconds,
+  .action-area[data-state="p3"] .ab-fold-seconds,
+  .action-area[data-state="y1"] .ab-fold-timer,
+  .action-area[data-state="y2"] .ab-fold-timer,
+  .action-area[data-state="y3"] .ab-fold-timer,
+  .action-area[data-state="p2"] .ab-fold-timer,
+  .action-area[data-state="p3"] .ab-fold-timer {
     display: none;
   }
-  .action-area[data-state="check"] .ab-check-label-check {
+
+  /* Y1 跟注预选:右下显"金额 + 跟注" */
+  .action-area[data-state="y1"] .ab-check-amount,
+  .action-area[data-state="y1"] .ab-check-label {
     display: block;
+  }
+  /* Y2 过牌预选:右下显"过牌" */
+  .action-area[data-state="y2"] .ab-check-label-check {
+    display: block;
+  }
+
+  /* ---------- Y3 过/弃合并预选大按钮 ---------- */
+  .ab-check-fold {
+    display: none;
+    position: absolute;
+    bottom: 20px;
+    left: 36px;
+    right: 36px;
+    width: auto;
+    height: 50px;
+    border-radius: 25px;
+    background: rgba(120, 120, 120, 0.7);
+    color: white;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding: 0 16px;
+  }
+  .ab-check-fold .ab-cf-label {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .ab-check-fold .ab-cf-hint {
+    font-size: 9px;
+    line-height: 1;
+    opacity: 0.75;
+  }
+  /* Y3 态:显示过/弃大按钮,隐藏原有弃牌+跟注按钮 */
+  .action-area[data-state="y3"] .ab-check-fold {
+    display: flex;
+  }
+  .action-area[data-state="y3"] .ab-fold,
+  .action-area[data-state="y3"] .ab-check {
+    display: none;
+  }
+
+  /* ---------- S1/S2 滑杆态:三按钮区原样,滑杆面板覆盖在上面 ---------- */
+  /* S1 加注滑杆:同 P1 但显示滑杆弹窗(JS 控制) */
+  /* S2 下注滑杆:同 P2 但显示滑杆弹窗(JS 控制) */
+  /* S1:跟注按钮保留显示(用户可弃可滑加可跟) */
+  .action-area[data-state="s1"] .ab-check-amount,
+  .action-area[data-state="s1"] .ab-check-label {
+    display: block;
+  }
+  /* S2:过牌按钮显示 */
+  .action-area[data-state="s2"] .ab-check-amount,
+  .action-area[data-state="s2"] .ab-check-label {
+    display: none;
+  }
+  .action-area[data-state="s2"] .ab-check-label-check {
+    display: block;
+  }
+
+  /* ---------- 倒计时蒙版:只在 P1/P2/P3/P4(轮到我)显示 ---------- */
+  /* 默认:弃牌按钮蒙版只在 P 组态显示 */
+  .action-area[data-state="y1"] .ab-fold-timer,
+  .action-area[data-state="y2"] .ab-fold-timer,
+  .action-area[data-state="y3"] .ab-fold-timer,
+  .action-area[data-state="s1"] .ab-fold-timer,
+  .action-area[data-state="s2"] .ab-fold-timer {
+    display: none;
   }
 
   /* ⭐ 预选高亮:绿色发光描边 */
@@ -3221,14 +3524,95 @@
     padding: 6px;
     border-radius: 6px;
     border: 1px dashed rgba(255,255,77,0.5);
+    /* v2.18.6 拖动支持(JS 改 left/top) */
+    user-select: none;
+    -webkit-user-select: none;
   }
-  .dev-state-switcher::before {
-    content: 'DEV';
+  /* ⭐ v2.18.6 标题栏:点击折叠 + 按住拖动 */
+  .dev-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 2px 4px;
+    cursor: grab;
+    border-radius: 4px;
+    background: rgba(255,255,77,0.08);
+    transition: background 0.15s;
+  }
+  .dev-header:hover { background: rgba(255,255,77,0.15); }
+  .dev-header:active { cursor: grabbing; }
+  .dev-header-label {
+    color: #ff5;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .dev-header-current {
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(77,255,77,0.2);
+    border: 1px solid rgba(77,255,77,0.5);
+    border-radius: 3px;
+    padding: 0 4px;
+    line-height: 14px;
+  }
+  .dev-header-toggle {
+    color: #ff5;
+    font-size: 10px;
+    transition: transform 0.2s;
+  }
+  /* 折叠态:body 隐藏 + 容器变小 + 箭头转 -90 */
+  .dev-state-switcher.collapsed {
+    border-style: solid;
+    padding: 4px;
+  }
+  .dev-state-switcher.collapsed .dev-body {
+    display: none;
+  }
+  .dev-state-switcher.collapsed .dev-header-toggle {
+    transform: rotate(-90deg);
+  }
+  .dev-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  /* ⭐ v2.18.4 DEV 分组小标题 */
+  .dev-group-title {
     color: #ff5;
     font-size: 8px;
     font-weight: 700;
     text-align: center;
-    margin-bottom: 2px;
+    margin-top: 4px;
+    margin-bottom: 1px;
+    opacity: 0.7;
+    letter-spacing: 1px;
+  }
+  /* ⭐ v2.18.6 座位测试快捷区 */
+  .dev-seat-row {
+    display: flex;
+    gap: 3px;
+  }
+  .dev-seat-btn {
+    flex: 1;
+    background: rgba(60, 60, 60, 0.9);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 4px;
+    font-size: 10px;
+    padding: 3px 0;
+    cursor: pointer;
+    font-family: inherit;
+    min-width: 0;
+  }
+  .dev-seat-btn:hover { background: rgba(80, 80, 80, 0.9); }
+  .dev-seat-btn.active {
+    background: var(--green-main);
+    color: #000;
+    font-weight: 700;
+    border-color: var(--green-main);
   }
   .dev-state-btn {
     background: rgba(60, 60, 60, 0.9);
@@ -3246,6 +3630,17 @@
     color: #000;
     font-weight: 700;
     border-color: var(--green-main);
+  }
+  /* ⭐ v2.18.3 动作型按钮(模拟上家加注/模拟他人行动/新一轮)点击短暂闪绿 600ms
+     用来跟"加注/下注/跟注预选/过牌预选"这种持续 active 态区分:
+     - 状态型:点了之后绿色常亮(同时只有 1 个绿)
+     - 动作型:点了之后绿色闪 600ms 表示"已执行",不常亮 */
+  .dev-state-btn.flash {
+    animation: devBtnFlash 0.6s ease-out;
+  }
+  @keyframes devBtnFlash {
+    0%   { background: var(--green-main); color: #000; border-color: var(--green-main); }
+    100% { background: rgba(60, 60, 60, 0.9); color: white; border-color: rgba(255,255,255,0.3); }
   }
 
   /* 底部工具栏 */
@@ -4395,6 +4790,297 @@
     flex: 1;
   }
 
+  /* ⭐ v2.18.6 买入弹窗专属样式 */
+  .buyin-modal {
+    width: 320px;
+  }
+  .buyin-modal .cm-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  /* 信息行(余额/盲注) */
+  .buyin-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+  .buyin-label {
+    color: rgba(255,255,255,0.6);
+  }
+  .buyin-balance {
+    color: var(--green-main);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .buyin-blinds {
+    color: #fff;
+    font-weight: 600;
+  }
+  /* 金额输入区 */
+  .buyin-amount-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .buyin-amount-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .buyin-amount-label {
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
+  }
+  .buyin-amount-value {
+    color: var(--green-main);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .buyin-amount-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .buyin-amount-units {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+  }
+  /* ⭐ v2.18.6 水平滑杆(离散档位) */
+  .buyin-slider-track {
+    position: relative;
+    width: 100%;
+    height: 28px;
+    margin: 6px 0 2px;
+    cursor: pointer;
+    touch-action: none;
+  }
+  .buyin-slider-track::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 6px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+  }
+  /* 档位刻度点(JS 动态生成) */
+  .buyin-slider-tick {
+    position: absolute;
+    top: 50%;
+    width: 3px;
+    height: 3px;
+    background: rgba(255,255,255,0.25);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  .buyin-slider-tick.passed {
+    background: rgba(255,255,255,0.5);
+  }
+  .buyin-slider-fill {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 6px;
+    width: 50%;
+    background: linear-gradient(to right, #2ecc4d, var(--green-main));
+    border-radius: 3px;
+    pointer-events: none;
+  }
+  .buyin-slider-thumb {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--green-main);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    cursor: grab;
+  }
+  .buyin-slider-thumb:active {
+    cursor: grabbing;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  .buyin-slider-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    margin-top: -2px;
+  }
+  .buyin-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    min-height: 14px;
+  }
+  .buyin-hint.error {
+    color: #ff6a6a;
+  }
+  /* 5 个快捷金额按钮 */
+  .buyin-quick-row {
+    display: flex;
+    gap: 6px;
+  }
+  .buyin-quick-btn {
+    flex: 1;
+    height: 32px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .buyin-quick-btn:hover {
+    background: rgba(255,255,255,0.1);
+  }
+  .buyin-quick-btn.active {
+    background: rgba(77,255,77,0.18);
+    border-color: var(--green-main);
+    color: var(--green-main);
+  }
+  /* 自动补码 */
+  .buyin-autorebuy {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+  }
+  .buyin-autorebuy input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--green-main);
+    cursor: pointer;
+  }
+  /* 底部按钮 */
+  .buyin-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .buyin-btn {
+    flex: 1;
+    height: 44px;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .buyin-btn-cancel {
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.7);
+  }
+  .buyin-btn-cancel:hover {
+    background: rgba(255,255,255,0.12);
+  }
+  .buyin-btn-confirm {
+    background: var(--green-main);
+    color: #000;
+  }
+  .buyin-btn-confirm:hover {
+    background: #3de63d;
+  }
+  .buyin-btn-confirm:disabled,
+  .buyin-btn-confirm.disabled {
+    background: rgba(120,120,120,0.5);
+    color: rgba(255,255,255,0.4);
+    cursor: not-allowed;
+  }
+  /* 淡入动画(简洁不浮夸) */
+  .center-modal-mask.show .buyin-modal {
+    animation: buyinFadeIn 0.18s ease-out;
+  }
+  @keyframes buyinFadeIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  /* ⭐ v2.18.6 子项 5 入局选择弹窗 */
+  .entry-modal {
+    width: 320px;
+  }
+  .entry-modal .cm-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .entry-welcome {
+    text-align: center;
+    font-size: 14px;
+    color: rgba(255,255,255,0.6);
+    padding-bottom: 4px;
+  }
+  .entry-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: #fff;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .entry-option:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(77,255,77,0.4);
+  }
+  .entry-option:active {
+    transform: scale(0.98);
+  }
+  .entry-option-icon {
+    font-size: 26px;
+    flex-shrink: 0;
+    width: 32px;
+    text-align: center;
+  }
+  .entry-option-text {
+    flex: 1;
+  }
+  .entry-option-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .entry-option-desc {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    line-height: 1.3;
+  }
+  /* 等大盲:中性色 */
+  .entry-wait .entry-option-title {
+    color: #b8b8b8;
+  }
+  /* 立即下注:绿色突出 */
+  .entry-post .entry-option-title {
+    color: var(--green-main);
+  }
+  .center-modal-mask.show .entry-modal {
+    animation: buyinFadeIn 0.18s ease-out;
+  }
+
   /* 牌局信息表格 */
   .info-row {
     display: flex;
@@ -4852,7 +5538,7 @@
   }
 
   /* ===================================================
-     ====== 4色花主题:让牌桌上的扑克牌按4色显示 ======
+     ====== 4色花主题:过牌桌上的扑克牌按4色显示 ======
      =================================================== */
   /* 公共牌 + 我的牌 都通过 suit 字符识别花色,用 data 属性切色 */
   /* 默认 .card.red 红/黑两色,加 .card4color 后梅花变绿、方块变蓝 */
@@ -8663,16 +9349,70 @@
         <div class="seat-chips">1.4K</div>
       </div>
 
-      <!-- ⭐ v2.16 临时三态切换器(DEV 用,WebSocket 接入后删) -->
+      <!-- ⭐ v2.18.4 DEV 切换器:9 个静态弹窗 + 动作型按钮(WebSocket 接入后删)
+           ⭐ v2.18.6 标题栏可点击折叠 + 按住拖动 -->
       <div class="dev-state-switcher" id="dev-state-switcher">
-        <button class="dev-state-btn active" data-dev-state="raise">加注</button>
-        <button class="dev-state-btn" data-dev-state="call">跟注预选</button>
-        <button class="dev-state-btn" data-dev-state="check">让牌预选</button>
-        <button class="dev-state-btn" id="dev-sim-raise" style="margin-top:6px;background:rgba(255,140,40,0.85);">模拟上家加注</button>
+        <!-- 标题栏:左 DEV 标签 / 中 当前态 / 右 折叠箭头 -->
+        <div class="dev-header" id="dev-header">
+          <span class="dev-header-label">DEV</span>
+          <span class="dev-header-current" id="dev-header-current">P1</span>
+          <span class="dev-header-toggle" id="dev-header-toggle">▼</span>
+        </div>
+        <div class="dev-body" id="dev-body">
+        <!-- 轮到我 4 态 -->
+        <div class="dev-group-title">轮到我</div>
+        <button class="dev-state-btn active" data-dev-state="p1">P1 加注</button>
+        <button class="dev-state-btn" data-dev-state="p2">P2 下注</button>
+        <button class="dev-state-btn" data-dev-state="p3">P3 过牌-加注</button>
+        <button class="dev-state-btn" data-dev-state="p4">P4 All-In跟</button>
+        <!-- 预选 4 态 -->
+        <div class="dev-group-title">预选</div>
+        <button class="dev-state-btn" data-dev-state="y1">Y1 跟注预选</button>
+        <button class="dev-state-btn" data-dev-state="y2">Y2 过牌预选</button>
+        <button class="dev-state-btn" data-dev-state="y3">Y3 过/弃预选</button>
+        <!-- 滑杆 2 态 -->
+        <div class="dev-group-title">滑杆</div>
+        <button class="dev-state-btn" data-dev-state="s1">S1 加注滑杆</button>
+        <button class="dev-state-btn" data-dev-state="s2">S2 下注滑杆</button>
+        <!-- 动作型 -->
+        <div class="dev-group-title">动作</div>
+        <button class="dev-state-btn" id="dev-sim-raise">模拟上家加注</button>
+        <button class="dev-state-btn" id="dev-acting-other">模拟他人行动</button>
+        <!-- ⭐ v2.18.6 座位人数测试快捷区 -->
+        <div class="dev-group-title">座位测试 7人桌</div>
+        <div class="dev-seat-row">
+          <button class="dev-seat-btn" data-dev-seats="1/7">1/7</button>
+          <button class="dev-seat-btn" data-dev-seats="2/7">2/7</button>
+          <button class="dev-seat-btn" data-dev-seats="3/7">3/7</button>
+          <button class="dev-seat-btn" data-dev-seats="4/7">4/7</button>
+        </div>
+        <div class="dev-seat-row">
+          <button class="dev-seat-btn" data-dev-seats="5/7">5/7</button>
+          <button class="dev-seat-btn" data-dev-seats="6/7">6/7</button>
+          <button class="dev-seat-btn" data-dev-seats="7/7">7/7</button>
+        </div>
+        <div class="dev-group-title">座位测试 9人桌</div>
+        <div class="dev-seat-row">
+          <button class="dev-seat-btn" data-dev-seats="0/9">0/9</button>
+          <button class="dev-seat-btn" data-dev-seats="1/9">1/9</button>
+          <button class="dev-seat-btn" data-dev-seats="2/9">2/9</button>
+          <button class="dev-seat-btn" data-dev-seats="3/9">3/9</button>
+        </div>
+        <div class="dev-seat-row">
+          <button class="dev-seat-btn" data-dev-seats="4/9">4/9</button>
+          <button class="dev-seat-btn" data-dev-seats="5/9">5/9</button>
+          <button class="dev-seat-btn" data-dev-seats="6/9">6/9</button>
+          <button class="dev-seat-btn" data-dev-seats="7/9">7/9</button>
+        </div>
+        <div class="dev-seat-row">
+          <button class="dev-seat-btn" data-dev-seats="8/9">8/9</button>
+          <button class="dev-seat-btn" data-dev-seats="9/9">9/9</button>
+        </div>
+        </div>
       </div>
 
       <!-- ⭐ v2.15 玩家行动按钮区(默认显示加注弹窗) -->
-      <div class="action-area" id="action-area" data-state="raise">
+      <div class="action-area" id="action-area" data-state="p1">
         <!-- 5 个快捷加注键(只在 state=raise 时显示) -->
         <div class="ab-tile tile-1" data-raise-tile="1/5" data-amount="82">
           <div class="t-frac">1/5</div>
@@ -8701,7 +9441,10 @@
 
         <!-- 3 大主按钮 -->
         <button class="ab-btn ab-fold" id="ab-fold-btn">
-          <span>弃牌</span>
+          <span class="ab-fold-label">弃牌</span>
+          <!-- ⭐ v2.18.3 倒计时秒数(15→0,跟扇形蒙版同步)
+               P2/P3 态隐藏(秒数已挪到过牌按钮上),P1/P4 显示 -->
+          <span class="ab-fold-seconds" id="ab-fold-seconds">15</span>
           <!-- 黑色扇形倒计时蒙版(15秒消减,JS 驱动) -->
           <span class="ab-fold-timer" id="ab-fold-timer"></span>
         </button>
@@ -8721,11 +9464,24 @@
             <span>免费</span>
           </span>
         </button>
-        <button class="ab-btn ab-raise" id="ab-raise-btn">加注</button>
+        <button class="ab-btn ab-raise" id="ab-raise-btn" data-action="raise"><span class="ab-raise-text-raise">加注</span><span class="ab-raise-text-bet">下注</span></button>
         <button class="ab-btn ab-check" id="ab-check-btn">
           <span class="ab-check-amount" id="ab-check-amount">40</span>
           <span class="ab-check-label" id="ab-check-label">跟注</span>
-          <span class="ab-check-label-check">让牌</span>
+          <span class="ab-check-label-check">过牌</span>
+          <!-- ⭐ v2.18.4 P4 All-In 跟注文案 -->
+          <span class="ab-check-label-allin">全下</span>
+          <!-- ⭐ v2.18.3 过牌态倒计时秒数(check态/下注态显示) -->
+          <span class="ab-check-seconds" id="ab-check-seconds">15</span>
+          <!-- ⭐ v2.18.1 过牌态倒计时蒙版(check态显示,call/raise态隐藏) -->
+          <span class="ab-check-timer" id="ab-check-timer"></span>
+        </button>
+
+        <!-- ⭐ v2.18.4 Y3 过/弃合并预选大按钮(默认隐藏,只在 data-state="y3" 时显示)
+             大盲位常用:没人加我就过,有人加我就弃 -->
+        <button class="ab-btn ab-check-fold" id="ab-check-fold-btn">
+          <span class="ab-cf-label">过牌/弃牌</span>
+          <span class="ab-cf-hint">无人加注则过牌</span>
         </button>
       </div>
 
@@ -9303,6 +10059,95 @@
             <div class="rules-tab" data-rules-tab="保险">保险</div>
           </div>
           <div class="cm-body" id="rules-body"></div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.18.6 买入弹窗(点空座位坐下时触发)
+           子项 2:买入弹窗 + 子项 3:金额选择 + 子项 4:确认坐下
+           关闭方式:点蒙版 / 点 ✕ / 点取消 -->
+      <div class="center-modal-mask" id="buyin-modal-mask">
+        <div class="center-modal buyin-modal">
+          <div class="cm-header">
+            <span class="cm-title">买入</span>
+            <span class="cm-close" data-close-modal="buyin-modal-mask">✕</span>
+          </div>
+          <div class="cm-body">
+            <!-- 余额行 -->
+            <div class="buyin-row">
+              <span class="buyin-label">钱包余额</span>
+              <span class="buyin-balance" id="buyin-balance">50,000</span>
+            </div>
+            <!-- 盲注信息 -->
+            <div class="buyin-row">
+              <span class="buyin-label">盲注</span>
+              <span class="buyin-blinds" id="buyin-blinds">0.5/1</span>
+            </div>
+            <!-- ⭐ v2.18.6 子项 2 修订:滑杆按买入档位跳动(100×大盲为单位) -->
+            <div class="buyin-amount-section">
+              <div class="buyin-amount-display">
+                <span class="buyin-amount-label">买入金额</span>
+                <span class="buyin-amount-meta">
+                  <span class="buyin-amount-value" id="buyin-amount-value">100</span>
+                  <span class="buyin-amount-units">(<span id="buyin-amount-units">1</span> 个买入)</span>
+                </span>
+              </div>
+              <!-- 水平滑杆(离散档位) -->
+              <div class="buyin-slider-track" id="buyin-slider-track">
+                <div class="buyin-slider-fill" id="buyin-slider-fill"></div>
+                <div class="buyin-slider-thumb" id="buyin-slider-thumb"></div>
+              </div>
+              <div class="buyin-slider-scale">
+                <span><span id="buyin-slider-min-units">1</span> 个</span>
+                <span><span id="buyin-slider-max-units">50</span> 个</span>
+              </div>
+              <div class="buyin-hint" id="buyin-hint">1 个买入 = 100 大盲</div>
+            </div>
+            <!-- 5 个快捷买入个数 -->
+            <div class="buyin-quick-row">
+              <button class="buyin-quick-btn" data-buyins="1">1个</button>
+              <button class="buyin-quick-btn" data-buyins="3">3个</button>
+              <button class="buyin-quick-btn active" data-buyins="5">5个</button>
+              <button class="buyin-quick-btn" data-buyins="10">10个</button>
+              <button class="buyin-quick-btn" data-buyins="max">最大</button>
+            </div>
+            <!-- 自动补码(占位,子项 7 实现) -->
+            <label class="buyin-autorebuy">
+              <input type="checkbox" id="buyin-autorebuy">
+              <span>自动补码(筹码 &lt; 1BB 时自动补到 100BB)</span>
+            </label>
+            <!-- 底部按钮 -->
+            <div class="buyin-footer">
+              <button class="buyin-btn buyin-btn-cancel" data-close-modal="buyin-modal-mask">取消</button>
+              <button class="buyin-btn buyin-btn-confirm" id="buyin-confirm-btn">买入</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.18.6 子项 5:入局选择弹窗(坐下后立即弹) -->
+      <div class="center-modal-mask" id="entry-modal-mask">
+        <div class="center-modal entry-modal">
+          <div class="cm-header">
+            <span class="cm-title">入局方式</span>
+            <span class="cm-close" data-close-modal="entry-modal-mask">✕</span>
+          </div>
+          <div class="cm-body">
+            <div class="entry-welcome">欢迎来到牌桌</div>
+            <button class="entry-option entry-wait" id="entry-wait-btn">
+              <div class="entry-option-icon">⏰</div>
+              <div class="entry-option-text">
+                <div class="entry-option-title">等待大盲</div>
+                <div class="entry-option-desc">免费等待,大盲位轮到自己再入局</div>
+              </div>
+            </button>
+            <button class="entry-option entry-post" id="entry-post-btn">
+              <div class="entry-option-icon">🎯</div>
+              <div class="entry-option-text">
+                <div class="entry-option-title">立即下注大盲</div>
+                <div class="entry-option-desc" id="entry-post-desc">补一个大盲入局,下一手即开始</div>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -10682,26 +11527,32 @@
       poolLimit: '无限制',
       forceGrab: '已开启',
       payPublic: '0.05USDT',
-      payHand: '0.05USDT'
+      payHand: '0.05USDT',
+      maxBuyins: 100  // ⭐ v2.18.6 最大买入个数(开桌时设置,后端推送)
     }, opts);
   }
 
   const rooms = [
-    makeRoom({ name: '永旺娱乐(长牌) 01031', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 5, total: 7, time: '00:08:17', buyin: 20 }),
-    makeRoom({ name: '永旺娱乐(长牌) 01032', blinds: '0.2/0.5/1(1)', type: '长牌', seats: 7, total: 9, seatTotal: 9, time: '01:23:45', buyin: 50, duration: '3h', autoStart: 4 }),
-    makeRoom({ name: '永旺娱乐(短牌) 01033', blinds: '0.5/1/2(2)', type: '短牌', seats: 3, total: 6, seatTotal: 6, time: '00:02:34', buyin: 100, insurance: '已关闭', forceGrab: '已关闭' }),
-    makeRoom({ name: 'VIP高额局 长牌 01034', blinds: '1/2/4(4)', type: '长牌', seats: 4, total: 4, seatTotal: 4, time: '02:11:08', buyin: 200 }),
-    makeRoom({ name: '新手娱乐场 01035', blinds: '0.05/0.1/0.2(0.2)', type: '长牌', seats: 4, total: 7, time: '00:45:22', buyin: 10 }),
-    makeRoom({ name: '黄金VIP厅 01036', blinds: '2/5/10(10)', type: '长牌', seats: 7, total: 7, time: '03:45:11', buyin: 500 }),
-    makeRoom({ name: '快速短牌 01037', blinds: '0.1/0.2(0.2)', type: '短牌', seats: 2, total: 7, time: '00:15:30', buyin: 5 }),
-    makeRoom({ name: '高手对决 长牌 01038', blinds: '5/10/20(20)', type: '长牌', seats: 5, total: 7, time: '01:08:45', buyin: 1000 }),
-    makeRoom({ name: '永旺娱乐(长牌) 01039', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 6, total: 7, time: '04:20:18', buyin: 20 }),
-    makeRoom({ name: '深夜场 短牌 01040', blinds: '0.5/1(1)', type: '短牌', seats: 4, total: 7, time: '02:55:09', buyin: 50 }),
-    makeRoom({ name: '俱乐部内局 01041', blinds: '0.2/0.5/1(1)', type: '长牌', seats: 7, total: 7, time: '05:30:22', buyin: 100 }),
-    makeRoom({ name: '新手友好场 01042', blinds: '0.02/0.05/0.1(0.1)', type: '长牌', seats: 3, total: 7, time: '00:33:14', buyin: 2 }),
-    makeRoom({ name: '土豪专场 短牌 01043', blinds: '10/20(20)', type: '短牌', seats: 5, total: 7, time: '01:45:33', buyin: 2000 }),
-    makeRoom({ name: '永旺娱乐(长牌) 01044', blinds: '0.5/1/2(2)', type: '长牌', seats: 7, total: 7, time: '06:11:55', buyin: 100 }),
-    makeRoom({ name: '快速牌局 短牌 01045', blinds: '0.1/0.2(0.2)', type: '短牌', seats: 1, total: 7, time: '00:01:48', buyin: 5 })
+    // ⭐ v2.18.6 大厅房间数据严格对应 17 个测试场景(X/Y 一一对应)
+    // 7 人桌 7 个:1/7 ~ 7/7
+    makeRoom({ name: '永旺娱乐(长牌) 01031', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 1, total: 7, seatTotal: 7, time: '00:01:48', buyin: 20 }),
+    makeRoom({ name: '快速短牌 01032',       blinds: '0.1/0.2(0.2)',     type: '短牌', seats: 2, total: 7, seatTotal: 7, time: '00:15:30', buyin: 5 }),
+    makeRoom({ name: '新手友好场 01033',      blinds: '0.02/0.05/0.1(0.1)', type: '长牌', seats: 3, total: 7, seatTotal: 7, time: '00:33:14', buyin: 2 }),
+    makeRoom({ name: '新手娱乐场 01034',      blinds: '0.05/0.1/0.2(0.2)', type: '长牌', seats: 4, total: 7, seatTotal: 7, time: '00:45:22', buyin: 10 }),
+    makeRoom({ name: '高手对决 长牌 01035',   blinds: '5/10/20(20)',      type: '长牌', seats: 5, total: 7, seatTotal: 7, time: '01:08:45', buyin: 1000 }),
+    makeRoom({ name: '永旺娱乐(长牌) 01036', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 6, total: 7, seatTotal: 7, time: '04:20:18', buyin: 20 }),
+    makeRoom({ name: '俱乐部内局 01037',      blinds: '0.2/0.5/1(1)',     type: '长牌', seats: 7, total: 7, seatTotal: 7, time: '05:30:22', buyin: 100 }),
+    // 9 人桌 10 个:0/9 ~ 9/9
+    makeRoom({ name: '深夜场 短牌 01038',     blinds: '0.5/1(1)',         type: '短牌', seats: 0, total: 9, seatTotal: 9, time: '00:00:00', buyin: 50 }),
+    makeRoom({ name: '土豪专场 短牌 01039',   blinds: '10/20(20)',        type: '短牌', seats: 1, total: 9, seatTotal: 9, time: '00:02:34', buyin: 2000 }),
+    makeRoom({ name: '永旺娱乐(长牌) 01040', blinds: '0.5/1/2(2)',       type: '长牌', seats: 2, total: 9, seatTotal: 9, time: '00:11:55', buyin: 100 }),
+    makeRoom({ name: '永旺娱乐(短牌) 01041', blinds: '0.5/1/2(2)',       type: '短牌', seats: 3, total: 9, seatTotal: 9, time: '00:22:15', buyin: 100 }),
+    makeRoom({ name: '快速牌局 短牌 01042',   blinds: '0.1/0.2(0.2)',     type: '短牌', seats: 4, total: 9, seatTotal: 9, time: '01:45:33', buyin: 5 }),
+    makeRoom({ name: '永旺娱乐(长牌) 01043', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 5, total: 9, seatTotal: 9, time: '00:08:17', buyin: 20 }),
+    makeRoom({ name: '永旺娱乐(长牌) 01044', blinds: '0.2/0.5/1(1)',     type: '长牌', seats: 6, total: 9, seatTotal: 9, time: '01:23:45', buyin: 50, duration: '3h', autoStart: 4 }),
+    makeRoom({ name: '黄金VIP厅 01045',      blinds: '2/5/10(10)',       type: '长牌', seats: 7, total: 9, seatTotal: 9, time: '03:45:11', buyin: 500 }),
+    makeRoom({ name: 'VIP高额局 长牌 01046', blinds: '1/2/4(4)',         type: '长牌', seats: 8, total: 9, seatTotal: 9, time: '02:11:08', buyin: 200 }),
+    makeRoom({ name: '夜间高手场 01047',      blinds: '5/10/20(20)',      type: '长牌', seats: 9, total: 9, seatTotal: 9, time: '06:55:33', buyin: 1500 })
   ];
 
   // 渲染房间列表
@@ -10799,9 +11650,12 @@
     // room.maxSeats 优先,兼容旧字段 seatTotal/total
     const maxSeats = room.maxSeats || room.seatTotal || room.total || 9;
     room.maxSeats = maxSeats; // 回写,后续可用
-    // ⭐ v2.15 摊牌演示:强制 9 人满座(含我自己) - 看摊牌效果用
-    // 真实业务:删掉这行,用后端推送的 room.seats
-    room.seats = 9;
+    // ⭐ v2.18.6 删除硬编码 room.seats,改用大厅传过来的真实人数
+    // 真实业务:room.seats 由后端推送,大厅展示"X/Y" → 牌桌渲染必须一致
+    // 如果 room.seats 没传(直接进牌桌测试),默认 7 演示空座位 UI
+    if (typeof room.seats !== 'number') {
+      room.seats = 7;
+    }
     // 调用座位渲染函数(传入桌子数据)
     renderSeats(room);
 
@@ -10847,8 +11701,9 @@
     // 格式: { s1: {name, balance, avatar, ...}, s3: {...}, ... }
     // s0 = 我自己,单独由 .my-seat 渲染
     // ⭐ 数据源唯一:demoOccupied 用 room.seats (已坐人数,含我自己)
-    const occupied = room.occupiedSeats || demoOccupied(room.seats || 0);
+    // ⭐ v2.18.6 maxSeats 必须先声明,因为 demoOccupied 要用它
     const maxSeats = room.maxSeats;
+    const occupied = room.occupiedSeats || demoOccupied(room.seats || 0);
     // 已坐人数 = 后端字段 room.seats (含我自己)
     // 兼容:如果没传 seats,用 occupied 数量+1 推算
     const seatedCount = (typeof room.seats === 'number')
@@ -10877,7 +11732,12 @@
           ${player.winTag ? `<div class="win-tag">${player.winTag}</div>` : ''}
           ${player.isDealer ? `<div class="dealer-mark">D</div>` : ''}
           ${player.action ? `<div class="seat-action-tag action-${player.action}">${player.actionLabel || player.action.toUpperCase()}</div>` : ''}
-          <div class="seat-avatar">${player.avatar || player.name.charAt(0)}</div>
+          <div class="seat-avatar">${player.avatar || player.name.charAt(0)}
+            <svg class="seat-turn-ring" viewBox="-30 -30 60 60">
+              <circle cx="0" cy="0" r="26"/>
+              <circle class="turn-head-glow" cx="0" cy="-26" r="3"/>
+            </svg>
+          </div>
           <div class="seat-cards-back">${cardsHtml}</div>
           <div class="seat-name-chip">${player.name}</div>
           <div class="seat-chips">${player.chips}</div>
@@ -10889,61 +11749,56 @@
         `;
         if (player.winTag) seatEl.classList.add('winner');
         if (player.folded) seatEl.classList.add('folded');
+        if (player.waitbb) seatEl.classList.add('waitbb');  // ⭐ v2.18.6 等大盲灰显
       } else if (isFull) {
         // ===== 满员状态:剩余空位变"N人满员"(不可点) =====
         seatEl.classList.add('full');
         seatEl.innerHTML = `<div class="seat-avatar">${maxSeats}人<br>满员</div>`;
       } else {
-        // ===== 空座(可点击坐下) =====
+        // ===== 空座(可点击坐下)v2.18.6:从"空座"改为"+ 坐下" =====
         seatEl.classList.add('empty');
-        seatEl.innerHTML = `<div class="seat-avatar">空座</div>`;
+        seatEl.innerHTML = `<div class="seat-avatar">
+          <span class="empty-plus">+</span>
+          <span class="empty-text">坐下</span>
+        </div>`;
       }
     });
   }
 
+  // ⭐ v2.18.6 演示玩家池抽到外层,买入弹窗坐下时也能用
+  // 真实业务:这整个池删除,演示玩家完全由后端推送
+  const DEMO_PLAYER_POOL = [
+    { name: 'FastBr...', avatar: 'F', chips: '920' },
+    { name: 'AOE',       avatar: 'A', chips: '900' },
+    { name: 'Palpit...', avatar: 'P', chips: '920' },
+    { name: '听尽天...',  avatar: '听', chips: '910' },
+    { name: 'SoftLu...', avatar: 'S', chips: '880' },
+    { name: 'Breeze',    avatar: 'B', chips: '870' },
+    { name: 'Occan...',  avatar: 'O', chips: '850' },
+    { name: '贝加岭',     avatar: '贝', chips: '880' }
+  ];
+
   // 演示用假数据生成器(等后端 occupiedSeats 真实数据)
   // ⭐ 单一数据源:接收"已坐人数"seats(含我自己),生成 seats-1 个其他玩家
   // 真实业务:这个函数会被删,完全用 room.occupiedSeats(后端推送)
-  function demoOccupied(seats) {
+  function demoOccupied(seats, maxSeats) {
+    maxSeats = maxSeats || 9;  // ⭐ v2.18.6 默认 9 人桌,兼容旧调用
     // 8 个玩家假数据池(够 9 位桌用)
     // ⭐ v2.15 翻牌阶段(Flop)演示场景:9 人全部入池,无人弃牌,未摊牌
     // ⭐ v2.16 新增 action 字段:演示动作状态丰富场景
     //   action 值: raise / call / check / allin / fold(配合 folded:true)
     //   actionLabel: 标签显示文字(默认按 action 大写,可自定义)
     //   folded: true 则座位灰显
+    // ⭐ v2.18.6 基础玩家信息从 DEMO_PLAYER_POOL 拿,这里只加演示场景的动作字段
     const demoPlayers = [
-      {
-        name: 'FastBr...',  avatar: 'F', chips: '920', isDealer: true, bet: 4,
-        action: 'raise', actionLabel: '加注'
-      },
-      {
-        name: 'AOE',        avatar: 'A', chips: '900', bet: 8,
-        action: 'straddle', actionLabel: '抓头'
-      },
-      {
-        name: 'Palpit...',  avatar: 'P', chips: '920', bet: 60,
-        action: 'raise', actionLabel: '加注'
-      },
-      {
-        name: '听尽天...',   avatar: '听', chips: '910', bet: 20,
-        action: 'call', actionLabel: '跟注'
-      },
-      {
-        name: 'SoftLu...',  avatar: 'S', chips: '0', bet: 910,
-        action: 'allin', actionLabel: 'ALL-IN'
-      },
-      {
-        name: 'Breeze',     avatar: 'B', chips: '870', bet: 20,
-        action: 'check', actionLabel: '让牌'
-      },
-      {
-        name: 'Occan...',   avatar: 'O', chips: '850', bet: 0,
-        folded: true, action: 'fold', actionLabel: '弃牌'
-      },
-      {
-        name: '贝加岭',      avatar: '贝', chips: '880', bet: 20,
-        action: 'call', actionLabel: '跟注'
-      }
+      Object.assign({}, DEMO_PLAYER_POOL[0], { isDealer: true, bet: 4,  action: 'raise',    actionLabel: '加注' }),
+      Object.assign({}, DEMO_PLAYER_POOL[1],                { bet: 8,  action: 'straddle', actionLabel: '抓头' }),
+      Object.assign({}, DEMO_PLAYER_POOL[2],                { bet: 60, action: 'raise',    actionLabel: '加注' }),
+      Object.assign({}, DEMO_PLAYER_POOL[3],                { bet: 20, action: 'call',     actionLabel: '跟注' }),
+      Object.assign({}, DEMO_PLAYER_POOL[4], { chips: '0',   bet: 910, action: 'allin',    actionLabel: 'ALL-IN' }),
+      Object.assign({}, DEMO_PLAYER_POOL[5],                { bet: 20, action: 'check',    actionLabel: '过牌' }),
+      Object.assign({}, DEMO_PLAYER_POOL[6], { bet: 0, folded: true,    action: 'fold',     actionLabel: '弃牌' }),
+      Object.assign({}, DEMO_PLAYER_POOL[7],                { bet: 20, action: 'call',     actionLabel: '跟注' })
     ];
     // 已坐人数 seats(含我自己),所以其他玩家 = seats - 1
     const otherCount = Math.min(demoPlayers.length, Math.max(0, seats - 1));
@@ -10958,7 +11813,7 @@
 
   // ⭐ v2.15 空座点击监听(事件委托,绑在牌桌容器上)
   // 真实业务:点空座 → 弹"坐下买入"弹窗 → 后端 /api/table/sit
-  // 现阶段:占位 toast
+  // ⭐ v2.18.6 子项 2:点空座 → 弹买入弹窗
   const pageTableEl = document.getElementById('page-table');
   if (pageTableEl) {
     pageTableEl.addEventListener('click', (e) => {
@@ -10971,8 +11826,364 @@
         return;
       }
       if (seat.classList.contains('empty')) {
-        // 空座可坐
-        if (typeof showToast === 'function') showToast('选位坐下(开发中)');
+        // 空座可坐 → 打开买入弹窗
+        openBuyinModal(seat);
+      }
+    });
+  }
+
+  // ⭐ v2.18.6 买入弹窗交互(子项 2 修订:按"买入个数"档位滑杆)
+  // 业务规则:
+  //   1 个买入 = 100 × 大盲(独站德州标准)
+  //   最多个数 = room.maxBuyins(开桌时设置,后端推送)
+  //   实际可选最大 = min(maxBuyins, floor(余额 / 单买入))
+  //   滑杆离散档位:1 / 2 / 3 / ... / 实际最大
+  // 真实业务:发送 /api/table/sit { seatId, buyinUnits, autoRebuy }
+  let pendingSeat = null;
+  const buyinMask = document.getElementById('buyin-modal-mask');
+  const buyinValueEl = document.getElementById('buyin-amount-value');
+  const buyinUnitsEl = document.getElementById('buyin-amount-units');
+  const buyinMinUnitsEl = document.getElementById('buyin-slider-min-units');
+  const buyinMaxUnitsEl = document.getElementById('buyin-slider-max-units');
+  const buyinHint = document.getElementById('buyin-hint');
+  const buyinConfirm = document.getElementById('buyin-confirm-btn');
+  const buyinBalance = document.getElementById('buyin-balance');
+  const buyinBlindsEl = document.getElementById('buyin-blinds');
+  const buyinTrack = document.getElementById('buyin-slider-track');
+  const buyinFill = document.getElementById('buyin-slider-fill');
+  const buyinThumb = document.getElementById('buyin-slider-thumb');
+  const buyinQuickBtns = document.querySelectorAll('.buyin-quick-btn');
+
+  // 假数据:当前用户余额(等钱包系统对接后端)
+  let demoUserBalance = 50000;
+
+  // 滑杆当前档位状态(在 openBuyinModal 里初始化)
+  let buyinState = {
+    bb: 1,              // 大盲值
+    perUnit: 100,       // 单个买入金额 = 100 × bb
+    maxUnits: 50,       // 实际可选最大个数 = min(maxBuyins, floor(balance/perUnit))
+    currentUnits: 5     // 当前选中个数(1 ~ maxUnits)
+  };
+
+  function openBuyinModal(seatEl) {
+    if (!buyinMask) return;
+    pendingSeat = seatEl;
+    // 从当前房间数据读盲注
+    const blindsStr = (currentTableRoom && currentTableRoom.blinds) || '0.5/1';
+    const bb = parseBigBlind(blindsStr);
+    // 1 个买入 = 100 × 大盲
+    const perUnit = bb * 100;
+    // 房间设置的最大买入个数(后端推送,默认 100)
+    const roomMaxBuyins = (currentTableRoom && currentTableRoom.maxBuyins) || 100;
+    // 余额能买几个(整除)
+    const affordableUnits = Math.floor(demoUserBalance / perUnit);
+    // 实际可选最大 = min(房间设置, 余额能买的)
+    const maxUnits = Math.max(0, Math.min(roomMaxBuyins, affordableUnits));
+
+    buyinState = {
+      bb,
+      perUnit,
+      maxUnits,
+      currentUnits: maxUnits === 0 ? 0 : Math.min(5, maxUnits)  // 默认 5 个,余额不够就取上限
+    };
+
+    // 更新弹窗显示
+    if (buyinBlindsEl) buyinBlindsEl.textContent = blindsStr;
+    if (buyinBalance) buyinBalance.textContent = formatAmount(demoUserBalance);
+    if (buyinMinUnitsEl) buyinMinUnitsEl.textContent = maxUnits === 0 ? '0' : '1';
+    if (buyinMaxUnitsEl) buyinMaxUnitsEl.textContent = maxUnits;
+
+    // 渲染档位刻度点
+    renderBuyinTicks();
+    // 应用当前选中档位
+    setBuyinUnits(buyinState.currentUnits);
+    // 默认选中"5个"快捷键(如果可选)
+    buyinQuickBtns.forEach(b => {
+      b.classList.toggle('active', b.dataset.buyins === String(buyinState.currentUnits));
+    });
+
+    buyinMask.classList.add('show');
+  }
+
+  // 整数显示;小数保留两位但去掉尾零
+  function formatAmount(n) {
+    if (n === Math.floor(n)) return n.toLocaleString();
+    return parseFloat(n.toFixed(2)).toLocaleString();
+  }
+
+  // 从盲注字符串解析大盲值
+  function parseBigBlind(blindsStr) {
+    if (!blindsStr) return 1;
+    const paren = blindsStr.match(/\(([\d.]+)\)/);
+    if (paren) return parseFloat(paren[1]);
+    const parts = blindsStr.split('/').map(s => parseFloat(s));
+    return parts[parts.length - 1] || 1;
+  }
+
+  // 渲染滑杆档位刻度点(maxUnits ≤ 30 时显示,太多就不显示避免太挤)
+  function renderBuyinTicks() {
+    if (!buyinTrack) return;
+    // 清除旧刻度
+    buyinTrack.querySelectorAll('.buyin-slider-tick').forEach(t => t.remove());
+    const { maxUnits, currentUnits } = buyinState;
+    if (maxUnits <= 1 || maxUnits > 30) return;  // 1 个或太多不画刻度
+    for (let i = 1; i <= maxUnits; i++) {
+      const tick = document.createElement('div');
+      tick.className = 'buyin-slider-tick';
+      if (i <= currentUnits) tick.classList.add('passed');
+      const pct = ((i - 1) / (maxUnits - 1)) * 100;
+      tick.style.left = pct + '%';
+      buyinTrack.appendChild(tick);
+    }
+  }
+
+  // 设置买入档位(统一入口:更新数字 + 滑杆 + 提示 + 校验)
+  function setBuyinUnits(units) {
+    const { maxUnits, perUnit } = buyinState;
+    units = Math.max(0, Math.min(maxUnits, Math.round(units)));
+    buyinState.currentUnits = units;
+    const amount = units * perUnit;
+
+    // 显示金额(整数 → 整数显示)
+    if (buyinValueEl) buyinValueEl.textContent = formatAmount(amount);
+    if (buyinUnitsEl) buyinUnitsEl.textContent = units;
+
+    // 滑杆位置:0~100%(maxUnits=1 时把手永远在中间;否则按档位)
+    let pct = 0;
+    if (maxUnits >= 1) {
+      pct = maxUnits === 1 ? 100 : ((units - 1) / (maxUnits - 1)) * 100;
+      if (units === 0) pct = 0;
+    }
+    if (buyinFill) buyinFill.style.width = pct + '%';
+    if (buyinThumb) buyinThumb.style.left = pct + '%';
+
+    // 更新刻度的 passed 状态
+    if (buyinTrack) {
+      buyinTrack.querySelectorAll('.buyin-slider-tick').forEach((t, idx) => {
+        t.classList.toggle('passed', (idx + 1) <= units);
+      });
+    }
+
+    // 提示和校验
+    if (buyinHint && buyinConfirm) {
+      if (maxUnits === 0) {
+        buyinHint.textContent = `余额不足 1 个买入(需要 ${formatAmount(perUnit)})`;
+        buyinHint.classList.add('error');
+        buyinConfirm.classList.add('disabled');
+      } else if (units === 0) {
+        buyinHint.textContent = '请选择买入个数';
+        buyinHint.classList.add('error');
+        buyinConfirm.classList.add('disabled');
+      } else {
+        buyinHint.textContent = `1 个买入 = ${formatAmount(perUnit)}(100 大盲)`;
+        buyinHint.classList.remove('error');
+        buyinConfirm.classList.remove('disabled');
+      }
+    }
+  }
+
+  // ---- 滑杆拖动逻辑(rAF 节流,踩坑 #37 + #50) ----
+  let sliderDrag = null;
+  let sliderRafId = null;
+  let sliderPendingUnits = null;
+
+  function applySliderUnits() {
+    sliderRafId = null;
+    if (sliderPendingUnits != null) {
+      setBuyinUnits(sliderPendingUnits);
+      sliderPendingUnits = null;
+      // 用户拖滑杆 → 清掉快捷键的 active
+      buyinQuickBtns.forEach(b => b.classList.remove('active'));
+    }
+  }
+
+  function getEventX(e) {
+    if (e.touches && e.touches[0]) return e.touches[0].clientX;
+    if (e.changedTouches && e.changedTouches[0]) return e.changedTouches[0].clientX;
+    return e.clientX;
+  }
+
+  function sliderUpdateFromX(clientX) {
+    if (!buyinTrack) return;
+    const { maxUnits } = buyinState;
+    if (maxUnits === 0) return;
+    const rect = buyinTrack.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    // 离散档位:把 0~1 的 pct 映射到 1~maxUnits 的整数
+    let targetUnits;
+    if (maxUnits === 1) {
+      targetUnits = 1;
+    } else {
+      targetUnits = Math.round(1 + pct * (maxUnits - 1));
+    }
+    sliderPendingUnits = targetUnits;
+    if (sliderRafId == null) {
+      sliderRafId = requestAnimationFrame(applySliderUnits);
+    }
+  }
+
+  function onSliderStart(e) {
+    if (!buyinTrack) return;
+    if (buyinState.maxUnits === 0) return;
+    sliderDrag = true;
+    sliderUpdateFromX(getEventX(e));
+    if (e.cancelable) e.preventDefault();
+    document.addEventListener('mousemove', onSliderMove);
+    document.addEventListener('mouseup', onSliderEnd);
+    document.addEventListener('touchmove', onSliderMove, { passive: false });
+    document.addEventListener('touchend', onSliderEnd);
+    document.addEventListener('touchcancel', onSliderEnd);
+  }
+  function onSliderMove(e) {
+    if (!sliderDrag) return;
+    if (e.cancelable) e.preventDefault();
+    sliderUpdateFromX(getEventX(e));
+  }
+  function onSliderEnd(e) {
+    sliderDrag = null;
+    document.removeEventListener('mousemove', onSliderMove);
+    document.removeEventListener('mouseup', onSliderEnd);
+    document.removeEventListener('touchmove', onSliderMove);
+    document.removeEventListener('touchend', onSliderEnd);
+    document.removeEventListener('touchcancel', onSliderEnd);
+  }
+
+  if (buyinTrack) {
+    buyinTrack.addEventListener('mousedown', onSliderStart);
+    buyinTrack.addEventListener('touchstart', onSliderStart, { passive: false });
+  }
+
+  // 5 个快捷按钮(1个/3个/5个/10个/最大)
+  buyinQuickBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = btn.dataset.buyins;
+      let targetUnits;
+      if (val === 'max') {
+        targetUnits = buyinState.maxUnits;
+      } else {
+        targetUnits = Math.min(parseInt(val, 10), buyinState.maxUnits);
+      }
+      setBuyinUnits(targetUnits);
+      buyinQuickBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // ⭐ v2.18.6 子项 4:确认坐下 → 显示玩家信息
+  if (buyinConfirm) {
+    buyinConfirm.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (buyinConfirm.classList.contains('disabled')) return;
+      const { currentUnits, perUnit } = buyinState;
+      const amount = currentUnits * perUnit;
+      const seatId = pendingSeat ? pendingSeat.className.match(/s\d+/)?.[0] : null;
+      if (!seatId || !currentTableRoom) {
+        buyinMask.classList.remove('show');
+        return;
+      }
+      // 确保 occupiedSeats 是真实存在的对象(之前 demoOccupied 返回的临时对象不会回写)
+      if (!currentTableRoom.occupiedSeats) {
+        // 第一次主动坐下 → 用 demoOccupied 生成当前快照,然后切到显式管理
+        currentTableRoom.occupiedSeats = demoOccupied(currentTableRoom.seats || 0, currentTableRoom.maxSeats || 9);
+      }
+      // 从演示玩家池随机抽一个未被使用的
+      const usedNames = new Set(Object.values(currentTableRoom.occupiedSeats).map(p => p.name));
+      const available = DEMO_PLAYER_POOL.filter(p => !usedNames.has(p.name));
+      const picked = available.length > 0
+        ? available[Math.floor(Math.random() * available.length)]
+        : DEMO_PLAYER_POOL[Math.floor(Math.random() * DEMO_PLAYER_POOL.length)];
+      // 新坐下的玩家:用买入金额作为筹码,无 action 标签(还没行动)
+      // 真实业务:由后端推送 player:sit 事件,字段从服务端来
+      const newPlayer = {
+        name: picked.name,
+        avatar: picked.avatar,
+        chips: formatAmount(amount),
+        bet: 0
+      };
+      currentTableRoom.occupiedSeats[seatId] = newPlayer;
+      // 已坐人数 +1(含乱凌仍然在 my-seat,所以 seats 也要 +1)
+      currentTableRoom.seats = (currentTableRoom.seats || 0) + 1;
+      // 重新渲染
+      if (typeof renderSeats === 'function') {
+        renderSeats(currentTableRoom);
+      }
+      // 关闭买入弹窗
+      buyinMask.classList.remove('show');
+      // ⭐ v2.18.6 子项 5:坐下后立即弹入局选择弹窗
+      openEntryModal(seatId);
+    });
+  }
+
+  // ⭐ v2.18.6 子项 5:入局选择弹窗交互
+  // 真实业务:发送 /api/table/entry { mode: 'waitbb' | 'postbb' }
+  //   waitbb → 服务端把玩家标记为 waiting,等大盲位轮到自己时再激活
+  //   postbb → 服务端立即扣 1 大盲入池,该玩家下一手入局
+  const entryMask = document.getElementById('entry-modal-mask');
+  const entryWaitBtn = document.getElementById('entry-wait-btn');
+  const entryPostBtn = document.getElementById('entry-post-btn');
+  const entryPostDesc = document.getElementById('entry-post-desc');
+  // 记录刚坐下的座位号(选完入局方式后用)
+  let entryPendingSeat = null;
+
+  function openEntryModal(seatId) {
+    if (!entryMask) return;
+    entryPendingSeat = seatId;
+    // 更新立即下注的具体金额提示
+    const bbValue = parseBigBlind((currentTableRoom && currentTableRoom.blinds) || '0.5/1');
+    if (entryPostDesc) {
+      entryPostDesc.textContent = `补一个大盲 ${formatAmount(bbValue)} 入局,下一手即开始`;
+    }
+    entryMask.classList.add('show');
+  }
+
+  // 等大盲:玩家头像灰显 + 显示"等大盲"标签
+  if (entryWaitBtn) {
+    entryWaitBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!entryPendingSeat || !currentTableRoom || !currentTableRoom.occupiedSeats) {
+        entryMask.classList.remove('show');
+        return;
+      }
+      const player = currentTableRoom.occupiedSeats[entryPendingSeat];
+      if (player) {
+        player.waitbb = true;
+        player.action = 'waitbb';
+        player.actionLabel = '等大盲';
+        // 真实业务:发送 /api/table/entry { mode: 'waitbb' }
+      }
+      if (typeof renderSeats === 'function') renderSeats(currentTableRoom);
+      entryMask.classList.remove('show');
+      if (typeof showToast === 'function') {
+        showToast('已选择等大盲(免费等待入局)');
+      }
+    });
+  }
+
+  // 立即下注大盲:头像正常 + 显示"补大盲"标签 + 筹码扣 1BB
+  if (entryPostBtn) {
+    entryPostBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!entryPendingSeat || !currentTableRoom || !currentTableRoom.occupiedSeats) {
+        entryMask.classList.remove('show');
+        return;
+      }
+      const player = currentTableRoom.occupiedSeats[entryPendingSeat];
+      const bbValue = parseBigBlind(currentTableRoom.blinds || '0.5/1');
+      if (player) {
+        player.action = 'postbb';
+        player.actionLabel = '补大盲';
+        player.bet = bbValue;
+        // 筹码 - 1大盲(从原 chips 字符串里减)
+        const oldChips = parseFloat(String(player.chips).replace(/,/g, '')) || 0;
+        const newChips = Math.max(0, oldChips - bbValue);
+        player.chips = formatAmount(newChips);
+        // 真实业务:发送 /api/table/entry { mode: 'postbb' }
+      }
+      if (typeof renderSeats === 'function') renderSeats(currentTableRoom);
+      entryMask.classList.remove('show');
+      if (typeof showToast === 'function') {
+        showToast(`已补 ${formatAmount(bbValue)} 大盲,下一手入局`);
       }
     });
   }
@@ -11304,7 +12515,7 @@
   // 4. 顶部 AAGame + 牌局号 + 盲注 + 底池
   // 5. 底部固定:⭐收藏(标记入"我的页→收藏") + < 47/47 > 分页
   // 6. 付费按钮:发发看/偷偷看 ₮50(后端配置金额),本次占位 toast
-  // 7. 术语:跟注/加注/弃牌/让牌/下注/抓头/大盲/小盲/前注
+  // 7. 术语:跟注/加注/弃牌/过牌/下注/抓头/大盲/小盲/前注
 
   // 演示数据:一局完整牌谱(真实业务从后端 /api/replay/:handId 拉取)
   // 5 个玩家(BTN/SB/BB/UTG/CO),最终 CO 位 Blush 赢
@@ -11339,7 +12550,7 @@
           { seat: 'BTN', name: 'Cool_L...', chips: '14,217.73', action: '跟注', amount: 200 },
           { seat: 'SB',  name: '伯恩',     chips: '8,970.12', action: '弃牌', amount: 0 },
           { seat: 'BB',  name: 'Kevin',   chips: '2,581.49', action: '弃牌', amount: 0 },
-          { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '让牌', amount: 0 }
+          { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '过牌', amount: 0 }
         ]
       },
       {
@@ -11347,9 +12558,9 @@
         community: ['J♦','9♦','5♣'],
         potAfter: 1750,
         acts: [
-          { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '让牌', amount: 0 },
-          { seat: 'CO',  name: 'HB华强', chips: '4,461.3',  action: '让牌', amount: 0 },
-          { seat: 'BTN', name: 'Cool_L...', chips: '14,017.73', action: '让牌', amount: 0 }
+          { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '过牌', amount: 0 },
+          { seat: 'CO',  name: 'HB华强', chips: '4,461.3',  action: '过牌', amount: 0 },
+          { seat: 'BTN', name: 'Cool_L...', chips: '14,017.73', action: '过牌', amount: 0 }
         ]
       },
       {
@@ -11357,9 +12568,9 @@
         community: ['J♦','9♦','5♣','4♣'],
         potAfter: 1750,
         acts: [
-          { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '让牌', amount: 0 },
-          { seat: 'CO',  name: 'HB华强', chips: '4,461.3',  action: '让牌', amount: 0 },
-          { seat: 'BTN', name: 'Cool_L...', chips: '14,017.73', action: '让牌', amount: 0 }
+          { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '过牌', amount: 0 },
+          { seat: 'CO',  name: 'HB华强', chips: '4,461.3',  action: '过牌', amount: 0 },
+          { seat: 'BTN', name: 'Cool_L...', chips: '14,017.73', action: '过牌', amount: 0 }
         ]
       },
       {
@@ -11367,7 +12578,7 @@
         community: ['J♦','9♦','5♣','4♣','K♣'],
         potAfter: 3150,
         acts: [
-          { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '让牌', amount: 0 },
+          { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '过牌', amount: 0 },
           { seat: 'CO',  name: 'HB华强', chips: '4,461.3',  action: '下注', amount: 1400 },
           { seat: 'BTN', name: 'Cool_L...', chips: '14,017.73', action: '弃牌', amount: 0 },
           { seat: 'UTG', name: '龙骑士...', chips: '5,254.24', action: '弃牌', amount: 0 }
@@ -11617,7 +12828,7 @@
   // 状态机:
   //   raise  = 加注弹窗(轮到我):弃牌+加注+跟注+5快捷键+扇形倒计时
   //   call   = 跟注预选弹窗(没轮到我):弃牌+跟注 灰色70%
-  //   check  = 让牌预选弹窗(没轮到我):弃牌+让牌 灰色70%
+  //   check  = 过牌预选弹窗(没轮到我):弃牌+过牌 灰色70%
   // 真实业务:WebSocket 推送 turn:start/turn:end 时切换 state
   const actionArea = document.getElementById('action-area');
   const abFoldBtn = document.getElementById('ab-fold-btn');
@@ -11627,6 +12838,120 @@
   // ⭐ v2.16 临时切换器:点击 → 改 action-area 的 data-state
   // 真实业务删掉这段 + 删 HTML 切换器,改用 WebSocket 推送的 turn:start 事件切换
   const devSwitcher = document.getElementById('dev-state-switcher');
+  const raiseBtnForBet = document.getElementById('ab-raise-btn');   // ⭐ v2.18.1 加注/下注按钮
+
+  // ⭐ v2.18.6 DEV 切换器:折叠+拖动+当前态同步
+  // 真实业务删掉这整段(切换器本身就是临时的)
+  const devHeader = document.getElementById('dev-header');
+  const devHeaderCurrent = document.getElementById('dev-header-current');
+  if (devSwitcher && devHeader) {
+    // ---- 折叠状态(localStorage 持久化)----
+    const STORAGE_KEY_COLLAPSED = 'aagame_dev_collapsed';
+    const STORAGE_KEY_POS = 'aagame_dev_pos';
+    const savedCollapsed = localStorage.getItem(STORAGE_KEY_COLLAPSED);
+    if (savedCollapsed === '1') devSwitcher.classList.add('collapsed');
+    // 恢复位置
+    try {
+      const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_POS) || 'null');
+      if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
+        devSwitcher.style.left = savedPos.left + 'px';
+        devSwitcher.style.top = savedPos.top + 'px';
+      }
+    } catch (e) {}
+
+    // ---- 拖动 vs 点击区分(移动超过 5px 算拖动)----
+    let dragState = null;
+    const DRAG_THRESHOLD = 5;
+
+    function onDragStart(e) {
+      // 触摸或鼠标事件统一取坐标
+      const pt = e.touches && e.touches[0] ? e.touches[0] : e;
+      const rect = devSwitcher.getBoundingClientRect();
+      const parentRect = devSwitcher.offsetParent
+        ? devSwitcher.offsetParent.getBoundingClientRect()
+        : { left: 0, top: 0 };
+      dragState = {
+        startX: pt.clientX,
+        startY: pt.clientY,
+        // 相对父容器的初始位置
+        origLeft: rect.left - parentRect.left,
+        origTop: rect.top - parentRect.top,
+        moved: false
+      };
+      document.addEventListener('mousemove', onDragMove);
+      document.addEventListener('mouseup', onDragEnd);
+      document.addEventListener('touchmove', onDragMove, { passive: false });
+      document.addEventListener('touchend', onDragEnd);
+      document.addEventListener('touchcancel', onDragEnd);
+    }
+    function onDragMove(e) {
+      if (!dragState) return;
+      const pt = e.touches && e.touches[0] ? e.touches[0]
+              : (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0] : e);
+      const dx = pt.clientX - dragState.startX;
+      const dy = pt.clientY - dragState.startY;
+      if (!dragState.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+        dragState.moved = true;
+      }
+      if (dragState.moved) {
+        if (e.cancelable) e.preventDefault();
+        // 算新位置,限制在父容器内
+        const parent = devSwitcher.offsetParent || document.body;
+        const pw = parent.clientWidth;
+        const ph = parent.clientHeight;
+        const w = devSwitcher.offsetWidth;
+        const h = devSwitcher.offsetHeight;
+        let newLeft = dragState.origLeft + dx;
+        let newTop = dragState.origTop + dy;
+        newLeft = Math.max(0, Math.min(pw - w, newLeft));
+        newTop = Math.max(0, Math.min(ph - h, newTop));
+        devSwitcher.style.left = newLeft + 'px';
+        devSwitcher.style.top = newTop + 'px';
+      }
+    }
+    function onDragEnd(e) {
+      if (!dragState) return;
+      const wasMoved = dragState.moved;
+      // 移除监听
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragEnd);
+      document.removeEventListener('touchmove', onDragMove);
+      document.removeEventListener('touchend', onDragEnd);
+      document.removeEventListener('touchcancel', onDragEnd);
+      // 如果发生了拖动:保存位置
+      if (wasMoved) {
+        const left = parseFloat(devSwitcher.style.left) || 0;
+        const top = parseFloat(devSwitcher.style.top) || 0;
+        try {
+          localStorage.setItem(STORAGE_KEY_POS, JSON.stringify({ left, top }));
+        } catch (e) {}
+      } else {
+        // 没拖动 → 当作点击,切换折叠态
+        devSwitcher.classList.toggle('collapsed');
+        const collapsed = devSwitcher.classList.contains('collapsed');
+        try {
+          localStorage.setItem(STORAGE_KEY_COLLAPSED, collapsed ? '1' : '0');
+        } catch (e) {}
+      }
+      dragState = null;
+    }
+    devHeader.addEventListener('mousedown', onDragStart);
+    devHeader.addEventListener('touchstart', onDragStart, { passive: true });
+
+    // ---- 当前态同步显示(改 actionArea data-state 时联动)----
+    function syncCurrentLabel() {
+      if (!devHeaderCurrent || !actionArea) return;
+      const state = (actionArea.dataset.state || '').toUpperCase();
+      devHeaderCurrent.textContent = state || '—';
+    }
+    syncCurrentLabel();
+    // 监听 data-state 变化
+    if (actionArea) {
+      const stateObserver = new MutationObserver(syncCurrentLabel);
+      stateObserver.observe(actionArea, { attributes: true, attributeFilter: ['data-state'] });
+    }
+  }
+
   if (devSwitcher && actionArea) {
     devSwitcher.querySelectorAll('.dev-state-btn[data-dev-state]').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -11635,30 +12960,115 @@
         // 切换 active 类
         devSwitcher.querySelectorAll('.dev-state-btn[data-dev-state]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        // 切换 action-area data-state
+        // ⭐ v2.18.4 10 态切换:
+        //   P1 加注 / P2 下注 / P3 过牌-加注 / P4 All-In跟注 (轮到我,有倒计时)
+        //   Y1 跟注预选 / Y2 过牌预选 / Y3 过/弃预选 (没轮到我,无倒计时)
+        //   S1 加注滑杆 / S2 下注滑杆 (二级弹窗)
         actionArea.dataset.state = newState;
+        // 中央按钮文字:p2/s2=下注,其他=加注
+        if (raiseBtnForBet) {
+          raiseBtnForBet.dataset.action = (newState === 'p2' || newState === 's2') ? 'bet' : 'raise';
+        }
         // 切换状态时清除所有预选高亮(预选不跨状态保留)
         actionArea.querySelectorAll('.ab-btn.preselected').forEach(el => el.classList.remove('preselected'));
+        // 倒计时:只在 P 组 4 态启动,其他停止
+        const isMyTurn = ['p1','p2','p3','p4'].includes(newState);
+        if (isMyTurn) {
+          startTimer(TURN_DURATION_MS);
+        } else {
+          stopTimer(false);
+        }
+        // S1/S2 滑杆态:打开滑杆弹窗
+        const raiseSliderOverlay = document.getElementById('raise-slider-overlay');
+        if (raiseSliderOverlay) {
+          if (newState === 's1' || newState === 's2') {
+            raiseSliderOverlay.classList.add('show');
+          } else {
+            raiseSliderOverlay.classList.remove('show');
+          }
+        }
       });
     });
   }
 
+  // ⭐ v2.18.1 模拟"他人行动"(DEV 用):随机给一个其他玩家加 .acting,触发头像倒计时环
+  const devActingOtherBtn = document.getElementById('dev-acting-other');
+  if (devActingOtherBtn) {
+    devActingOtherBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 找一个未弃牌、未我自己的座位
+      const candidates = ['s1','s2','s3','s4','s5','s6','s7','s8'].filter(id => {
+        const seat = document.querySelector(`.seat.${id}`);
+        return seat && !seat.classList.contains('folded') && !seat.classList.contains('empty') && !seat.classList.contains('full');
+      });
+      if (candidates.length === 0) return;
+      const target = candidates[Math.floor(Math.random() * candidates.length)];
+      setActingSeat(target);
+      // ⭐ v2.18.3 闪绿 600ms 反馈
+      devActingOtherBtn.classList.remove('flash');
+      void devActingOtherBtn.offsetWidth;
+      devActingOtherBtn.classList.add('flash');
+      setTimeout(() => devActingOtherBtn.classList.remove('flash'), 600);
+      if (typeof showToast === 'function') showToast(`轮到 ${target} 行动`);
+    });
+  }
+
+  // ⭐ v2.18.6 座位人数测试快捷区(DEV 用,真实业务删)
+  // 点击 X/Y 按钮 → 修改 currentTableRoom 的 seats/maxSeats → 重新渲染座位
+  // 用途:测试空座位 UI、不同人数的桌子布局、大厅与牌桌数据一致性
+  devSwitcher.querySelectorAll('.dev-seat-btn[data-dev-seats]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const [seatsStr, maxStr] = btn.dataset.devSeats.split('/');
+      const seats = parseInt(seatsStr, 10);
+      const maxSeats = parseInt(maxStr, 10);
+      // 切换 active 类
+      devSwitcher.querySelectorAll('.dev-seat-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      // 修改当前桌房间数据并重渲染
+      if (!currentTableRoom) currentTableRoom = {};
+      currentTableRoom.seats = seats;
+      currentTableRoom.maxSeats = maxSeats;
+      currentTableRoom.total = maxSeats;
+      currentTableRoom.seatTotal = maxSeats;
+      // 清掉 occupiedSeats 让 demoOccupied 重新生成
+      delete currentTableRoom.occupiedSeats;
+      // 重渲染座位(只调 renderSeats,不动其他)
+      if (typeof renderSeats === 'function') {
+        renderSeats(currentTableRoom);
+      }
+      // ⭐ 0/9 特殊处理:乱凌也没坐,隐藏 my-seat
+      const mySeatEl = document.querySelector('.my-seat');
+      if (mySeatEl) {
+        mySeatEl.style.display = seats === 0 ? 'none' : '';
+      }
+      if (typeof showToast === 'function') {
+        showToast(`座位测试: ${seats}/${maxSeats}`);
+      }
+    });
+  });
+
   // ⭐ v2.16 模拟"上家加注"事件(DEV 用)
   // 真实业务:WebSocket 推送 player:raise 事件触发同样逻辑
-  // 规则: 跟注/让牌预选自动作废,弃牌预选保留(不管谁加注我都还想弃)
+  // 规则: 跟注/过牌预选自动作废,弃牌预选保留(不管谁加注我都还想弃)
   const devSimRaise = document.getElementById('dev-sim-raise');
   if (devSimRaise && actionArea) {
     devSimRaise.addEventListener('click', (e) => {
       e.stopPropagation();
       const checkBtn = document.getElementById('ab-check-btn');
       const foldBtn = document.getElementById('ab-fold-btn');
-      // 仅清除跟注/让牌的预选高亮,弃牌的保留
+      // 仅清除跟注/过牌的预选高亮,弃牌的保留
       if (checkBtn) checkBtn.classList.remove('preselected');
       // 弃牌预选不变 → 不动 foldBtn
+      // ⭐ v2.18.3 闪绿 600ms 反馈
+      devSimRaise.classList.remove('flash');
+      void devSimRaise.offsetWidth;
+      devSimRaise.classList.add('flash');
+      setTimeout(() => devSimRaise.classList.remove('flash'), 600);
       // 提示反馈(真实业务用其他玩家头像标签变化代替)
       if (typeof showToast === 'function') {
         const foldKept = foldBtn && foldBtn.classList.contains('preselected');
-        showToast(foldKept ? '上家加注:跟注/让牌预选已作废,弃牌预选保留' : '上家加注:跟注/让牌预选已作废');
+        showToast(foldKept ? '上家加注:跟注/过牌预选已作废,弃牌预选保留' : '上家加注:跟注/过牌预选已作废');
       }
     });
   }
@@ -11673,8 +13083,31 @@
   const TURN_DURATION_MS = 15000;     // 单轮 15 秒
   const ADD_TIME_MS = 15000;          // +15S 加多少
   const foldTimerEl = document.getElementById('ab-fold-timer');
+  const foldSecondsEl = document.getElementById('ab-fold-seconds');  // ⭐ v2.18.3 弃牌按钮秒数
+  const checkTimerEl = document.getElementById('ab-check-timer');   // ⭐ v2.18.1 过牌按钮蒙版
+  const checkSecondsEl = document.getElementById('ab-check-seconds'); // ⭐ v2.18.3 过牌按钮秒数
   const addTimeBtn = document.getElementById('ab-add-time-btn');
   const foldBtnEl = document.getElementById('ab-fold-btn');
+  const checkBtnEl = document.getElementById('ab-check-btn');       // ⭐ v2.18.1 过牌按钮(用于警示态)
+
+  // ⭐ v2.18.1 当前正在行动的座位(玩家头像有倒计时环)
+  // 真实业务:WebSocket 推 game:turn 事件给定 seatId,我们标记 .acting
+  // DEV 演示:JS 调 setActingSeat('s4') 切换
+  let actingSeatId = null;
+  function setActingSeat(seatId) {
+    // 清掉所有座位的 acting
+    document.querySelectorAll('.seat.acting').forEach(el => el.classList.remove('acting'));
+    actingSeatId = seatId;
+    if (!seatId) return;
+    const seatEl = document.querySelector(`.seat.${seatId}`);
+    if (seatEl) {
+      seatEl.classList.add('acting');
+      // 同时启动倒计时(其他玩家行动也算 15 秒)
+      if (!turnTimer.running) startTimer(TURN_DURATION_MS);
+    }
+  }
+  // 暴露到 window 供 DEV 测试
+  window.setActingSeat = setActingSeat;
 
   // 计时器状态
   const turnTimer = {
@@ -11696,15 +13129,52 @@
     }
     // 计算进度 0~100 (走过的百分比)
     const p = ((turnTimer.duration - remaining) / turnTimer.duration) * 100;
+    const pStr = p.toFixed(2);
     if (foldTimerEl) {
-      foldTimerEl.style.setProperty('--p', p.toFixed(2));
+      foldTimerEl.style.setProperty('--p', pStr);
     }
+    // ⭐ v2.18.3 弃牌按钮秒数同步:Math.ceil 让 15→14→13...→1→0 干净跳变
+    if (foldSecondsEl) {
+      foldSecondsEl.textContent = Math.max(0, Math.ceil(remaining / 1000));
+    }
+    // ⭐ v2.18.1 过牌按钮蒙版同步进度
+    if (checkTimerEl) {
+      checkTimerEl.style.setProperty('--p', pStr);
+    }
+    // ⭐ v2.18.3 过牌按钮秒数同步(bet 态/check 态显示时跟弃牌一起跳)
+    if (checkSecondsEl) {
+      checkSecondsEl.textContent = Math.max(0, Math.ceil(remaining / 1000));
+    }
+    // ⭐ v2.18.1 头像倒计时环:同步进度 + 移动尾部闪光
+    const actingSeats = document.querySelectorAll('.seat.acting');
+    actingSeats.forEach(seat => {
+      const ring = seat.querySelector('.seat-turn-ring');
+      if (!ring) return;
+      ring.style.setProperty('--turn-p', pStr);
+      // 尾部闪光位置:沿圆周走,起点12点,顺时针
+      const glow = ring.querySelector('.turn-head-glow');
+      if (glow) {
+        // 已走过的弧度(从顶部12点开始顺时针)
+        const angle = (p / 100) * Math.PI * 2 - Math.PI / 2;
+        const r = 26;
+        glow.setAttribute('cx', (Math.cos(angle) * r).toFixed(2));
+        glow.setAttribute('cy', (Math.sin(angle) * r).toFixed(2));
+      }
+    });
     // ≤5s 警示态
     if (foldBtnEl) {
       if (remaining <= 5000) {
         foldBtnEl.classList.add('timer-warn');
       } else {
         foldBtnEl.classList.remove('timer-warn');
+      }
+    }
+    // ⭐ v2.18.1 过牌按钮也同步警示态
+    if (checkBtnEl) {
+      if (remaining <= 5000) {
+        checkBtnEl.classList.add('timer-warn');
+      } else {
+        checkBtnEl.classList.remove('timer-warn');
       }
     }
     turnTimer.rafId = requestAnimationFrame(tickTimer);
@@ -11717,6 +13187,10 @@
     turnTimer.running = true;
     if (foldTimerEl) foldTimerEl.style.setProperty('--p', 0);
     if (foldBtnEl) foldBtnEl.classList.remove('timer-warn');
+    if (foldSecondsEl) foldSecondsEl.textContent = Math.ceil(durationMs / 1000);  // ⭐ v2.18.3 启动显示总秒数
+    if (checkTimerEl) checkTimerEl.style.setProperty('--p', 0);    // ⭐ v2.18.1 同步重置
+    if (checkSecondsEl) checkSecondsEl.textContent = Math.ceil(durationMs / 1000); // ⭐ v2.18.3 过牌秒数同步启动
+    if (checkBtnEl) checkBtnEl.classList.remove('timer-warn');     // ⭐ v2.18.1 同步重置
     turnTimer.rafId = requestAnimationFrame(tickTimer);
   }
 
@@ -11727,6 +13201,10 @@
     if (!silent && foldTimerEl) {
       foldTimerEl.style.setProperty('--p', 0);
       if (foldBtnEl) foldBtnEl.classList.remove('timer-warn');
+      if (foldSecondsEl) foldSecondsEl.textContent = Math.ceil(TURN_DURATION_MS / 1000);  // ⭐ v2.18.3 非静默停止恢复默认 15
+      if (checkTimerEl) checkTimerEl.style.setProperty('--p', 0);   // ⭐ v2.18.1 同步清理
+      if (checkSecondsEl) checkSecondsEl.textContent = Math.ceil(TURN_DURATION_MS / 1000); // ⭐ v2.18.3 过牌秒数恢复默认
+      if (checkBtnEl) checkBtnEl.classList.remove('timer-warn');    // ⭐ v2.18.1 同步清理
     }
   }
 
@@ -11736,13 +13214,13 @@
     turnTimer.duration += ms;   // 也加到总时长,保证进度条比例正确
   }
 
-  // 归零默认动作:有未跟注的金额 → 弃牌;否则让牌
+  // 归零默认动作:有未跟注的金额 → 弃牌;否则过牌
   // 现阶段不真改演示数据,只 toast 提示
   function onTimeout() {
-    // 看跟注按钮金额是否大于 0(代表有人加注我没跟):有则弃牌,无则让牌
+    // 看跟注按钮金额是否大于 0(代表有人加注我没跟):有则弃牌,无则过牌
     const amountEl = document.getElementById('ab-check-amount');
     const callAmount = amountEl ? parseInt(amountEl.textContent, 10) || 0 : 0;
-    const action = callAmount > 0 ? '弃牌' : '让牌';
+    const action = callAmount > 0 ? '弃牌' : '过牌';
     if (typeof showToast === 'function') showToast(`超时:默认${action}`);
     // 真实业务:发送 action:default 给服务端,等推送下一玩家 turn:start
   }
@@ -11767,20 +13245,21 @@
     });
   }
 
-  // 状态联动:进入 raise → 启动计时;离开 raise → 停止
+  // ⭐ v2.18.4 状态联动:进入 P 组(P1-P4) → 启动计时;其他 → 停止
   // 监听 actionArea data-state 变化(MutationObserver)
   if (actionArea) {
+    const isMyTurnState = (s) => ['p1','p2','p3','p4'].includes(s);
     const observer = new MutationObserver(() => {
       const state = actionArea.dataset.state;
-      if (state === 'raise') {
+      if (isMyTurnState(state)) {
         startTimer(TURN_DURATION_MS);
       } else {
         stopTimer(false);
       }
     });
     observer.observe(actionArea, { attributes: true, attributeFilter: ['data-state'] });
-    // 初始如果是 raise,启动一次
-    if (actionArea.dataset.state === 'raise') {
+    // 初始如果是 P 组,启动一次
+    if (isMyTurnState(actionArea.dataset.state)) {
       startTimer(TURN_DURATION_MS);
     }
   }
@@ -11792,14 +13271,18 @@
   devNewRoundBtn.className = 'dev-state-btn';
   devNewRoundBtn.textContent = '新一轮(重置+15S)';
   devNewRoundBtn.style.marginTop = '4px';
-  devNewRoundBtn.style.background = 'rgba(80, 130, 200, 0.85)';
   devNewRoundBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     turnTimer.addTimeUsedThisRound = false;
     if (addTimeBtn) addTimeBtn.classList.remove('cooldown');
-    if (actionArea.dataset.state === 'raise') {
+    if (['p1','p2','p3','p4'].includes(actionArea.dataset.state)) {
       startTimer(TURN_DURATION_MS);
     }
+    // ⭐ v2.18.3 闪绿 600ms 反馈
+    devNewRoundBtn.classList.remove('flash');
+    void devNewRoundBtn.offsetWidth;
+    devNewRoundBtn.classList.add('flash');
+    setTimeout(() => devNewRoundBtn.classList.remove('flash'), 600);
     if (typeof showToast === 'function') showToast('新一轮:+15S 已重置,倒计时重启');
   });
   if (devSwitcher) devSwitcher.appendChild(devNewRoundBtn);
@@ -11863,9 +13346,9 @@
     // 点中央加注按钮 → 打开弹窗
     if (raiseBtn) {
       raiseBtn.addEventListener('click', (e) => {
-        // 只在 raise 态下弹滑杆(call/check 态点加注没意义,且按钮已隐藏)
+        // 只在轮到我的态弹滑杆(P1/P2/P3/P4),预选态按钮已隐藏
         const state = actionArea && actionArea.dataset.state;
-        if (state !== 'raise') return;
+        if (!['p1','p2','p3','p4'].includes(state)) return;
         e.stopPropagation();
         // 默认金额 = MIN_RAISE * 1.5(可改成上次的金额或推荐值)
         setAmount(MIN_RAISE * 1.5);
@@ -11964,14 +13447,14 @@
     updateUI();
   })();
 
-  // ⭐ v2.16 预选高亮逻辑:仅在 call/check 态下,点弃牌/跟注/让牌按钮 → 切换 .preselected
-  // ⭐ 互斥规则:弃牌 vs 跟注/让牌 只能二选一,点新的自动清旧的
-  // 真实业务:预选作废逻辑下次做(上家加注 → 跟注/让牌预选自动清除)
+  // ⭐ v2.16 预选高亮逻辑:仅在 call/check 态下,点弃牌/跟注/过牌按钮 → 切换 .preselected
+  // ⭐ 互斥规则:弃牌 vs 跟注/过牌 只能二选一,点新的自动清旧的
+  // 真实业务:预选作废逻辑下次做(上家加注 → 跟注/过牌预选自动清除)
   function togglePreselect(btn) {
     if (!actionArea) return;
     const state = actionArea.dataset.state;
-    // raise 态下不预选(立即执行),只有 call/check 态才预选
-    if (state !== 'call' && state !== 'check') return false;
+    // P 组(轮到我)立即执行不预选,只有 Y 组(没轮到我,预选态)才预选
+    if (!['y1','y2','y3'].includes(state)) return false;
     const wasPreselected = btn.classList.contains('preselected');
     // 先清掉所有预选(实现互斥)
     actionArea.querySelectorAll('.ab-btn.preselected').forEach(el => el.classList.remove('preselected'));
@@ -12000,7 +13483,7 @@
     abCheckBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (togglePreselect(abCheckBtn)) return;
-      if (typeof showToast === 'function') showToast('跟注/让牌(开发中)');
+      if (typeof showToast === 'function') showToast('跟注/过牌(开发中)');
     });
   }
   // 5 个快捷加注键

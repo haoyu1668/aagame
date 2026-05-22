@@ -14388,181 +14388,230 @@
   // ---------------------------------------------------------------------
   // 段 7 "发牌动画" 段所有按钮的事件绑定
   // 包含: 单座位发牌 / 全员各 1 张 / 完整 2 圈 / 清飞行牌 / 重置牌堆
+  // ⭐ 改用 document 级事件委托(更稳,不依赖按钮存在的时机)
   // =====================================================================
 
-  // 单座位发牌按钮(10 个: s1~s9 + my-seat)
-  document.querySelectorAll('.dev-seat-btn[data-deal-to]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const seatId = btn.dataset.dealTo;
-      if (typeof dealOneCard === 'function') {
-        dealOneCard(seatId);
-      }
-      // 闪绿反馈
-      btn.classList.remove('flash');
-      void btn.offsetWidth;
-      btn.classList.add('flash');
-      setTimeout(() => btn.classList.remove('flash'), 600);
-    });
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('[data-deal-to]');
+    if (!target) return;
+    e.stopPropagation();
+    const seatId = target.dataset.dealTo;
+    console.log('[DEV 发牌] 点击:', seatId, ', dealOneCard 可用:', typeof window.dealOneCard);
+    if (typeof window.dealOneCard === 'function') {
+      window.dealOneCard(seatId);
+    } else {
+      console.error('[DEV 发牌] window.dealOneCard 未定义!');
+    }
+    target.classList.remove('flash');
+    void target.offsetWidth;
+    target.classList.add('flash');
+    setTimeout(() => target.classList.remove('flash'), 600);
   });
 
-  // 全员各 1 张:9 个座位按顺序连发,间隔 80ms(子项 3 没做完前先用这个测试)
-  // 顺序: SB 开始绕一圈(s1→s2→...→s9 简化版,真正的牌序由子项 3 按 D 位推算)
-  const devDealAllOnce = document.getElementById('dev-deal-all-once');
-  if (devDealAllOnce) {
-    devDealAllOnce.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      // 找当前有人的座位(过滤 empty/full)
+  // 全员各 1 张
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-deal-all-once')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-deal-all-once');
+    console.log('[DEV 发牌] 全员各 1 张, dealOneCard 可用:', typeof window.dealOneCard);
+    if (typeof window.dealOneCard !== 'function') {
+      console.error('[DEV 发牌] window.dealOneCard 未定义!');
+      return;
+    }
+    const allSeats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
+      const seat = document.querySelector(`.seat.${id}`);
+      return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
+    });
+    const order = [...allSeats, 'my-seat'];
+    order.forEach((seatId, idx) => {
+      setTimeout(() => window.dealOneCard(seatId), idx * 80);
+    });
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+
+  // 完整 2 圈
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-deal-full')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-deal-full');
+    console.log('[DEV 发牌] 完整 2 圈, dealHoleCards 可用:', typeof window.dealHoleCards);
+    if (typeof window.dealHoleCards === 'function') {
+      window.dealHoleCards();
+    } else if (typeof window.dealOneCard === 'function') {
+      // 兜底
       const allSeats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
         const seat = document.querySelector(`.seat.${id}`);
         return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
       });
-      // 加上自己
       const order = [...allSeats, 'my-seat'];
-      // 间隔 80ms 触发(不等上一张落位,模拟"流畅发牌")
-      order.forEach((seatId, idx) => {
-        setTimeout(() => dealOneCard(seatId), idx * 80);
-      });
-      devDealAllOnce.classList.remove('flash');
-      void devDealAllOnce.offsetWidth;
-      devDealAllOnce.classList.add('flash');
-      setTimeout(() => devDealAllOnce.classList.remove('flash'), 600);
-    });
-  }
-
-  // 完整 2 圈(标准发牌):子项 3 实现后接入,目前先占位调用全员 × 2
-  const devDealFull = document.getElementById('dev-deal-full');
-  if (devDealFull) {
-    devDealFull.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      // 子项 3 完成后会改成调用 window.dealHoleCards()(完整带 D 位推算的标准发牌)
-      // 目前占位:全员 1 张 → 等 1 秒 → 全员再 1 张
-      if (typeof window.dealHoleCards === 'function') {
-        // 子项 3 完成,走真实流程
-        window.dealHoleCards();
-      } else {
-        // 子项 3 未完成,临时简化版
-        const allSeats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
-          const seat = document.querySelector(`.seat.${id}`);
-          return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
-        });
-        const order = [...allSeats, 'my-seat'];
-        // 第一圈
-        order.forEach((seatId, idx) => {
-          setTimeout(() => dealOneCard(seatId), idx * 80);
-        });
-        // 第二圈(延迟到第一圈大致结束)
-        const round2Start = order.length * 80 + 200;
-        order.forEach((seatId, idx) => {
-          setTimeout(() => dealOneCard(seatId), round2Start + idx * 80);
-        });
-      }
-      devDealFull.classList.remove('flash');
-      void devDealFull.offsetWidth;
-      devDealFull.classList.add('flash');
-      setTimeout(() => devDealFull.classList.remove('flash'), 600);
-    });
-  }
-
-  // 清掉所有飞行牌
-  const devDealClear = document.getElementById('dev-deal-clear');
-  if (devDealClear) {
-    devDealClear.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (typeof window.clearFlyingCards === 'function') window.clearFlyingCards();
-      devDealClear.classList.remove('flash');
-      void devDealClear.offsetWidth;
-      devDealClear.classList.add('flash');
-      setTimeout(() => devDealClear.classList.remove('flash'), 600);
-    });
-  }
-
-  // 重置牌堆:清飞行牌 + 牌堆 opacity 恢复
-  const devDealReset = document.getElementById('dev-deal-reset');
-  if (devDealReset) {
-    devDealReset.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (typeof window.clearFlyingCards === 'function') window.clearFlyingCards();
-      const deck = document.getElementById('card-deck');
-      if (deck) deck.classList.remove('dealing-done');
-      devDealReset.classList.remove('flash');
-      void devDealReset.offsetWidth;
-      devDealReset.classList.add('flash');
-      setTimeout(() => devDealReset.classList.remove('flash'), 600);
-    });
-  }
-
-  // ⭐ 子项 5: 速度档位按钮(slow/normal/fast)
-  document.querySelectorAll('.dev-deal-speed-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const speed = btn.dataset.dealSpeed;
-      if (typeof window.setDealSpeed === 'function') {
-        window.setDealSpeed(speed);
-      }
-    });
+      order.forEach((seatId, idx) => setTimeout(() => window.dealOneCard(seatId), idx * 80));
+      const round2Start = order.length * 80 + 200;
+      order.forEach((seatId, idx) => setTimeout(() => window.dealOneCard(seatId), round2Start + idx * 80));
+    } else {
+      console.error('[DEV 发牌] 发牌函数都未定义!');
+    }
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
   });
-  // 初始化:把当前档位的按钮高亮
-  (function initDealSpeedBtn() {
+
+  // 清飞行牌
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-deal-clear')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-deal-clear');
+    if (typeof window.clearFlyingCards === 'function') window.clearFlyingCards();
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+
+  // 重置牌堆
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-deal-reset')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-deal-reset');
+    if (typeof window.clearFlyingCards === 'function') window.clearFlyingCards();
+    const deck = document.getElementById('card-deck');
+    if (deck) {
+      deck.classList.remove('dealing-done');
+      deck.removeAttribute('data-cards-left');
+    }
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+
+  // 速度档位
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.dev-deal-speed-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    const speed = btn.dataset.dealSpeed;
+    if (typeof window.setDealSpeed === 'function') window.setDealSpeed(speed);
+  });
+  // 初始化速度档位高亮
+  setTimeout(() => {
     const cur = window.DEAL_SPEED || 'normal';
     document.querySelectorAll('.dev-deal-speed-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.dealSpeed === cur);
     });
-  })();
+  }, 100);
 
   // =====================================================================
-  // ⭐ v2.18.7 板块 A: 公共牌切换 DEV 按钮(子项 6)
+  // ⭐ v2.18.7 板块 A: 公共牌切换 DEV 按钮(子项 6)- 改委托
   // =====================================================================
 
-  // 街况快速切换(无动画)
-  document.querySelectorAll('.dev-seat-btn[data-set-street]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const street = btn.dataset.setStreet;
-      if (typeof window.setStreet === 'function') window.setStreet(street);
-      btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-      setTimeout(() => btn.classList.remove('flash'), 600);
-    });
-  });
-  // 带动画的发牌
-  const devDealFlop = document.getElementById('dev-deal-flop');
-  if (devDealFlop) devDealFlop.addEventListener('click', async (e) => {
+  // 街况快速切换
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-set-street]');
+    if (!btn) return;
     e.stopPropagation();
+    if (typeof window.setStreet === 'function') window.setStreet(btn.dataset.setStreet);
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+
+  // 翻牌动画
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#dev-deal-flop')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-deal-flop');
     if (typeof window.dealFlop === 'function') await window.dealFlop();
-    devDealFlop.classList.remove('flash'); void devDealFlop.offsetWidth; devDealFlop.classList.add('flash');
-    setTimeout(() => devDealFlop.classList.remove('flash'), 600);
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
   });
-  const devDealTurn = document.getElementById('dev-deal-turn');
-  if (devDealTurn) devDealTurn.addEventListener('click', async (e) => {
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#dev-deal-turn')) return;
     e.stopPropagation();
+    const btn = e.target.closest('#dev-deal-turn');
     if (typeof window.dealTurn === 'function') await window.dealTurn();
-    devDealTurn.classList.remove('flash'); void devDealTurn.offsetWidth; devDealTurn.classList.add('flash');
-    setTimeout(() => devDealTurn.classList.remove('flash'), 600);
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
   });
-  const devDealRiver = document.getElementById('dev-deal-river');
-  if (devDealRiver) devDealRiver.addEventListener('click', async (e) => {
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#dev-deal-river')) return;
     e.stopPropagation();
+    const btn = e.target.closest('#dev-deal-river');
     if (typeof window.dealRiver === 'function') await window.dealRiver();
-    devDealRiver.classList.remove('flash'); void devDealRiver.offsetWidth; devDealRiver.classList.add('flash');
-    setTimeout(() => devDealRiver.classList.remove('flash'), 600);
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
   });
   // 中牌高亮
-  const devHighlightWinning = document.getElementById('dev-highlight-winning');
-  if (devHighlightWinning) devHighlightWinning.addEventListener('click', (e) => {
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-highlight-winning')) return;
     e.stopPropagation();
+    const btn = e.target.closest('#dev-highlight-winning');
     if (typeof window.highlightWinningCards === 'function') {
-      window.highlightWinningCards([0, 2, 4]);  // 示例:第 1/3/5 张高亮
+      window.highlightWinningCards([0, 2, 4]);
     }
-    devHighlightWinning.classList.remove('flash'); void devHighlightWinning.offsetWidth; devHighlightWinning.classList.add('flash');
-    setTimeout(() => devHighlightWinning.classList.remove('flash'), 600);
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
   });
-  const devClearWinning = document.getElementById('dev-clear-winning');
-  if (devClearWinning) devClearWinning.addEventListener('click', (e) => {
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-clear-winning')) return;
     e.stopPropagation();
+    const btn = e.target.closest('#dev-clear-winning');
     if (typeof window.clearWinningCards === 'function') window.clearWinningCards();
-    devClearWinning.classList.remove('flash'); void devClearWinning.offsetWidth; devClearWinning.classList.add('flash');
-    setTimeout(() => devClearWinning.classList.remove('flash'), 600);
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
   });
+
+  // =====================================================================
+  // ⭐ v2.18.7 板块 C: 筹码动画 DEV 按钮 - 改委托
+  // =====================================================================
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-chip-from]');
+    if (!btn) return;
+    e.stopPropagation();
+    if (typeof window.flyChipToPot === 'function') window.flyChipToPot(btn.dataset.chipFrom);
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-chip-collect-all')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-chip-collect-all');
+    if (typeof window.collectChipsToPot === 'function') window.collectChipsToPot();
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-chip-award-s3')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-chip-award-s3');
+    if (typeof window.awardChipsToWinner === 'function') window.awardChipsToWinner('s3');
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-chip-award-my')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-chip-award-my');
+    if (typeof window.awardChipsToWinner === 'function') window.awardChipsToWinner('my-seat');
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+
+  // =====================================================================
+  // ⭐ v2.18.7 板块 B: 完整手牌演示 DEV 按钮 - 改委托
+  // =====================================================================
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#dev-flow-full')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-flow-full');
+    if (typeof window.runFullHand === 'function') await window.runFullHand();
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#dev-flow-reset')) return;
+    e.stopPropagation();
+    const btn = e.target.closest('#dev-flow-reset');
+    if (typeof window.resetToPreflop === 'function') window.resetToPreflop();
+    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  });
+
+  // ⭐ v2.18.6 座位人数测试快捷区(DEV 用,真实业务删)
 
   // =====================================================================
   // ⭐ v2.18.7 板块 C: 筹码动画
@@ -14576,7 +14625,7 @@
   // 飞行筹码原子动画:从起点飞到终点
   function flyChipBase(startX, startY, endX, endY, opts = {}) {
     return new Promise(resolve => {
-      const tableArea = document.querySelector('.table-area');
+      const tableArea = document.querySelector('#page-table');
       if (!tableArea) { resolve(); return; }
       const chip = document.createElement('div');
       chip.className = 'flying-chip' + (opts.blue ? ' blue' : '') + (opts.gold ? ' gold' : '');
@@ -14591,16 +14640,15 @@
     });
   }
 
-  // 计算座位下注块/头像中心相对 table-area 的坐标
+  // 计算元素中心相对 page-table 的坐标(用于筹码飞行起止点)
   function getElementCenterInTable(el) {
-    const tableArea = document.querySelector('.table-area');
+    const tableArea = document.querySelector('#page-table');
     if (!tableArea || !el) return null;
     const tableRect = tableArea.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
-    const scale = tableRect.width / tableArea.offsetWidth || 1;
     return {
-      x: (elRect.left - tableRect.left) / scale + (elRect.width / scale) / 2 - 12,  // 12 = 筹码 24 一半
-      y: (elRect.top  - tableRect.top ) / scale + (elRect.height / scale) / 2 - 12
+      x: elRect.left - tableRect.left + elRect.width / 2 - 12,  // 12 = 筹码 24 一半
+      y: elRect.top  - tableRect.top  + elRect.height / 2 - 12
     };
   }
 
@@ -14673,38 +14721,6 @@
     });
   }
   window.awardChipsToWinner = awardChipsToWinner;
-
-  // 板块 C DEV 按钮
-  document.querySelectorAll('.dev-seat-btn[data-chip-from]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const seatId = btn.dataset.chipFrom;
-      if (typeof window.flyChipToPot === 'function') window.flyChipToPot(seatId);
-      btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-      setTimeout(() => btn.classList.remove('flash'), 600);
-    });
-  });
-  const devChipCollectAll = document.getElementById('dev-chip-collect-all');
-  if (devChipCollectAll) devChipCollectAll.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (typeof window.collectChipsToPot === 'function') window.collectChipsToPot();
-    devChipCollectAll.classList.remove('flash'); void devChipCollectAll.offsetWidth; devChipCollectAll.classList.add('flash');
-    setTimeout(() => devChipCollectAll.classList.remove('flash'), 600);
-  });
-  const devChipAwardS3 = document.getElementById('dev-chip-award-s3');
-  if (devChipAwardS3) devChipAwardS3.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (typeof window.awardChipsToWinner === 'function') window.awardChipsToWinner('s3');
-    devChipAwardS3.classList.remove('flash'); void devChipAwardS3.offsetWidth; devChipAwardS3.classList.add('flash');
-    setTimeout(() => devChipAwardS3.classList.remove('flash'), 600);
-  });
-  const devChipAwardMy = document.getElementById('dev-chip-award-my');
-  if (devChipAwardMy) devChipAwardMy.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (typeof window.awardChipsToWinner === 'function') window.awardChipsToWinner('my-seat');
-    devChipAwardMy.classList.remove('flash'); void devChipAwardMy.offsetWidth; devChipAwardMy.classList.add('flash');
-    setTimeout(() => devChipAwardMy.classList.remove('flash'), 600);
-  });
 
   // =====================================================================
   // ⭐ v2.18.7 板块 B: 状态机 JS 全链路渲染(一键完整一手)
@@ -14792,22 +14808,6 @@
     });
   }
   window.resetToPreflop = resetToPreflop;
-
-  // 板块 B DEV 按钮
-  const devFlowFull = document.getElementById('dev-flow-full');
-  if (devFlowFull) devFlowFull.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    if (typeof window.runFullHand === 'function') await window.runFullHand();
-    devFlowFull.classList.remove('flash'); void devFlowFull.offsetWidth; devFlowFull.classList.add('flash');
-    setTimeout(() => devFlowFull.classList.remove('flash'), 600);
-  });
-  const devFlowReset = document.getElementById('dev-flow-reset');
-  if (devFlowReset) devFlowReset.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (typeof window.resetToPreflop === 'function') window.resetToPreflop();
-    devFlowReset.classList.remove('flash'); void devFlowReset.offsetWidth; devFlowReset.classList.add('flash');
-    setTimeout(() => devFlowReset.classList.remove('flash'), 600);
-  });
 
   // ⭐ v2.18.6 座位人数测试快捷区(DEV 用,真实业务删)
   // 点击 X/Y 按钮 → 修改 currentTableRoom 的 seats/maxSeats → 重新渲染座位
@@ -14965,7 +14965,7 @@
       const flyDuration = speed.flyDuration;
       const landBounce = speed.landBounce;
 
-      const tableArea = document.querySelector('.table-area');
+      const tableArea = document.querySelector('#page-table');
       const deckEl = document.getElementById('card-deck');
       if (!tableArea || !deckEl) {
         console.warn('[dealOneCard] table-area 或 card-deck 不存在');
@@ -14990,19 +14990,17 @@
         return;
       }
 
-      // 用 getBoundingClientRect 算位移(适配 scale 自适应)
+      // 用 getBoundingClientRect 算位移(直接用 rect 差值)
+      // page-table 是 position:relative 容器,绝对定位的子元素 left/top 就是相对它
       const deckRect = deckEl.getBoundingClientRect();
       const tableRect = tableArea.getBoundingClientRect();
       const targetRect = targetEl.getBoundingClientRect();
 
-      // 起始位置:牌堆中心,相对 tableArea 左上角
-      // 注意:.table-area 用 transform: scale,getBoundingClientRect 返回缩放后尺寸
-      // 用比例换算回原始坐标系
-      const tableScale = tableRect.width / tableArea.offsetWidth || 1;
-      const startX = (deckRect.left - tableRect.left) / tableScale + (deckRect.width / tableScale) / 2 - 16;  // 16 = 飞行牌宽 32 的一半
-      const startY = (deckRect.top  - tableRect.top ) / tableScale + (deckRect.height / tableScale) / 2 - 22; // 22 = 飞行牌高 44 的一半
-      const endX   = (targetRect.left - tableRect.left) / tableScale + (targetRect.width / tableScale) / 2 - 16;
-      const endY   = (targetRect.top  - tableRect.top ) / tableScale + (targetRect.height / tableScale) / 2 - 22;
+      // 起始位置:牌堆中心,相对 page-table 左上角
+      const startX = deckRect.left - tableRect.left + deckRect.width / 2 - 16;  // 16 = 飞行牌宽 32 的一半
+      const startY = deckRect.top  - tableRect.top  + deckRect.height / 2 - 22; // 22 = 飞行牌高 44 的一半
+      const endX   = targetRect.left - tableRect.left + targetRect.width / 2 - 16;
+      const endY   = targetRect.top  - tableRect.top  + targetRect.height / 2 - 22;
 
       const dx = endX - startX;
       const dy = endY - startY;
@@ -15283,7 +15281,7 @@
   // 每翻一街前调用一次
   function burnCard() {
     return new Promise(resolve => {
-      const tableArea = document.querySelector('.table-area');
+      const tableArea = document.querySelector('#page-table');
       const deckEl = document.getElementById('card-deck');
       const boardEl = document.getElementById('community-cards');
       if (!tableArea || !deckEl || !boardEl) { resolve(); return; }
@@ -15291,14 +15289,13 @@
       const deckRect = deckEl.getBoundingClientRect();
       const tableRect = tableArea.getBoundingClientRect();
       const boardRect = boardEl.getBoundingClientRect();
-      const tableScale = tableRect.width / tableArea.offsetWidth || 1;
 
       // 起点:牌堆中心
-      const startX = (deckRect.left - tableRect.left) / tableScale + (deckRect.width / tableScale) / 2 - 16;
-      const startY = (deckRect.top  - tableRect.top ) / tableScale + (deckRect.height / tableScale) / 2 - 22;
+      const startX = deckRect.left - tableRect.left + deckRect.width / 2 - 16;
+      const startY = deckRect.top  - tableRect.top  + deckRect.height / 2 - 22;
       // 终点:公共牌区左侧旁边(模拟"烧到一边")
-      const endX = (boardRect.left - tableRect.left) / tableScale - 40;
-      const endY = (boardRect.top  - tableRect.top ) / tableScale - 8;
+      const endX = boardRect.left - tableRect.left - 40;
+      const endY = boardRect.top  - tableRect.top  - 8;
 
       const burned = document.createElement('div');
       burned.className = 'burned-card';

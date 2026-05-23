@@ -10497,6 +10497,7 @@
               <button class="dev-state-btn" id="dev-toggle-dealer">▶ 切换庄家D标</button>
               <button class="dev-state-btn" id="dev-post-blinds">▶ 下盲注 SB/BB</button>
               <button class="dev-state-btn" id="dev-post-straddle">▶ 抓头(Straddle)</button>
+              <button class="dev-state-btn" id="dev-run-round">▶ 单街行动轮</button>
               <button class="dev-state-btn highlight-demo" id="dev-full-hand">▶▶ 完整一手演示</button>
             </div>
           </div>
@@ -12776,12 +12777,58 @@
 <script>
   // 全局错误捕获(临时调试用)
   window.addEventListener('error', function(e) {
-    document.body.innerHTML = '<div style="padding:20px;color:red;font-family:monospace;font-size:12px;">' +
-      '<strong>JS Error:</strong> ' + e.message + '<br>' +
-      '<strong>File:</strong> ' + (e.filename || 'inline') + '<br>' +
-      '<strong>Line:</strong> ' + e.lineno + ', col ' + e.colno + '<br>' +
-      '<strong>Stack:</strong><pre>' + (e.error && e.error.stack ? e.error.stack : '(no stack)') + '</pre>' +
-      '</div>';
+    // ⭐ v2.21 改成角落小浮窗,不再覆盖整个 body
+    // 避免点了按钮触发的局部错误把整页清掉
+    let errBox = document.getElementById('js-error-box');
+    if (!errBox) {
+      errBox = document.createElement('div');
+      errBox.id = 'js-error-box';
+      errBox.style.cssText = 'position:fixed;left:8px;bottom:8px;right:8px;max-height:35%;overflow:auto;z-index:99999;padding:10px;color:#ff5252;background:rgba(20,0,0,0.95);font-family:monospace;font-size:11px;border:1px solid #ff5252;border-radius:6px;line-height:1.5;';
+      const closeBtn = document.createElement('div');
+      closeBtn.textContent = '✕';
+      closeBtn.style.cssText = 'position:absolute;right:6px;top:4px;cursor:pointer;color:#ff5252;font-size:14px;padding:2px 6px;';
+      closeBtn.onclick = () => errBox.remove();
+      errBox.appendChild(closeBtn);
+      document.body.appendChild(errBox);
+    }
+    const log = document.createElement('div');
+    log.style.cssText = 'margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed rgba(255,82,82,0.3);';
+    log.innerHTML =
+      '<strong>JS Error:</strong> ' + (e.message || 'unknown') + '<br>' +
+      '<strong>At:</strong> line ' + e.lineno + ', col ' + e.colno + '<br>' +
+      (e.error && e.error.stack ? '<pre style="white-space:pre-wrap;margin:4px 0;font-size:10px;">' + e.error.stack.split('\n').slice(0, 3).join('\n') + '</pre>' : '');
+    errBox.appendChild(log);
+  });
+
+  // ⭐ v2.21 全局 unhandled Promise rejection 捕获(async 错误)
+  window.addEventListener('unhandledrejection', function(e) {
+    let errBox = document.getElementById('js-error-box');
+    if (!errBox) {
+      errBox = document.createElement('div');
+      errBox.id = 'js-error-box';
+      errBox.style.cssText = 'position:fixed;left:8px;bottom:8px;right:8px;max-height:35%;overflow:auto;z-index:99999;padding:10px;color:#ff5252;background:rgba(20,0,0,0.95);font-family:monospace;font-size:11px;border:1px solid #ff5252;border-radius:6px;line-height:1.5;';
+      const closeBtn = document.createElement('div');
+      closeBtn.textContent = '✕';
+      closeBtn.style.cssText = 'position:absolute;right:6px;top:4px;cursor:pointer;color:#ff5252;font-size:14px;padding:2px 6px;';
+      closeBtn.onclick = () => errBox.remove();
+      errBox.appendChild(closeBtn);
+      document.body.appendChild(errBox);
+    }
+    const log = document.createElement('div');
+    log.style.cssText = 'margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed rgba(255,82,82,0.3);';
+    const reason = e.reason;
+    let reasonText = 'unknown';
+    let stackText = '';
+    try {
+      if (reason) {
+        reasonText = reason.message || String(reason);
+        stackText = reason.stack || '';
+      }
+    } catch (_) {}
+    log.innerHTML =
+      '<strong>Promise rejection:</strong> ' + reasonText + '<br>' +
+      (stackText ? '<pre style="white-space:pre-wrap;margin:4px 0;font-size:10px;">' + stackText.split('\n').slice(0, 3).join('\n') + '</pre>' : '');
+    errBox.appendChild(log);
   });
 
 
@@ -14979,6 +15026,11 @@
     devQueryAll('.dev-state-btn[data-dev-stage]').forEach(b => b.classList.remove('active'));
     const preflopBtn = devSwitcher.querySelector('.dev-state-btn[data-dev-stage="preflop"]');
     if (preflopBtn) preflopBtn.classList.add('active');
+    // ⭐ v2.21 清行动轮状态
+    actionRound = null;
+    // ⭐ v2.21 注意:不要在这里设 cancelFlag.cancelled = true
+    // 因为 playFullHandDemo 一开始就调 fullResetTable,如果在这里 cancel 会让新演示一启动就退出
+    // 中断逻辑由 dev-full-hand 按钮 click handler 单独管理
   }
   window.fullResetTable = fullResetTable;
 
@@ -15141,9 +15193,11 @@
     for (let i = 1; i <= DEALER_ORDER.length; i++) {
       const cand = DEALER_ORDER[(idx + i) % DEALER_ORDER.length];
       const el = cand === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + cand);
-      if (el && !el.classList.contains('empty') && !el.classList.contains('full') && !el.classList.contains('folded') && el.style.display !== 'none') {
-        return cand;
-      }
+      if (!el) continue;
+      if (el.classList.contains('empty') || el.classList.contains('full') || el.classList.contains('folded') || el.style.display === 'none') continue;
+      // ⭐ v2.21 必须有头像才算有效玩家
+      if (cand !== 'my' && !el.querySelector('.seat-avatar')) continue;
+      return cand;
     }
     return null;
   }
@@ -15220,6 +15274,324 @@
     return stSeat;
   }
   window.postStraddle = postStraddle;
+
+  // ⭐ v2.21 行动轮 JS(子项 1-6)
+  // ═════════════════════════════════════════════════════════════════
+  // 德州扑克标准:每街从 UTG(BB 左侧第一个,翻前)或 SB(翻后)开始,
+  // 顺时针每个玩家依次行动,直到所有未弃牌玩家投入相等且都已行动。
+  // 加注/下注触发 re-raise:前面已 hasActed 的玩家被重置为未行动。
+  // ═════════════════════════════════════════════════════════════════
+
+  // 行动轮全局状态
+  let actionRound = null;   // 一手开始时初始化,见 initActionRound()
+
+  // 初始化一手的行动轮状态(从盲注/抓头快照里读初始投入)
+  // streetName: 'preflop' | 'flop' | 'turn' | 'river'
+  function initActionRound(streetName) {
+    const players = [];
+    // 9 座位 + my
+    ['s1','s2','s3','s4','s5','my','s6','s7','s8'].forEach(seatId => {
+      const el = seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + seatId);
+      if (!el || el.classList.contains('empty') || el.classList.contains('full') || el.style.display === 'none') return;
+      // ⭐ v2.21 必须有头像才算"已坐玩家"(避免默认空 div 被误判为有人)
+      if (seatId !== 'my' && !el.querySelector('.seat-avatar')) return;
+      // 读取当前 seat-bet 金额作为本街初始投入(翻前包含盲注)
+      const betEl = el.querySelector('.seat-bet .seat-bet-amount');
+      const totalBet = betEl ? (parseInt(betEl.textContent, 10) || 0) : 0;
+      players.push({
+        seatId,
+        hasActed: false,
+        totalBet,                                // 本街投入
+        isFolded: el.classList.contains('folded'),
+        isAllIn: false,
+        startChips: 1400 + Math.floor(Math.random() * 600)   // 演示用初始筹码
+      });
+    });
+    // 当前下注 = 所有玩家投入的最大值(翻前 = BB 或 抓头)
+    const currentBet = players.reduce((max, p) => Math.max(max, p.totalBet), 0);
+    actionRound = {
+      streetName,
+      currentBet,
+      minRaise: currentBlinds.bb,    // 最小加注步进
+      lastRaiserSeatId: null,
+      players,
+      isComplete: false
+    };
+    return actionRound;
+  }
+
+  // 顺时针拿下一个该行动的玩家(未弃牌、未 all-in、且 hasActed=false 或投入<currentBet)
+  // fromSeatId: 从哪个位置之后开始找
+  function nextActor(fromSeatId) {
+    if (!actionRound) return null;
+    const idx = DEALER_ORDER.indexOf(fromSeatId);
+    if (idx === -1) return null;
+    for (let i = 1; i <= DEALER_ORDER.length; i++) {
+      const cand = DEALER_ORDER[(idx + i) % DEALER_ORDER.length];
+      const p = actionRound.players.find(pp => pp.seatId === cand);
+      if (!p) continue;
+      if (p.isFolded || p.isAllIn) continue;
+      // 需要行动:还没行动过 OR 投入未达 currentBet
+      if (!p.hasActed || p.totalBet < actionRound.currentBet) {
+        return cand;
+      }
+    }
+    return null;
+  }
+
+  // 判定行动轮是否结束:所有非弃牌、非 all-in 玩家都 hasActed 且投入 = currentBet
+  function isRoundEnded() {
+    if (!actionRound) return true;
+    // 剩余玩家(未弃牌)
+    const remaining = actionRound.players.filter(p => !p.isFolded);
+    if (remaining.length <= 1) return true;   // 只剩 1 人,本手结束
+    // 检查活跃玩家(未 all-in)
+    const active = remaining.filter(p => !p.isAllIn);
+    if (active.length === 0) return true;     // 全 all-in,直接进下一街
+    return active.every(p => p.hasActed && p.totalBet === actionRound.currentBet);
+  }
+
+  window.initActionRound = initActionRound;
+  window.nextActor = nextActor;
+  window.isRoundEnded = isRoundEnded;
+  window.getActionRound = () => actionRound;
+
+  // ⭐ v2.21 子项 2:执行单次行动 executeAction
+  // ─────────────────────────────────────────────────────────────────
+  // action ∈ 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allin'
+  // amount: 加注/下注的金额(总投入,非增量),fold/check/call 忽略
+  // 返回:Promise(动画完成后 resolve)
+  // ─────────────────────────────────────────────────────────────────
+  function executeAction(seatId, action, amount) {
+    return new Promise((resolve) => {
+      if (!actionRound) { resolve(); return; }
+      const p = actionRound.players.find(pp => pp.seatId === seatId);
+      if (!p) { resolve(); return; }
+
+      // 1. 更新玩家状态
+      if (action === 'fold') {
+        p.isFolded = true;
+        p.hasActed = true;
+        // UI:座位灰显
+        const el = seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + seatId);
+        if (el) el.classList.add('folded');
+      }
+      else if (action === 'check') {
+        p.hasActed = true;
+        // check 时不变投入,但仍弹气泡
+      }
+      else if (action === 'call') {
+        // 跟到 currentBet
+        p.totalBet = actionRound.currentBet;
+        p.hasActed = true;
+        setSeatBet(seatId, p.totalBet);
+      }
+      else if (action === 'bet' || action === 'raise') {
+        // 新的 currentBet = amount
+        const oldCurrentBet = actionRound.currentBet;
+        p.totalBet = amount;
+        p.hasActed = true;
+        actionRound.currentBet = amount;
+        actionRound.minRaise = Math.max(currentBlinds.bb, amount - oldCurrentBet);
+        actionRound.lastRaiserSeatId = seatId;
+        setSeatBet(seatId, amount);
+        // ⭐ re-raise:重置其他活跃玩家 hasActed = false(让他们重新决策)
+        actionRound.players.forEach(pp => {
+          if (pp.seatId !== seatId && !pp.isFolded && !pp.isAllIn) {
+            pp.hasActed = false;
+          }
+        });
+      }
+      else if (action === 'allin') {
+        p.totalBet = amount;
+        p.isAllIn = true;
+        p.hasActed = true;
+        if (amount > actionRound.currentBet) {
+          actionRound.currentBet = amount;
+          actionRound.lastRaiserSeatId = seatId;
+          // all-in 加注也算 raise,重置其他玩家
+          actionRound.players.forEach(pp => {
+            if (pp.seatId !== seatId && !pp.isFolded && !pp.isAllIn) {
+              pp.hasActed = false;
+            }
+          });
+        }
+        setSeatBet(seatId, amount);
+      }
+
+      // 2. 触发气泡(用现有 attachActionTag 或 seat-action-tag 系统)
+      const labelMap = {
+        fold:  { cls: 'action-fold',  text: '弃牌' },
+        check: { cls: 'action-check', text: '过牌' },
+        call:  { cls: 'action-call',  text: '跟注' },
+        bet:   { cls: 'action-raise', text: '下注' },   // 用加注同款橘色
+        raise: { cls: 'action-raise', text: '加注' },
+        allin: { cls: 'action-allin', text: 'ALL-IN' }
+      };
+      const info = labelMap[action];
+      if (info) attachActionTag(seatId, info.cls, info.text);
+
+      // 3. 800ms 后 resolve(让用户看清气泡)
+      setTimeout(resolve, 800);
+    });
+  }
+  window.executeAction = executeAction;
+
+  // 辅助:给座位挂动作气泡(复用现有 .seat-action-tag 系统)
+  function attachActionTag(seatId, actionClass, labelText) {
+    const seatEl = seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + seatId);
+    if (!seatEl) return;
+    // 清旧气泡
+    seatEl.querySelectorAll('.seat-action-tag').forEach(el => el.remove());
+    const tag = document.createElement('div');
+    tag.className = 'seat-action-tag ' + actionClass;
+    tag.textContent = labelText;
+    seatEl.appendChild(tag);
+  }
+  window.attachActionTag = attachActionTag;
+
+  // ⭐ v2.21 子项 3:玩家随机动作生成器
+  // ─────────────────────────────────────────────────────────────────
+  // 根据当前局面智能挑动作 + 加权随机
+  // 返回 { action: 'fold|check|call|raise', amount: number }
+  // ─────────────────────────────────────────────────────────────────
+  function pickRandomAction(seatId) {
+    if (!actionRound) return { action: 'check' };
+    const p = actionRound.players.find(pp => pp.seatId === seatId);
+    if (!p) return { action: 'check' };
+
+    const callAmount = actionRound.currentBet - p.totalBet;   // 需要补多少跟注
+    const isBetLocked = actionRound.currentBet > 0 && callAmount > 0;   // 面对下注/加注
+    const isCheckable = callAmount === 0;     // 可以过牌(无人下注或我已平)
+
+    // 加权随机
+    function weightedPick(weights) {
+      const total = weights.reduce((s, w) => s + w.w, 0);
+      let r = Math.random() * total;
+      for (const item of weights) {
+        r -= item.w;
+        if (r <= 0) return item.action;
+      }
+      return weights[0].action;
+    }
+
+    if (isCheckable) {
+      // 可以过牌的局面:大概率过牌,小概率下注
+      const action = weightedPick([
+        { action: 'check', w: 70 },
+        { action: 'bet',   w: 30 }
+      ]);
+      if (action === 'bet') {
+        // 下注金额:0.5-1 倍底池(简化为 2-4 倍大盲)
+        const amount = currentBlinds.bb * (2 + Math.floor(Math.random() * 3));
+        return { action: 'bet', amount };
+      }
+      return { action: 'check' };
+    } else {
+      // 面对下注/加注:弃牌 / 跟注 / 加注
+      // 翻前大盲特殊:已投入 BB,如果没人加只用过牌(走 isCheckable 分支),被加注则正常逻辑
+      const action = weightedPick([
+        { action: 'fold',  w: 25 },
+        { action: 'call',  w: 60 },
+        { action: 'raise', w: 15 }
+      ]);
+      if (action === 'raise') {
+        // 加注金额:最小加注 = currentBet + minRaise,演示用 2-3 倍 currentBet
+        const minRaise = actionRound.currentBet + actionRound.minRaise;
+        const maxRaise = actionRound.currentBet * 3;
+        const amount = minRaise + Math.floor(Math.random() * Math.max(1, maxRaise - minRaise));
+        return { action: 'raise', amount };
+      }
+      return { action };
+    }
+  }
+  window.pickRandomAction = pickRandomAction;
+
+  // ⭐ v2.21 子项 4:行动轮执行循环 runActionRound
+  // ─────────────────────────────────────────────────────────────────
+  // 从指定起始玩家开始,每个玩家间隔 1200ms 自动行动,直到 isRoundEnded()
+  // streetName: 'preflop' | 'flop' | 'turn' | 'river'
+  // 翻前从 UTG(BB 左侧)开始,翻后从 SB(D 左侧)开始
+  // 返回:Promise(整个行动轮完成后 resolve)
+  // ─────────────────────────────────────────────────────────────────
+  function runActionRound(streetName, options) {
+    options = options || {};
+    return new Promise((resolveAll) => {
+      // 1. 初始化状态(从座位现有 seat-bet 读初始投入)
+      initActionRound(streetName);
+
+      // 2. 找起始玩家
+      let startFromSeat;
+      if (streetName === 'preflop') {
+        // UTG = 抓头位左侧(若有抓头)或 BB 左侧
+        // 找最后下盲注的座位(抓头 > BB > SB)
+        let lastBlindSeat = null;
+        // 优先抓头
+        document.querySelectorAll('.blind-label.label-st').forEach(el => {
+          const parent = el.closest('.seat, .my-seat');
+          if (!parent) return;
+          if (parent.classList.contains('my-seat')) lastBlindSeat = 'my';
+          else ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(id => {
+            if (parent.classList.contains(id)) lastBlindSeat = id;
+          });
+        });
+        // 没有抓头就用 BB
+        if (!lastBlindSeat) {
+          document.querySelectorAll('.blind-label.label-bb').forEach(el => {
+            const parent = el.closest('.seat, .my-seat');
+            if (!parent) return;
+            if (parent.classList.contains('my-seat')) lastBlindSeat = 'my';
+            else ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(id => {
+              if (parent.classList.contains(id)) lastBlindSeat = id;
+            });
+          });
+        }
+        startFromSeat = lastBlindSeat || (currentDealerSeatId || 's1');
+      } else {
+        // 翻后:从 D 左侧第一个开始(SB 位)
+        startFromSeat = currentDealerSeatId || 's1';
+      }
+
+      // 3. 循环执行:每个玩家间隔 1200ms 行动
+      const STEP_INTERVAL = options.interval || 1200;
+      let currentSeatId = nextActor(startFromSeat);
+
+      function step() {
+        // 检查结束条件
+        if (!currentSeatId || isRoundEnded()) {
+          // 行动轮结束:停止 acting 头像环
+          setActingSeat(null);
+          actionRound.isComplete = true;
+          // 短停顿后 resolve
+          setTimeout(resolveAll, 400);
+          return;
+        }
+
+        // 高亮当前行动者(头像绿环)
+        setActingSeat(currentSeatId);
+
+        // 决定动作:我自己 = options.myAction(若指定)否则随机;其他 = 随机
+        let decision;
+        if (currentSeatId === 'my' && options.waitForMyInput) {
+          // 演示阶段:让我自己也用随机(真实业务接 P1-P4 弹窗输入)
+          decision = pickRandomAction(currentSeatId);
+        } else {
+          decision = pickRandomAction(currentSeatId);
+        }
+
+        // 执行动作
+        const seatToAct = currentSeatId;
+        executeAction(seatToAct, decision.action, decision.amount).then(() => {
+          // 下一个玩家
+          currentSeatId = nextActor(seatToAct);
+          setTimeout(step, STEP_INTERVAL - 800);    // 减去 executeAction 内部 800ms
+        });
+      }
+
+      step();
+    });
+  }
+  window.runActionRound = runActionRound;
 
   // ⭐ v2.20.1 修复:补回 devToggleDealer 声明(之前 str_replace 丢失了)
   const devToggleDealer = document.getElementById('dev-toggle-dealer');
@@ -15299,103 +15671,271 @@
     });
   }
 
+  // ⭐ v2.21 子项 6:单街行动轮测试按钮
+  // 跑一次完整的行动轮(玩家依次行动直到本街结束)
+  const devRunRound = document.getElementById('dev-run-round');
+  if (devRunRound) {
+    devRunRound.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 前置检查:必须有庄家位 + 至少 2 个有效玩家
+      if (!currentDealerSeatId) {
+        if (typeof showToast === 'function') showToast('请先设置庄家位');
+        return;
+      }
+      // 推断当前街(从公共牌 data-stage)
+      const cardsEl = document.getElementById('community-cards');
+      const stage = cardsEl ? (cardsEl.getAttribute('data-stage') || 'preflop') : 'preflop';
+      if (typeof showToast === 'function') showToast('行动轮开始 (' + stage + ')...');
+      runActionRound(stage).then(() => {
+        if (typeof showToast === 'function') showToast('行动轮结束,收筹码');
+        // 行动轮结束自动收筹码到底池
+        setTimeout(() => betChipsToPotAnimation(), 200);
+      });
+      devRunRound.classList.remove('flash'); void devRunRound.offsetWidth;
+      devRunRound.classList.add('flash');
+      setTimeout(() => devRunRound.classList.remove('flash'), 600);
+    });
+  }
+
   // ⭐ v2.19.1 完整一手牌演示(自动播放从发牌到派彩全流程)
   // 流程:重置 → 发底牌 → 翻牌+收筹 → 转牌+收筹 → 河牌+收筹 → 摊牌 → 派彩
+  // ⭐ v2.21 演示用:确保 8 个座位都有玩家(默认状态下 seat 是空 div)
+  // 不依赖 renderSeats(那个要求选房间),直接给每个座位填一个简化版玩家 DOM
+  function ensureDemoSeatsFilled() {
+    const seats = ['s1','s2','s3','s4','s5','s6','s7','s8'];
+    seats.forEach((seatId, i) => {
+      const seatEl = document.querySelector('.seat.' + seatId);
+      if (!seatEl) return;
+      // 已经有玩家(头像)就跳过
+      if (seatEl.querySelector('.seat-avatar')) return;
+      // 用 DEMO_PLAYER_POOL 数据填充
+      const player = DEMO_PLAYER_POOL[i % DEMO_PLAYER_POOL.length];
+      seatEl.className = 'seat ' + seatId;
+      seatEl.innerHTML = `
+        <div class="seat-avatar">${player.avatar || player.name.charAt(0)}
+          <svg class="seat-turn-ring" viewBox="-30 -30 60 60">
+            <circle cx="0" cy="0" r="26"/>
+            <circle class="turn-head-glow" cx="0" cy="-26" r="3"/>
+          </svg>
+        </div>
+        <div class="seat-cards-back"><div class="mini-card"></div><div class="mini-card"></div></div>
+        <div class="seat-name-chip">${player.name}</div>
+        <div class="seat-chips">${player.chips}</div>
+      `;
+    });
+  }
+  window.ensureDemoSeatsFilled = ensureDemoSeatsFilled;
+
   let demoHandRunning = false;
   function playFullHandDemo() {
+    console.log('[demo] playFullHandDemo called, running=', demoHandRunning);
     if (demoHandRunning) return;
     demoHandRunning = true;
     const demoBtn = document.getElementById('dev-full-hand');
     if (demoBtn) demoBtn.classList.add('running');
+    console.log('[demo] start');
 
-    // 时间表(基于动画时长 + 停顿,让用户看清每一步)
-    // ⭐ v2.20 新增开局段:庄家D标 → 盲注 → 抓头 → 发底牌
-    // 0     : 重置 + toast
-    // 300   : 庄家D标飞到 s1
-    // 1000  : 下盲注 SB/BB
-    // 1700  : 抓头(50% 概率)
-    // 2300  : 盲注/抓头筹码飞向中央底池
-    // 3200  : 发底牌
-    // ... 后续动作同前,整体后移 ~2900ms
+    // ⭐ v2.21 时间表改写为 async/Promise 链
+    // 因为 runActionRound 时长不固定(玩家数 × 1.2s 动作间隔 × 可能 re-raise),
+    // 不再用固定 setTimeout 队列,改成 async 顺序等待
+    const cancelFlag = { cancelled: false };
+    window._demoHandCancel = cancelFlag;
 
-    const steps = [
-      { t: 0,     fn: () => { fullResetTable(); if (typeof showToast === 'function') showToast('▶ 新一手开始'); } },
-      // ⭐ v2.20 开局段
-      { t: 300,   fn: () => { setDealer('s1', !!currentDealerSeatId); if (typeof showToast === 'function') showToast('庄家位 → s1'); } },
-      { t: 1000,  fn: () => {
-          const r = postBlinds();
-          if (r && typeof showToast === 'function') showToast('盲注:SB ' + currentBlinds.sb + ' / BB ' + currentBlinds.bb);
-        }
-      },
-      { t: 1700,  fn: () => {
-          // 50% 概率抓头(增加演示丰富性)
-          if (Math.random() < 0.5) {
-            // 找 BB 位
-            let bbSeat = null;
-            document.querySelectorAll('.blind-label.label-bb').forEach(el => {
-              const parent = el.closest('.seat, .my-seat');
-              if (!parent) return;
-              if (parent.classList.contains('my-seat')) bbSeat = 'my';
-              else ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(id => {
-                if (parent.classList.contains(id)) bbSeat = id;
-              });
+    function delay(ms) {
+      return new Promise(resolve => {
+        const id = setTimeout(resolve, ms);
+        // 记录到全局,中断时可清
+        if (!window._demoHandTimers) window._demoHandTimers = [];
+        window._demoHandTimers.push(id);
+      });
+    }
+    function toast(msg) {
+      if (cancelFlag.cancelled) return;
+      if (typeof showToast === 'function') showToast(msg);
+    }
+
+    async function runDemo() {
+      try {
+        console.log('[demo] runDemo start');
+        // === 开局段 ===
+        fullResetTable();
+        console.log('[demo] after fullResetTable');
+        // ⭐ v2.21 重置后确保座位有人(默认 HTML 是空 div,演示需要 8 个对手)
+        ensureDemoSeatsFilled();
+        console.log('[demo] after ensureDemoSeatsFilled');
+        toast('▶ 新一手开始');
+        await delay(300);
+        if (cancelFlag.cancelled) return;
+
+        setDealer('s1', !!currentDealerSeatId);
+        console.log('[demo] after setDealer');
+        toast('庄家位 → s1');
+        await delay(700);
+        if (cancelFlag.cancelled) return;
+
+        const blindResult = postBlinds();
+        if (blindResult) toast('盲注:SB ' + currentBlinds.sb + ' / BB ' + currentBlinds.bb);
+        await delay(700);
+        if (cancelFlag.cancelled) return;
+
+        // 50% 概率抓头
+        if (Math.random() < 0.5) {
+          let bbSeat = null;
+          document.querySelectorAll('.blind-label.label-bb').forEach(el => {
+            const parent = el.closest('.seat, .my-seat');
+            if (!parent) return;
+            if (parent.classList.contains('my-seat')) bbSeat = 'my';
+            else ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(id => {
+              if (parent.classList.contains(id)) bbSeat = id;
             });
-            if (bbSeat) {
-              const st = postStraddle(bbSeat);
-              if (st && typeof showToast === 'function') showToast('抓头 → ' + (st === 'my' ? '我' : st));
-            }
-          } else {
-            if (typeof showToast === 'function') showToast('无人抓头');
+          });
+          if (bbSeat) {
+            const st = postStraddle(bbSeat);
+            if (st) toast('抓头 → ' + (st === 'my' ? '我' : st));
           }
+        } else {
+          toast('无人抓头');
         }
-      },
-      { t: 2300,  fn: () => { betChipsToPotAnimation(); clearBlindLabels(); if (typeof showToast === 'function') showToast('盲注归底池'); } },
-      // ⭐ 原发底牌起点 300ms,现后移到 3200ms
-      { t: 3200,  fn: () => { if (typeof showToast === 'function') showToast('发底牌...'); dealHoleCardsAnimation(); } },
-      { t: 5100,  fn: () => { setSeatBets(20); if (typeof showToast === 'function') showToast('翻前行动'); } },
-      { t: 5900,  fn: () => { betChipsToPotAnimation(); if (typeof showToast === 'function') showToast('收筹码到底池'); } },
-      { t: 7100,  fn: () => { if (typeof showToast === 'function') showToast('发翻牌'); dealBoardAnimation('flop'); } },
-      { t: 9100,  fn: () => { setSeatBets(40); if (typeof showToast === 'function') showToast('翻牌后行动'); } },
-      { t: 9900,  fn: () => { betChipsToPotAnimation(); } },
-      { t: 10900, fn: () => { if (typeof showToast === 'function') showToast('发转牌'); dealBoardAnimation('turn'); } },
-      { t: 12500, fn: () => { setSeatBets(80); if (typeof showToast === 'function') showToast('转牌后行动'); } },
-      { t: 13300, fn: () => { betChipsToPotAnimation(); } },
-      { t: 14300, fn: () => { if (typeof showToast === 'function') showToast('发河牌'); dealBoardAnimation('river'); } },
-      { t: 15900, fn: () => { setSeatBets(120); if (typeof showToast === 'function') showToast('河牌后行动'); } },
-      { t: 16700, fn: () => { betChipsToPotAnimation(); } },
-      { t: 17700, fn: () => { if (typeof showToast === 'function') showToast('摊牌!翻底牌'); setStage('showdown'); } },
-      // ⭐ v2.20 摊牌动画(revealAllHands)需要 9 玩家×220ms ≈ 2 秒 + 400ms 缓冲 → 总 2400ms
-      // 之后再停 800ms 让人看清牌型 + 高亮,再派彩
-      { t: 20700, fn: () => {
-          // 派彩给牌型最强的玩家(用 findWinners 真正算出来的赢家)
-          const board = getCurrentBoard();
-          const players = getShowdownPlayers();
-          if (players.length === 0) return;
-          const { winners } = findWinners(players, board);
-          const winner = winners[0] ? winners[0].seatId : 'my';
-          if (typeof showToast === 'function') {
-            const winName = winner === 'my' ? '我' : winner;
-            const winType = winners[0] ? winners[0].eval.type : '';
-            showToast('派彩 → ' + winName + '(' + winType + ')');
-          }
-          potToWinnerAnimation(winner);
-        }
-      },
-      { t: 22900, fn: () => {
-          if (typeof showToast === 'function') showToast('一手牌结束');
-          demoHandRunning = false;
-          if (demoBtn) demoBtn.classList.remove('running');
-        }
-      }
-    ];
+        await delay(700);
+        if (cancelFlag.cancelled) return;
 
-    const timerIds = [];
-    steps.forEach(s => {
-      const id = setTimeout(s.fn, s.t);
-      timerIds.push(id);
-    });
-    // 暴露中断方法
-    window._demoHandTimers = timerIds;
+        // === 发底牌 ===
+        toast('发底牌...');
+        dealHoleCardsAnimation();
+        await delay(1700);
+        if (cancelFlag.cancelled) return;
+
+        // === 翻前行动轮 ===
+        toast('翻前行动开始');
+        clearBlindLabels();   // 行动开始前清盲注标签(避免和动作气泡撞位置)
+        await runActionRound('preflop');
+        if (cancelFlag.cancelled) return;
+        // 检查是否提前结束(只剩 1 人)
+        const aliveAfterPreflop = actionRound.players.filter(p => !p.isFolded).length;
+        if (aliveAfterPreflop <= 1) {
+          toast('其他玩家全弃,直接结算');
+          await delay(800);
+          betChipsToPotAnimation();
+          await delay(1000);
+          await directPayout();
+          finishDemo();
+          return;
+        }
+        toast('收筹码到底池');
+        betChipsToPotAnimation();
+        await delay(1000);
+        if (cancelFlag.cancelled) return;
+
+        // === 翻牌 ===
+        toast('发翻牌');
+        dealBoardAnimation('flop');
+        await delay(2000);
+        if (cancelFlag.cancelled) return;
+        toast('翻牌后行动');
+        await runActionRound('flop');
+        if (cancelFlag.cancelled) return;
+        const aliveAfterFlop = actionRound.players.filter(p => !p.isFolded).length;
+        if (aliveAfterFlop <= 1) {
+          toast('其他玩家全弃,直接结算');
+          await delay(800);
+          betChipsToPotAnimation();
+          await delay(1000);
+          await directPayout();
+          finishDemo();
+          return;
+        }
+        betChipsToPotAnimation();
+        await delay(1000);
+        if (cancelFlag.cancelled) return;
+
+        // === 转牌 ===
+        toast('发转牌');
+        dealBoardAnimation('turn');
+        await delay(1600);
+        if (cancelFlag.cancelled) return;
+        toast('转牌后行动');
+        await runActionRound('turn');
+        if (cancelFlag.cancelled) return;
+        const aliveAfterTurn = actionRound.players.filter(p => !p.isFolded).length;
+        if (aliveAfterTurn <= 1) {
+          toast('其他玩家全弃,直接结算');
+          await delay(800);
+          betChipsToPotAnimation();
+          await delay(1000);
+          await directPayout();
+          finishDemo();
+          return;
+        }
+        betChipsToPotAnimation();
+        await delay(1000);
+        if (cancelFlag.cancelled) return;
+
+        // === 河牌 ===
+        toast('发河牌');
+        dealBoardAnimation('river');
+        await delay(1600);
+        if (cancelFlag.cancelled) return;
+        toast('河牌后行动');
+        await runActionRound('river');
+        if (cancelFlag.cancelled) return;
+        betChipsToPotAnimation();
+        await delay(1000);
+        if (cancelFlag.cancelled) return;
+
+        // === 摊牌 ===
+        toast('摊牌!翻底牌');
+        setStage('showdown');
+        await delay(3000);   // 等翻底牌动画完成
+        if (cancelFlag.cancelled) return;
+
+        // === 派彩 ===
+        await doPayoutByWinner();
+        finishDemo();
+      } catch (e) {
+        console.error('[demo] runDemo error:', e);
+        toast('演示出错: ' + e.message);
+        finishDemo();
+      }
+    }
+
+    // 派彩给当前牌型最强玩家
+    function doPayoutByWinner() {
+      return new Promise((resolve) => {
+        const board = getCurrentBoard();
+        const players = getShowdownPlayers().filter(p => {
+          // 排除已弃牌的
+          if (!actionRound) return true;
+          const ap = actionRound.players.find(pp => pp.seatId === p.seatId);
+          return !ap || !ap.isFolded;
+        });
+        if (players.length === 0) { resolve(); return; }
+        const { winners } = findWinners(players, board);
+        const winner = winners[0] ? winners[0].seatId : 'my';
+        const winType = winners[0] ? winners[0].eval.type : '';
+        toast('派彩 → ' + (winner === 'my' ? '我' : winner) + '(' + winType + ')');
+        potToWinnerAnimation(winner);
+        setTimeout(resolve, 2200);
+      });
+    }
+
+    // 中途有人独赢(所有人弃牌只剩 1 个):直接派彩,不摊牌
+    function directPayout() {
+      return new Promise((resolve) => {
+        const alive = actionRound.players.filter(p => !p.isFolded);
+        const winner = alive[0] ? alive[0].seatId : 'my';
+        toast('派彩 → ' + (winner === 'my' ? '我' : winner));
+        potToWinnerAnimation(winner);
+        setTimeout(resolve, 2200);
+      });
+    }
+
+    function finishDemo() {
+      toast('一手牌结束');
+      demoHandRunning = false;
+      if (demoBtn) demoBtn.classList.remove('running');
+    }
+
+    runDemo();
   }
 
   // 辅助:批量设置非空座位的下注金额(演示用)
@@ -15429,9 +15969,12 @@
     devFullHand.addEventListener('click', (e) => {
       e.stopPropagation();
       if (demoHandRunning) {
-        // 第二次点击 → 强制结束
+        // ⭐ v2.21 第二次点击 → 强制结束:设 cancelFlag + 清所有 setTimeout
+        if (window._demoHandCancel) window._demoHandCancel.cancelled = true;
         (window._demoHandTimers || []).forEach(id => clearTimeout(id));
         window._demoHandTimers = [];
+        // 立即停 acting 头像环
+        setActingSeat(null);
         demoHandRunning = false;
         devFullHand.classList.remove('running');
         if (typeof showToast === 'function') showToast('演示已中断');

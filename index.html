@@ -2321,20 +2321,16 @@
      ====== 牌桌界面 ======
      =================================================== */
   /* 牌桌整页:满屏深绿渐变 */
-  /* ⭐ v2.28.22 方案A:整体 scale 0.85,跟 TGPoker 比例对齐
-     transform-origin: top center 让顶部对齐(余额栏不挪)
-     transform: scale(0.85) 让所有内部元素等比缩小 15% */
+  /* ⭐ v2.28.23 方案A 改进:用 zoom 代替 scale
+     zoom 会实际改变 layout(不留空白),所有内部元素等比缩小
+     iOS Safari 16+ 已支持 zoom,Android Chrome 全版本支持 */
   #page-table {
     background: radial-gradient(ellipse at center, #1a7a3e 0%, #0d4d24 70%, #062b14 100%);
     height: 844px;
     overflow: hidden;
     padding-bottom: 0;
     position: relative;
-    transform: scale(0.85);
-    transform-origin: top center;
-    /* 因为缩 15%,要让宽度补回来居中显示,加伪宽度 */
-    width: 117.65%;            /* 1 / 0.85 = 117.65% */
-    margin-left: -8.82%;        /* (117.65 - 100) / 2 居中 */
+    zoom: 0.85;
   }
   /* 手机端:牌桌页铺满 viewport,内部元素用相对定位自适应 */
   @media (max-width: 768px) {

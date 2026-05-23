@@ -2441,6 +2441,57 @@
     font-weight: 700;
     margin-bottom: 12px;
   }
+
+  /* ⭐ v2.25 子项 3:边池分层 UI(主池下方堆叠展示)
+     ─────────────────────────────────────────────────────────────
+     业内标准:All-In 时按"投入金额从小到大"分层
+     UI 设计:
+       - 主池行:沿用 .pot-label,字号 15px,白色
+       - 边池行:小一档(12px),金黄色字体,带"边池 N: 金额"
+       - 多个边池纵向堆叠(margin 2px),竖屏空间够用
+       - 资格人数 ≤1 + needRefund=true → 灰色 + "(退还)"角标
+     位置:.table-center 内部,公共牌之上,跟现有底池一起垂直布局
+     不重叠:.table-center top:30%,公共牌 top:51.2%,间距足够展示 3 个边池
+     ───────────────────────────────────────────────────────────── */
+  .pot-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-bottom: 6px;
+    margin-top: -4px;   /* 紧贴主池行下方 */
+  }
+  .pot-list:empty {
+    display: none;       /* 无边池时彻底隐藏 */
+  }
+  .pot-row {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ffd96a;      /* 金黄色,跟 ⭐ 收藏统一色调 */
+    background: rgba(0, 0, 0, 0.35);
+    padding: 2px 9px;
+    border-radius: 9px;
+    line-height: 1.3;
+    letter-spacing: 0.3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    white-space: nowrap;
+  }
+  .pot-row.pot-row-refund {
+    color: #b0b0b0;      /* 灰色:待退还 */
+    font-style: italic;
+  }
+  .pot-row .pot-row-name {
+    opacity: 0.85;
+    margin-right: 4px;
+  }
+  .pot-row .pot-row-amount {
+    font-weight: 700;
+  }
+  .pot-row .pot-row-refund-tag {
+    margin-left: 4px;
+    font-size: 10px;
+    color: #888;
+  }
   .table-meta {
     font-size: 12px;
     color: rgba(255,255,255,0.7);
@@ -10796,6 +10847,8 @@
           <div class="pot-chip">C</div>
         </div>
         <div class="pot-label">底池: <span id="table-pot">1.33K</span></div>
+        <!-- ⭐ v2.25 子项 3:边池分层显示(只在有边池时显示;无边池时 :empty 自动隐藏) -->
+        <div class="pot-list" id="pot-list"></div>
         <div class="table-meta">
           <span class="meta-row" id="table-hand-no">#992793</span>
           <span class="meta-row">盲注 <span id="table-blinds">10/20(20)</span></span>
@@ -16175,8 +16228,9 @@
     ACTION_EXEC:      'action:exec',        // 玩家行动   { seatId, action, amount? }(可能是我自己也可能是其他玩家)
     STREET_NEXT:      'street:next',        // 进入下一街 { street }(行动轮结束后)
     POT_COLLECT:      'pot:collect',        // 筹码归底池 {}
+    POTS_UPDATE:      'pots:update',        // ⭐ v2.25 边池更新 { pots: [{id, name, amount, eligibleSeats[]}] }
     SHOWDOWN:         'showdown',           // 摊牌      { players: [{seatId, cards, handType}] }
-    PAYOUT:           'payout',             // 派彩      { winners: [{seatId, amount, handType}] }
+    PAYOUT:           'payout',             // 派彩      { winners: [{seatId, amount, handType, potId?}] }(potId 指明拿的是哪个池)
     HAND_END:         'hand:end',           // 一手结束   { handNo, mySnap: { chipsAfter, profit } }
 
     // ───── 连接管理 ─────
@@ -16357,23 +16411,36 @@
         await wait(1800);
 
         // ──────────────────────────────────────────────────────────
-        // 转牌
+        // ⭐ v2.25 子项 6:转牌 — 加入 All-In 场景验证边池
+        // 剧情:s7 转牌 All-In(假设它前面跟了 60,加上盲注合计投入很少,这里 All-In)
+        //   - s7 总投入(本手):前几街共 60,All-In 把剩下 ~200 全押 → 总投入 ~260
+        //   - 我和 s3 跟,但金额 > s7 剩余 → 形成边池
         // ──────────────────────────────────────────────────────────
         await execAction({ seatId: 's3', action: 'check' });
-        await execAction({ seatId: 's7', action: 'bet',  amount: 80 });
+        // ⭐ s7 All-In:把它剩余的全押(模拟 short stack 极限场景)
+        const s7AllInAmt = 200;  // s7 本街押的金额(等同剩余)
+        await execAction({ seatId: 's7', action: 'allin', amount: s7AllInAmt });
         const myTurn = await askMyAction({
           options: ['fold', 'call', 'raise', 'allin'],
-          callAmount: 80,
-          minRaise: 160,
+          callAmount: s7AllInAmt,
+          minRaise: s7AllInAmt * 2,
           maxRaise: myChipsNow,
           myChips: myChipsNow,
-          potSize: potFlop + 80
+          potSize: potFlop + s7AllInAmt
         });
-        await applyMyAction(myTurn, 80);
+        await applyMyAction(myTurn, s7AllInAmt);
         if (myTurn.action === 'fold') folded = true;
         if (!folded) {
-          await execAction({ seatId: 's1', action: 'fold' });
-          await execAction({ seatId: 's3', action: 'call', amount: 80 });
+          // 如果我加注/全下 → s3 也 All-In(只剩 ~300)→ 形成主池 + 边池 1 + 边池 2
+          if (myTurn.action === 'raise' || myTurn.action === 'allin') {
+            const myInvested = myTurn.action === 'allin' ? 2000 : (myTurn.amount || s7AllInAmt);
+            // s1 已弃,s3 跟 All-In
+            await execAction({ seatId: 's3', action: 'allin', amount: Math.min(300, myInvested) });
+          } else {
+            // 我只跟 → s3 也跟,主池形成,s7 vs 我 vs s3 三方
+            await execAction({ seatId: 's1', action: 'fold' });
+            await execAction({ seatId: 's3', action: 'call', amount: s7AllInAmt });
+          }
 
           emit(WS_EVENTS.STREET_NEXT, { street: 'river' }, 100);
           await wait(400);
@@ -16406,18 +16473,37 @@
           emit(WS_EVENTS.POT_COLLECT, {}, 100);
           await wait(1200);
 
-          // 摊牌
+          // ⭐ v2.25 子项 6:摊牌(把 All-In 玩家也算入)
           emit(WS_EVENTS.SHOWDOWN, {
             players: [
               { seatId: 'my', cards: ['K♥', '10♦'], handType: '两对' },
-              { seatId: 's7', cards: ['5♣', '5♦'], handType: '三条' }
+              { seatId: 's7', cards: ['5♣', '5♦'], handType: '三条' },
+              { seatId: 's3', cards: ['A♣', 'A♦'], handType: '三条 A' }
             ]
           }, 100);
           await wait(2800);
-          emit(WS_EVENTS.PAYOUT, {
-            winners: [{ seatId: 's7', amount: 720, handType: '三条' }]
-          }, 100);
-          await wait(2200);
+
+          // ⭐ v2.25 子项 6:多池派彩(读 potsStore 当前状态,每个池决出一个赢家)
+          // 业内规则:每池单独比牌 → 赢家拿该池
+          //   - 主池(所有人都有资格):比 my / s3 / s7 → s3 三条 A 最大,拿主池
+          //   - 边池 1(s7 无资格,因为他已用完投入):比 my / s3 → s3 拿
+          //   - 边池 2(只有我和 s3 投到这里):比 my / s3 → s3 拿
+          const pots = potsStore.list();
+          const winners = pots.map(pot => {
+            // 资格人比牌(演示规则:s3 三条 A > my 两对 > s7 三条 5)
+            const order = ['s3', 'my', 's7'];   // 牌型排名顺序
+            const winnerSeat = order.find(sid => pot.eligibleSeats.includes(sid));
+            const winnerHandType = winnerSeat === 's3' ? '三条 A' : (winnerSeat === 'my' ? '两对' : '三条');
+            return {
+              seatId: winnerSeat || pot.eligibleSeats[0] || 'my',
+              amount: pot.amount,
+              handType: winnerHandType,
+              potId: pot.id      // ⭐ 关键:告知前端拿的是哪个池
+            };
+          });
+          // 退还池特殊处理:winners 中 needRefund 的池 → 退还给唯一资格者(不算赢牌)
+          emit(WS_EVENTS.PAYOUT, { winners }, 100);
+          await wait(winners.length * 1500 + 800);
         }
       }
 
@@ -16660,6 +16746,275 @@
   let currentActionRequest = null;
   window.currentActionRequest = () => currentActionRequest;
 
+  // ⭐ v2.25 子项 4:整手累计投入跟踪(用于 computePots 输入)
+  // ─────────────────────────────────────────────────────────────────────
+  // 跟 actionRound.players[].totalBet(本街投入)区分:
+  //   - actionRound.totalBet:每街开始重置为 0(POT_COLLECT 后清)
+  //   - handAccumBets[seatId]:整手累计投入(从盲注开始累加到 SHOWDOWN)
+  // 用途:边池计算的唯一数据源
+  // 维护:
+  //   - HAND_START 清空
+  //   - BLIND_POST 加 SB/BB/抓头
+  //   - ACTION_EXEC 加 call/bet/raise/allin 金额
+  //   - foldedSeats / allInSeats 同步追踪
+  // ─────────────────────────────────────────────────────────────────────
+  const handAccumBets = {};        // { seatId: totalBetThisHand }
+  const handFoldedSeats = new Set();
+  const handAllInSeats = new Set();
+
+  function resetHandTracking() {
+    Object.keys(handAccumBets).forEach(k => delete handAccumBets[k]);
+    handFoldedSeats.clear();
+    handAllInSeats.clear();
+  }
+
+  function trackBet(seatId, amount) {
+    if (!seatId || !amount || amount <= 0) return;
+    handAccumBets[seatId] = (handAccumBets[seatId] || 0) + Number(amount);
+  }
+
+  function trackFold(seatId) {
+    if (seatId) handFoldedSeats.add(seatId);
+  }
+
+  function trackAllIn(seatId) {
+    if (seatId) handAllInSeats.add(seatId);
+  }
+
+  // 触发边池重算 + 广播(等价于后端推 POTS_UPDATE)
+  function recomputeAndPushPots() {
+    const pots = computePots(
+      handAccumBets,
+      Array.from(handFoldedSeats),
+      Array.from(handAllInSeats)
+    );
+    potsStore.set(pots);
+    return pots;
+  }
+  window.recomputeAndPushPots = recomputeAndPushPots;
+  window.handAccumBets = () => Object.assign({}, handAccumBets);
+
+  // ⭐ v2.25 子项 1:边池数据模型(单一数据源)
+  // ─────────────────────────────────────────────────────────────────────
+  // 业内标准:All-In 时按"投入金额从小到大"分层,每层一个池,All-In 玩家只能竞争自己投入的池
+  // 数据结构:
+  //   pots = [
+  //     { id: 'main',  name: '主池',    amount: 300, eligibleSeats: ['s1','s2','s3'] },
+  //     { id: 'side1', name: '边池 1', amount: 200, eligibleSeats: ['s2','s3']      },
+  //     ...
+  //   ]
+  // 字段说明:
+  //   - id:           主池固定 'main',边池 'side1'/'side2'/...
+  //   - name:         '主池' / '边池 1' / '边池 2' / ...
+  //   - amount:       该池筹码总额
+  //   - eligibleSeats:有资格争夺该池的座位 ID 数组(未弃牌 + 投入到该池阈值的玩家)
+  // ─────────────────────────────────────────────────────────────────────
+  const potsStore = (function() {
+    let pots = [];
+    const listeners = [];
+
+    function set(newPots) {
+      pots = Array.isArray(newPots) ? newPots.slice() : [];
+      listeners.forEach(cb => { try { cb(pots); } catch (e) { console.warn('[pots] listener error', e); } });
+    }
+
+    function clear() {
+      set([]);
+    }
+
+    function list() {
+      return pots.slice();
+    }
+
+    function total() {
+      return pots.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    }
+
+    function count() {
+      return pots.length;
+    }
+
+    function getMain() {
+      return pots.find(p => p.id === 'main') || null;
+    }
+
+    function getSidePots() {
+      return pots.filter(p => p.id !== 'main');
+    }
+
+    function onChange(cb) {
+      if (typeof cb !== 'function') return;
+      listeners.push(cb);
+    }
+
+    return { set, clear, list, total, count, getMain, getSidePots, onChange };
+  })();
+  window.potsStore = potsStore;
+
+  // ⭐ v2.25 子项 2:边池计算算法(纯函数,业内标准分层算法)
+  // ───────────────────────────────────────────────────────────────
+  // 业内参考:PokerStars / TGPoker / KKPoker 边池算法
+  // 输入:
+  //   playerBets:    {seatId: totalBet} 每人本手累计投入
+  //   foldedSeats:   [seatId, ...] 已弃牌座位(投入归池但无资格争夺)
+  //   allInSeats:    [seatId, ...] 已 All-In 座位(可选,仅用于命名提示)
+  // 输出:
+  //   pots: [{id, name, amount, eligibleSeats[]}, ...]
+  //   - 第一个永远是主池('main')
+  //   - 后续是边池('side1'/'side2'/...)
+  //   - 只有 1 人有资格 + 该层金额 > 0 → 标记 needRefund(后端退还,前端展示用)
+  // ───────────────────────────────────────────────────────────────
+  function computePots(playerBets, foldedSeats, allInSeats) {
+    foldedSeats = foldedSeats || [];
+    allInSeats = allInSeats || [];
+    const foldedSet = new Set(foldedSeats);
+
+    // 1. 拿出所有"还在手里"(未弃牌)的玩家投入,从小到大排序
+    //    注意:弃牌的玩家投入仍要进池,但不参与"分层切片"
+    const allBets = Object.entries(playerBets)
+      .filter(([_, amt]) => Number(amt) > 0);
+
+    if (allBets.length === 0) return [];
+
+    // 2. 收集所有独特的投入金额(分层阈值)
+    //    示例 {s1:100, s2:500, s3:200} → [100, 200, 500]
+    const thresholds = [...new Set(allBets.map(([_, amt]) => Number(amt)))]
+      .sort((a, b) => a - b);
+
+    const pots = [];
+    let prevThreshold = 0;
+
+    thresholds.forEach((threshold, layerIdx) => {
+      const layerHeight = threshold - prevThreshold;
+      if (layerHeight <= 0) return;
+
+      // 该层贡献者:投入 ≥ 本阈值的所有人(包括弃牌)
+      const contributors = allBets.filter(([_, amt]) => Number(amt) >= threshold);
+      // 该层资格者:投入 ≥ 本阈值 且 未弃牌
+      const eligibleSeats = contributors
+        .filter(([sid, _]) => !foldedSet.has(sid))
+        .map(([sid, _]) => sid);
+
+      const amount = layerHeight * contributors.length;
+
+      pots.push({
+        id: layerIdx === 0 ? 'main' : 'side' + layerIdx,
+        name: layerIdx === 0 ? '主池' : '边池 ' + layerIdx,
+        amount: amount,
+        eligibleSeats: eligibleSeats,
+        // 退还标记:只有 1 人资格 + 金额 > 0 + 不是主池
+        needRefund: layerIdx > 0 && eligibleSeats.length <= 1 && amount > 0
+      });
+
+      prevThreshold = threshold;
+    });
+
+    // 3. 合并连续的"同资格集"边池(算法副产物,UI 干净一些)
+    //    例:边池 1 资格 [s2,s3] 边池 2 资格 [s2,s3] → 合并成一个
+    const merged = [];
+    pots.forEach(p => {
+      const last = merged[merged.length - 1];
+      if (last
+          && last.id !== 'main'    // 主池不合并(主池语义独立)
+          && p.id !== 'main'
+          && last.eligibleSeats.length === p.eligibleSeats.length
+          && last.eligibleSeats.every(s => p.eligibleSeats.includes(s))) {
+        last.amount += p.amount;
+        last.needRefund = last.needRefund || p.needRefund;
+      } else {
+        merged.push(Object.assign({}, p));
+      }
+    });
+
+    // 4. 重新编号边池(合并后 side1/side2/... 连续)
+    let sideIdx = 0;
+    merged.forEach(p => {
+      if (p.id !== 'main') {
+        sideIdx += 1;
+        p.id = 'side' + sideIdx;
+        p.name = '边池 ' + sideIdx;
+      }
+    });
+
+    return merged;
+  }
+  window.computePots = computePots;
+
+  // ⭐ v2.25 子项 3:边池 UI 渲染(订阅 potsStore.onChange,数据变化自动重渲)
+  // ─────────────────────────────────────────────────────────────────
+  // 显示策略(符合手机德州扑克标准):
+  //   - 0 个池:           隐藏 .pot-list,主池行显示 "底池: 0"
+  //   - 1 个池(无边池):  隐藏 .pot-list,主池行显示金额
+  //   - 多个池:           主池行显示总池,.pot-list 显示每个边池分行
+  //   - 边池 needRefund:  灰色斜体 + "(退还)" 角标
+  // ─────────────────────────────────────────────────────────────────
+  function renderPotsUI(pots) {
+    const listEl = document.getElementById('pot-list');
+    const tablePotEl = document.getElementById('table-pot');
+    if (!listEl) return;
+
+    pots = Array.isArray(pots) ? pots : [];
+
+    if (pots.length === 0) {
+      listEl.innerHTML = '';
+      if (tablePotEl) tablePotEl.textContent = '0';
+      return;
+    }
+
+    // 主池金额显示在原 #table-pot 位置(不动旧 UI)
+    const main = pots.find(p => p.id === 'main');
+    const total = pots.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+    // 显示策略:
+    //  - 单一主池 → 主池行显示金额,边池列表为空
+    //  - 多池 → 主池行显示"总池"(更直观),边池列表展开每个边池
+    if (pots.length === 1) {
+      if (tablePotEl) tablePotEl.textContent = formatPotMoney(main ? main.amount : 0);
+      listEl.innerHTML = '';
+      return;
+    }
+
+    // 多池场景:主池行显示总额,边池列表显示每个边池
+    if (tablePotEl) tablePotEl.textContent = formatPotMoney(total);
+
+    // 渲染边池(主池金额已在上方 #table-pot 体现,这里不重复)
+    // 显示顺序:边池 1 → 边池 2 → ...(从小到大,符合阅读习惯)
+    const sidePots = pots.filter(p => p.id !== 'main');
+    const rows = [];
+    // 第一行单独显示主池金额作为细分(让玩家看清主池 vs 边池切分)
+    if (main) {
+      rows.push(
+        '<div class="pot-row">' +
+          '<span class="pot-row-name">主池</span>' +
+          '<span class="pot-row-amount">' + formatPotMoney(main.amount) + '</span>' +
+        '</div>'
+      );
+    }
+    sidePots.forEach(p => {
+      const cls = p.needRefund ? 'pot-row pot-row-refund' : 'pot-row';
+      const tag = p.needRefund ? '<span class="pot-row-refund-tag">退还</span>' : '';
+      rows.push(
+        '<div class="' + cls + '">' +
+          '<span class="pot-row-name">' + p.name + '</span>' +
+          '<span class="pot-row-amount">' + formatPotMoney(p.amount) + '</span>' +
+          tag +
+        '</div>'
+      );
+    });
+    listEl.innerHTML = rows.join('');
+  }
+  window.renderPotsUI = renderPotsUI;
+
+  // 边池金额格式化:>= 1000 显示 K(跟原 .pot-label 一致)
+  function formatPotMoney(n) {
+    n = Number(n) || 0;
+    if (n >= 1000) return (n / 1000).toFixed(n % 1000 === 0 ? 0 : 2).replace(/\.?0+$/, '') + 'K';
+    return String(Math.round(n));
+  }
+
+  // 订阅:potsStore 变化 → 自动重渲 UI
+  potsStore.onChange(renderPotsUI);
+
   /**
    * ⭐ v2.24 子项 1:ACTION_REQUEST → P 弹窗显示器
    *
@@ -16805,6 +17160,10 @@
         // 重置桌面 + 渲染玩家 + 设庄家
         fullResetTable();
         wsCurrentHand = data;
+        // ⭐ v2.25 子项 1:新一手开始清空边池
+        potsStore.clear();
+        // ⭐ v2.25 子项 4:清空整手累计投入跟踪
+        resetHandTracking();
         // 渲染所有玩家到座位
         if (data.players) {
           data.players.forEach(p => {
@@ -16839,15 +17198,20 @@
         if (data.sbSeat) {
           setSeatBet(data.sbSeat, data.sbAmount);
           attachBlindLabel(data.sbSeat, 'SB');
+          trackBet(data.sbSeat, data.sbAmount);   // ⭐ v2.25 子项 4
         }
         if (data.bbSeat) {
           setSeatBet(data.bbSeat, data.bbAmount);
           attachBlindLabel(data.bbSeat, 'BB');
+          trackBet(data.bbSeat, data.bbAmount);   // ⭐ v2.25 子项 4
         }
         if (data.straddleSeat) {
           setSeatBet(data.straddleSeat, data.straddleAmount);
           attachBlindLabel(data.straddleSeat, '抓头');
+          trackBet(data.straddleSeat, data.straddleAmount);  // ⭐ v2.25 子项 4
         }
+        // ⭐ v2.25 子项 4:盲注下完后边池立刻更新(虽然此时只有主池,但保持单一数据源)
+        recomputeAndPushPots();
         if (typeof showToast === 'function') showToast('盲注:SB ' + data.sbAmount + ' / BB ' + data.bbAmount);
         break;
       }
@@ -16900,9 +17264,16 @@
         if (data.action === 'fold') {
           const el = data.seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + data.seatId);
           if (el) el.classList.add('folded');
+          // ⭐ v2.25 子项 4:跟踪弃牌(投入仍归池,无资格争夺)
+          trackFold(data.seatId);
         } else if (data.action === 'call' || data.action === 'bet' || data.action === 'raise' || data.action === 'allin') {
           if (typeof data.amount === 'number') setSeatBet(data.seatId, data.amount);
+          // ⭐ v2.25 子项 4:累加本笔投入到整手累计
+          if (typeof data.amount === 'number') trackBet(data.seatId, data.amount);
+          if (data.action === 'allin') trackAllIn(data.seatId);
         }
+        // ⭐ v2.25 子项 4:每次行动后重算边池(让玩家实时看到边池形成)
+        recomputeAndPushPots();
         // ⭐ v2.24 子项 1:我自己的行动 ACK → 关 P 弹窗 + 清上下文
         if (data.seatId === 'my' && currentActionRequest) {
           clearActionRequest();
@@ -16923,6 +17294,16 @@
         break;
       }
 
+      case WS_EVENTS.POTS_UPDATE: {
+        // ⭐ v2.25 子项 1:边池更新(后端推送)
+        // 入参: { pots: [{id, name, amount, eligibleSeats[]}, ...] }
+        if (data.pots && Array.isArray(data.pots)) {
+          potsStore.set(data.pots);
+          console.log('[pots] update', data.pots);
+        }
+        break;
+      }
+
       case WS_EVENTS.SHOWDOWN: {
         // 摊牌:翻所有非弃牌玩家的底牌 + 牌型识别 + 高亮
         // 把后端给的 cards 写到 DEMO_HOLE_CARDS,复用现有 revealAllHands 逻辑
@@ -16939,13 +17320,59 @@
       }
 
       case WS_EVENTS.PAYOUT: {
-        if (data.winners && data.winners.length > 0) {
+        // ⭐ v2.25 子项 5:按边池资格逐个结算
+        // 入参格式(v2.25 扩展):
+        //   data.winners = [
+        //     { seatId, amount, handType, potId },   // potId 指明拿的是哪个池('main'/'side1'/...)
+        //     ...
+        //   ]
+        // 兼容旧格式(单赢家拿全场):data.winners = [{seatId, amount, handType}]
+        if (!data.winners || data.winners.length === 0) break;
+
+        const hasPotIds = data.winners.some(w => w.potId);
+
+        if (hasPotIds) {
+          // 多池派彩:按 potId 分组,主池 → 边池 1 → 边池 2 ... 顺序播放
+          const orderedPotIds = ['main', 'side1', 'side2', 'side3', 'side4', 'side5'];
+          const winnersByPot = {};
+          data.winners.forEach(w => {
+            const pid = w.potId || 'main';
+            if (!winnersByPot[pid]) winnersByPot[pid] = [];
+            winnersByPot[pid].push(w);
+          });
+
+          const PAYOUT_STEP = 1400;   // 每个池派彩间隔(给玩家看清)
+          let delay = 0;
+
+          orderedPotIds.forEach(pid => {
+            const ws = winnersByPot[pid];
+            if (!ws || ws.length === 0) return;
+            ws.forEach(winner => {
+              setTimeout(() => {
+                const pot = potsStore.list().find(p => p.id === pid);
+                const potName = pot ? pot.name : '主池';
+                if (typeof showToast === 'function') {
+                  const who = winner.seatId === 'my' ? '我' : winner.seatId;
+                  const ht = winner.handType ? '(' + winner.handType + ')' : '';
+                  showToast(potName + ' → ' + who + ' ' + formatPotMoney(winner.amount) + ' ' + ht);
+                }
+                potToWinnerAnimation(winner.seatId);
+                // 派完该池 → 从 potsStore 移除(让 UI 实时减少边池条目)
+                const remaining = potsStore.list().filter(p => p.id !== pid);
+                potsStore.set(remaining);
+              }, delay);
+              delay += PAYOUT_STEP;
+            });
+          });
+        } else {
+          // 旧格式兼容:第一个 winner 拿全场(单一主池场景)
           const winner = data.winners[0];
           if (typeof showToast === 'function') {
             showToast('派彩 → ' + (winner.seatId === 'my' ? '我' : winner.seatId) +
                       (winner.handType ? '(' + winner.handType + ')' : ''));
           }
           potToWinnerAnimation(winner.seatId);
+          potsStore.clear();
         }
         break;
       }

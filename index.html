@@ -3882,6 +3882,56 @@
     box-shadow: 0 0 14px rgba(255, 216, 74, 1), 0 2px 8px rgba(0,0,0,0.6);
   }
 
+  /* ⭐ v2.28.9 + v2.28.11:实时命中高亮(.live-hit)— 绿色发光
+     业务场景:翻牌/转牌/河牌发完后,我的命中牌型 ≥ 一对就亮起
+     跟摊牌高亮共存,各占一类 class,互不干扰
+     ⭐ v2.28.11:全部 !important 覆盖父规则,加粗 border + 多层 box-shadow 强对比 */
+  .card.live-hit,
+  .mini-card.live-hit {
+    outline: 3px solid #4dff4d !important;
+    outline-offset: -3px !important;
+    border-radius: 6px;
+    box-shadow:
+      0 0 0 2px rgba(77, 255, 77, 0.6),
+      0 0 16px rgba(77, 255, 77, 0.95),
+      0 0 28px rgba(77, 255, 77, 0.5),
+      0 2px 6px rgba(0,0,0,0.5) !important;
+    transform: translateY(-3px) scale(1.05) !important;
+    z-index: 10 !important;
+    position: relative !important;
+    animation: liveHitPulse 1.4s ease-in-out infinite !important;
+  }
+  @keyframes liveHitPulse {
+    0%, 100% {
+      box-shadow:
+        0 0 0 2px rgba(77, 255, 77, 0.5),
+        0 0 12px rgba(77, 255, 77, 0.85),
+        0 0 22px rgba(77, 255, 77, 0.4),
+        0 2px 6px rgba(0,0,0,0.5);
+    }
+    50% {
+      box-shadow:
+        0 0 0 3px rgba(77, 255, 77, 0.85),
+        0 0 20px rgba(77, 255, 77, 1),
+        0 0 34px rgba(77, 255, 77, 0.7),
+        0 2px 6px rgba(0,0,0,0.5);
+    }
+  }
+  .community-cards .card.live-hit {
+    opacity: 1 !important;
+    transform: translateY(-4px) scale(1.08) !important;
+  }
+  .my-cards .card.live-hit {
+    transform: translateY(-4px) scale(1.06) !important;
+  }
+  /* 摊牌高亮(.hand-highlight)优先级高于实时高亮:同时存在时金色覆盖绿色 */
+  .card.hand-highlight.live-hit,
+  .mini-card.hand-highlight.live-hit {
+    outline-color: #ffd84a !important;
+    box-shadow: 0 0 12px rgba(255, 216, 74, 0.9), 0 2px 6px rgba(0,0,0,0.5) !important;
+    animation: none !important;
+  }
+
   /* 自己的座位(底部) */
   .my-seat {
     position: absolute;
@@ -4055,7 +4105,7 @@
     background: conic-gradient(
       from 0deg,
       transparent calc(360deg * var(--p, 0) / 100),
-      rgba(0,0,0,0.55) calc(360deg * var(--p, 0) / 100)
+      rgba(0,0,0,0.25) calc(360deg * var(--p, 0) / 100)
     );
     box-shadow: inset 0 0 0 2px rgba(77,255,77,0.4);
   }
@@ -4068,7 +4118,7 @@
     background: conic-gradient(
       from 0deg,
       transparent calc(360deg * var(--p, 0) / 100),
-      rgba(0,0,0,0.55) calc(360deg * var(--p, 0) / 100)
+      rgba(0,0,0,0.25) calc(360deg * var(--p, 0) / 100)
     );
     box-shadow: inset 0 0 0 2px rgba(77,255,77,0.4);
     display: none;   /* 默认隐藏,只在check态显示 */
@@ -4484,18 +4534,19 @@
     display: block;
   }
 
-  /* P2 下注弹窗:显"过牌" + 倒计时秒数 + 蒙版,按钮保持绿色 */
+  /* P2 跟注弹窗:显"金额 + 跟注" + 倒计时秒数 + 蒙版,按钮保持绿色 */
+  /* ⭐ v2.28.5 Bug 修复:之前 CSS 错把 P2 显示成"过牌"文字,导致玩家以为是过牌实际是跟注 */
   .action-area[data-state="p2"] .ab-check-amount,
   .action-area[data-state="p2"] .ab-check-label {
-    display: none;
+    display: block;
   }
   .action-area[data-state="p2"] .ab-check-label-check {
-    display: block;
+    display: none;
   }
   .action-area[data-state="p2"] .ab-check-timer { display: block; }
   .action-area[data-state="p2"] .ab-check-seconds { display: block; }
 
-  /* P3 过牌-加注弹窗(翻前大盲):右下显"过牌"+ 倒计时,按钮保持绿色 */
+  /* P3 过牌-加注弹窗(翻前大盲 / 翻后无人下注):右下显"过牌"+ 倒计时,按钮保持绿色 */
   .action-area[data-state="p3"] .ab-check-amount,
   .action-area[data-state="p3"] .ab-check-label {
     display: none;
@@ -17764,7 +17815,7 @@
         await wait(400);
         emit(WS_EVENTS.POT_COLLECT, {}, 100);
         await wait(1200);
-        emit(WS_EVENTS.CARD_DEAL_BOARD, { street: 'flop', cards: ['J♦', '7♣', 'K♥'] }, 100);
+        emit(WS_EVENTS.CARD_DEAL_BOARD, { street: 'flop', cards: ['J♦', '7♣', 'K♠'] }, 100);
         await wait(2000);
         await runActionRound('flop', firstNonFoldedFrom(sbSeat));
       }
@@ -17791,28 +17842,86 @@
         await wait(1200);
 
         // 摊牌(只展示未弃牌的玩家)
+        // ⭐ v2.28.4 Bug 1 修复:其他未弃玩家随机合法 2 张牌(避免 '?' 导致渲染空白)
+        // ⭐ v2.28.8 Bug 2 修复:用 evaluateBestHand 计算真实牌型,不再硬编码
+        //   旧 bug:my 硬编码"两对",但实际公共牌 J♦7♣K♥A♠5♦ + 底牌 K♥10♦ 只能成"一对 K"
+        //          头像底部标签实时计算显示"一对"(对的),弹窗显示 mock 的"两对"(错的)
+        const BOARD_CARDS = ['J♦', '7♣', 'K♠', 'A♠', '5♦'];   // 跟前面发的公共牌保持一致
+        const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+        const SUITS = ['♠','♥','♦','♣'];
+        const usedCards = new Set(['K♥','10♦','5♣','5♦','A♣','A♦','J♦','7♣','K♠','A♠']);  // 已占用的(my/s7/s3 + 公共牌)
+        function randomCard() {
+          let tries = 0;
+          while (tries < 50) {
+            const r = RANKS[Math.floor(Math.random() * RANKS.length)];
+            const s = SUITS[Math.floor(Math.random() * SUITS.length)];
+            const card = r + s;
+            if (!usedCards.has(card)) {
+              usedCards.add(card);
+              return card;
+            }
+            tries++;
+          }
+          return 'Q♣';  // fallback
+        }
+        // 先生成每个玩家的底牌(my/s7/s3 固定;其他人随机)
         const showdownPlayers = allSeatIds
           .filter(s => !foldedSet.has(s))
           .map(s => {
-            if (s === 'my')   return { seatId: 'my', cards: ['K♥', '10♦'], handType: '两对' };
-            if (s === 's7')   return { seatId: 's7', cards: ['5♣', '5♦'],  handType: '三条' };
-            if (s === 's3')   return { seatId: 's3', cards: ['A♣', 'A♦'],  handType: '三条 A' };
-            return { seatId: s, cards: ['?', '?'], handType: '其他' };
+            let cards;
+            if (s === 'my')      cards = ['K♥', '10♦'];
+            else if (s === 's7') cards = ['5♣', '5♦'];
+            else if (s === 's3') cards = ['A♣', 'A♦'];
+            else                 cards = [randomCard(), randomCard()];
+            // 用 evaluateBestHand 计算真实牌型(底牌 + 公共牌 7 选 5)
+            let handType = '高牌';
+            let evalResult = null;
+            try {
+              if (typeof evaluateBestHand === 'function') {
+                evalResult = evaluateBestHand(cards.concat(BOARD_CARDS));
+                if (evalResult && evalResult.type) handType = evalResult.type;
+              }
+            } catch (e) {
+              console.warn('[mock] evaluateBestHand 失败', e);
+            }
+            return { seatId: s, cards, handType, evalResult };
           });
-        emit(WS_EVENTS.SHOWDOWN, { players: showdownPlayers }, 100);
+        emit(WS_EVENTS.SHOWDOWN, { players: showdownPlayers.map(p => ({ seatId: p.seatId, cards: p.cards, handType: p.handType })) }, 100);
         await wait(2800);
 
-        // 派彩(读 potsStore)
+        // 派彩(读 potsStore)— 按真实牌型强度选赢家(strength + tiebreak)
+        function pickWinner(candidates) {
+          // candidates: showdownPlayers 子集
+          if (candidates.length === 0) return null;
+          let best = candidates[0];
+          candidates.forEach(c => {
+            if (!c.evalResult || !best.evalResult) return;
+            const cmp = c.evalResult.strength - best.evalResult.strength;
+            if (cmp > 0 ||
+                (cmp === 0 && typeof compareTiebreak === 'function' &&
+                  compareTiebreak(c.evalResult.tiebreak, best.evalResult.tiebreak) > 0)) {
+              best = c;
+            }
+          });
+          return best;
+        }
         const pots = potsStore.list();
-        const winnerSeatId = showdownPlayers[0] && showdownPlayers[0].seatId || 'my';
         const winners = pots.length > 0
-          ? pots.map(p => ({
-              seatId: (p.eligibleSeats && p.eligibleSeats[0]) || winnerSeatId,
-              amount: p.amount,
-              handType: '两对',
-              potId: p.id
-            }))
-          : [{ seatId: winnerSeatId, amount: pot, handType: '两对' }];
+          ? pots.map(p => {
+              // 该池资格内的玩家
+              const eligibleCandidates = showdownPlayers.filter(sp => (p.eligibleSeats || []).includes(sp.seatId));
+              const winner = pickWinner(eligibleCandidates) || showdownPlayers[0];
+              return {
+                seatId: winner.seatId,
+                amount: p.amount,
+                handType: winner.handType,
+                potId: p.id
+              };
+            })
+          : (function() {
+              const winner = pickWinner(showdownPlayers) || showdownPlayers[0];
+              return [{ seatId: winner.seatId, amount: pot, handType: winner.handType }];
+            })();
         emit(WS_EVENTS.PAYOUT, { winners }, 100);
         await wait(winners.length * 1500 + 800);
       } else {
@@ -25344,13 +25453,17 @@
   const soundEngine = (function() {
     let enabled = true;
     let audioCtx = null;
-    let tickBuffer = null;             // tick 专用:解码后截取前 200ms 的 buffer
-    const audioPool = {};              // 其他音效:Audio 对象池
+    let tickBuffer = null;             // tick 专用:解码后截取前 200ms 的 buffer(v2.28.7 已统一到 buffers,保留兼容)
 
     try {
       const saved = localStorage.getItem('aagame_sound_enabled');
-      if (saved === '0') enabled = false;
+      console.log('[sound] localStorage aagame_sound_enabled =', JSON.stringify(saved));
+      if (saved === '0') {
+        enabled = false;
+        console.warn('[sound] 音效被 localStorage 禁用!如需开启:在 Console 跑 localStorage.removeItem("aagame_sound_enabled") 后刷新');
+      }
     } catch (e) {}
+    console.log('[sound] 初始 enabled=', enabled);
 
     // 把 base64 转 Blob URL(给 Audio 用)
     function b64ToBlobUrl(b64, mime) {
@@ -25374,14 +25487,41 @@
       return buf;
     }
 
-    // 初始化:为所有音效创建 Audio 对象;tick 单独 decode 截取
+    // ⭐ v2.28.7 重写:所有音效统一用 Web Audio decodeAudioData(iOS 完美支持)
+    // ─────────────────────────────────────────────────────────────────────
+    // 旧方案 Audio + Blob URL 在 iOS Safari 上抛 NotSupportedError
+    // 新方案:所有 base64 → ArrayBuffer → decodeAudioData → AudioBuffer 缓存
+    //         播放时 createBufferSource + connect to destination,延迟极低,iOS 完美
+    // ─────────────────────────────────────────────────────────────────────
+    const buffers = {};                // name → AudioBuffer
     let initialized = false;
+    let initPromise = null;
+
     function init() {
-      if (initialized) return;
-      initialized = true;
+      if (initialized || initPromise) {
+        console.log('[sound] init 已在进行/已完成');
+        return initPromise;
+      }
+      console.log('[sound] init() start');
+      // 创建 AudioContext(必须在用户手势内)
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) {
+          console.warn('[sound] AudioContext API 不可用');
+          return Promise.resolve();
+        }
+        if (!audioCtx) {
+          audioCtx = new AC();
+          console.log('[sound] AudioContext 创建, state=', audioCtx.state);
+        }
+      } catch (e) {
+        console.warn('[sound] AudioContext 创建失败', e);
+        return Promise.resolve();
+      }
 
       const ALL = {
         myTurn:        SOUND_B64_MYTURN,
+        tick:          SOUND_B64_TICK,
         fold:          SOUND_B64_FOLD,
         check:         SOUND_B64_CHECK,
         call:          SOUND_B64_CALL,
@@ -25396,81 +25536,116 @@
         dealHole:      SOUND_B64_DEALHOLE,
         dealBoard:     SOUND_B64_DEALBOARD,
       };
-      Object.entries(ALL).forEach(([name, b64]) => {
+
+      // 并发 decode 所有 mp3
+      const tasks = Object.entries(ALL).map(([name, b64]) => {
         try {
-          const url = b64ToBlobUrl(b64, 'audio/mpeg');
-          const a = new Audio(url);
-          a.preload = 'auto';
-          a.volume = 0.85;
-          audioPool[name] = a;
+          const ab = b64ToArrayBuffer(b64);
+          // ⭐ iOS Safari 兼容:decodeAudioData 必须传 callback,不能依赖 Promise
+          return new Promise((resolve) => {
+            audioCtx.decodeAudioData(
+              ab,
+              (buf) => {
+                // tick 特殊:截取前 200ms
+                if (name === 'tick') {
+                  const TICK_MS = 200;
+                  const sampleCount = Math.min(Math.floor(buf.sampleRate * TICK_MS / 1000), buf.length);
+                  const trimmed = audioCtx.createBuffer(buf.numberOfChannels, sampleCount, buf.sampleRate);
+                  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+                    const src = buf.getChannelData(ch);
+                    const dst = trimmed.getChannelData(ch);
+                    const fadeMs = 20;
+                    const fadeStart = Math.floor(buf.sampleRate * (TICK_MS - fadeMs) / 1000);
+                    for (let i = 0; i < sampleCount; i++) {
+                      let amp = src[i];
+                      if (i >= fadeStart) {
+                        amp = amp * (1 - (i - fadeStart) / (sampleCount - fadeStart));
+                      }
+                      dst[i] = amp;
+                    }
+                  }
+                  buffers[name] = trimmed;
+                } else {
+                  buffers[name] = buf;
+                }
+                resolve();
+              },
+              (err) => {
+                console.warn('[sound] decode failed for', name, err);
+                resolve();
+              }
+            );
+          });
         } catch (e) {
-          console.warn('[sound] init failed for', name, e);
+          console.warn('[sound] decode exception for', name, e);
+          return Promise.resolve();
         }
       });
 
-      // tick 单独处理:decode 后截取前 200ms 存为 AudioBuffer
-      try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (AC) {
-          audioCtx = new AC();
-          const ab = b64ToArrayBuffer(SOUND_B64_TICK);
-          audioCtx.decodeAudioData(ab).then(buffer => {
-            // 截取前 200ms
-            const TICK_MS = 200;
-            const sampleCount = Math.min(Math.floor(buffer.sampleRate * TICK_MS / 1000), buffer.length);
-            const trimmed = audioCtx.createBuffer(buffer.numberOfChannels, sampleCount, buffer.sampleRate);
-            for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
-              const src = buffer.getChannelData(ch);
-              const dst = trimmed.getChannelData(ch);
-              // 加 20ms 淡出避免咔哒
-              const fadeMs = 20;
-              const fadeStart = Math.floor(buffer.sampleRate * (TICK_MS - fadeMs) / 1000);
-              for (let i = 0; i < sampleCount; i++) {
-                let amp = src[i];
-                if (i >= fadeStart) {
-                  amp = amp * (1 - (i - fadeStart) / (sampleCount - fadeStart));
-                }
-                dst[i] = amp;
-              }
-            }
-            tickBuffer = trimmed;
-          }).catch(err => console.warn('[sound] tick decode failed', err));
-        }
-      } catch (e) {
-        console.warn('[sound] tick setup failed', e);
-      }
+      initPromise = Promise.all(tasks).then(() => {
+        initialized = true;
+        console.log('[sound] init 完成, 已 decode', Object.keys(buffers).length, '个音效');
+      });
+      return initPromise;
     }
 
-    // 播放普通音效(Audio 对象)
+    // 播放(统一入口,所有音效都走 Web Audio buffer source)
     function playAudio(name, volume) {
       if (!enabled) return;
-      if (!initialized) init();
-      const a = audioPool[name];
-      if (!a) return;
-      try {
-        // 克隆 src 复用(允许快速重叠播放)
-        const clone = a.cloneNode();
-        clone.volume = (volume !== undefined ? volume : 0.85);
-        const p = clone.play();
-        if (p && p.catch) p.catch(() => {});  // 忽略浏览器自动播放限制
-      } catch (e) {}
+      // 兼容旧 sliderDrag/dealHole 这些直接调 playAudio 的入口
+      doPlay(name, volume);
     }
 
-    // 播放 tick(用 Web Audio 截取版 buffer)
-    function playTick() {
+    function doPlay(name, volume) {
       if (!enabled) return;
-      if (!initialized) init();
-      if (!audioCtx || !tickBuffer) return;
+      // 必须先 init,但 init 是异步的;如果还没完成,跳过这次播放
+      if (!initialized) {
+        // 没初始化:尝试触发,但本次播放无法播
+        if (!initPromise) {
+          init();
+        }
+        return;
+      }
+      if (!audioCtx) return;
+      // iOS 上 AudioContext 经常处于 suspended 状态,需要在用户手势内 resume
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      const buf = buffers[name];
+      if (!buf) {
+        console.warn('[sound] no buffer for', name);
+        return;
+      }
       try {
-        if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
         const src = audioCtx.createBufferSource();
-        src.buffer = tickBuffer;
+        src.buffer = buf;
         const gain = audioCtx.createGain();
-        gain.gain.value = 0.7;
+        gain.gain.value = volume !== undefined ? volume : 0.85;
         src.connect(gain);
         gain.connect(audioCtx.destination);
         src.start();
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[sound] play exception for', name, e);
+      }
+    }
+
+    // tick 直接复用 sliderTick(完整短音,200ms 截取版在 iOS 上太短常被丢弃)
+    // ⭐ v2.28.17:放弃 tick 截取方案,sliderTick.mp3 本身是清脆"咔哒"声,适合倒计时
+    function playTick() {
+      if (!enabled) {
+        console.log('[tick] playTick skipped: 音效关闭');
+        return;
+      }
+      if (!initialized) {
+        console.log('[tick] playTick skipped: 引擎未初始化');
+        return;
+      }
+      if (!buffers['sliderTick']) {
+        console.warn('[tick] buffers[sliderTick] 不存在,无法播放');
+        return;
+      }
+      console.log('[tick] playTick → doPlay(sliderTick), buffer.duration=', buffers['sliderTick'].duration);
+      doPlay('sliderTick', 0.85);
     }
 
     // ─── 滑杆 drag 节流(>=80ms 一次)───
@@ -25511,17 +25686,50 @@
     function play(name) { if (sounds[name]) sounds[name](); }
 
     // 用户首次交互时触发 init(浏览器自动播放限制要求 user gesture)
+    // ⭐ v2.28.5 Bug 修复:用 capture 阶段监听,先于按钮 click handler 触发
+    //   否则按钮上的 stopPropagation / stopImmediatePropagation 会阻止 init,导致声音引擎永不初始化
+    // ⭐ v2.28.7 新增:iOS 上 AudioContext 初始化后会处于 suspended,必须在 user gesture 内 resume
     function onFirstGesture() {
+      console.log('[sound] onFirstGesture 触发');
       init();
-      document.removeEventListener('click', onFirstGesture);
-      document.removeEventListener('touchstart', onFirstGesture);
+      // 在用户手势内 resume(iOS 关键)
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+          console.log('[sound] AudioContext resumed, state=', audioCtx.state);
+        }).catch(err => {
+          console.warn('[sound] resume failed', err);
+        });
+      }
+      // 移除监听(只跑一次)
+      document.removeEventListener('click', onFirstGesture, true);
+      document.removeEventListener('touchstart', onFirstGesture, true);
     }
-    document.addEventListener('click', onFirstGesture, { once: false });
-    document.addEventListener('touchstart', onFirstGesture, { once: false });
+    document.addEventListener('click', onFirstGesture, { capture: true });
+    document.addEventListener('touchstart', onFirstGesture, { capture: true });
 
     return { play, setEnabled, isEnabled, sounds };
   })();
   window.soundEngine = soundEngine;
+
+  // ⭐ v2.28.6 诊断辅助:玩家可在 Console 直接调用排查音效问题
+  window.soundDebug = function() {
+    console.log('========== 音效系统诊断 ==========');
+    console.log('1. soundEngine.isEnabled() =', window.soundEngine.isEnabled());
+    console.log('2. localStorage =', localStorage.getItem('aagame_sound_enabled'));
+    console.log('3. AudioContext 可用?', !!(window.AudioContext || window.webkitAudioContext));
+    console.log('4. window.soundEngine =', typeof window.soundEngine);
+    console.log('5. 触发 init + 立即播放 call.mp3 测试...');
+    try {
+      window.soundEngine.setEnabled(true);
+      window.soundEngine.play('call');
+      console.log('  → play("call") 已调用,如果听到声音说明音效系统正常');
+      console.log('  → 如果没声音,看上面警告 log');
+    } catch (e) {
+      console.error('  → 异常:', e);
+    }
+    console.log('========== 诊断结束 ==========');
+    console.log('如要强制重置音效偏好:跑 localStorage.removeItem("aagame_sound_enabled") 然后刷新页面');
+  };
 
   // ⭐ v2.28 批次 A2:网络断线检测 — 跟 wsClient.onStateChange 联动
   // ─────────────────────────────────────────────────────────────────────
@@ -26372,6 +26580,7 @@
     foldedSeats = foldedSeats || [];
     allInSeats = allInSeats || [];
     const foldedSet = new Set(foldedSeats);
+    const allInSet = new Set(allInSeats);
 
     // 1. 拿出所有"还在手里"(未弃牌)的玩家投入,从小到大排序
     //    注意:弃牌的玩家投入仍要进池,但不参与"分层切片"
@@ -26380,10 +26589,35 @@
 
     if (allBets.length === 0) return [];
 
-    // 2. 收集所有独特的投入金额(分层阈值)
-    //    示例 {s1:100, s2:500, s3:200} → [100, 200, 500]
-    const thresholds = [...new Set(allBets.map(([_, amt]) => Number(amt)))]
-      .sort((a, b) => a - b);
+    // ⭐ v2.28.14 重写:只在有玩家 All-In 时才生成边池
+    // 标准德州扑克规则:
+    //   - 没人 All-In → 只有 1 个主池(所有投入合并)
+    //   - 1 个 All-In 玩家筹码低于其他人 → 主池(All-In 档)+ 边池1(超出部分)
+    //   - 多个 All-In 不同档 → 主池 + 边池1 + 边池2 + ...
+    //
+    // 切片点 = 所有 All-In 玩家的投入金额(去重排序)+ 最大投入
+    const allInBets = allBets
+      .filter(([sid, _]) => allInSet.has(sid))
+      .map(([_, amt]) => Number(amt));
+
+    // 没人 All-In → 只有 1 个主池,全部投入合并
+    if (allInBets.length === 0) {
+      const totalAmount = allBets.reduce((sum, [_, amt]) => sum + Number(amt), 0);
+      const eligibleSeats = allBets
+        .filter(([sid, _]) => !foldedSet.has(sid))
+        .map(([sid, _]) => sid);
+      return [{
+        id: 'main',
+        name: '主池',
+        amount: totalAmount,
+        eligibleSeats: eligibleSeats,
+        needRefund: false
+      }];
+    }
+
+    // 有 All-In:用 All-In 档位 + 最大投入做切片点
+    const maxBet = Math.max(...allBets.map(([_, amt]) => Number(amt)));
+    const thresholds = [...new Set([...allInBets, maxBet])].sort((a, b) => a - b);
 
     const pots = [];
     let prevThreshold = 0;
@@ -26989,6 +27223,13 @@
         }
         // ⭐ v2.28 批次 C2:新一手清保险可用标记
         if (window.insuranceModal) window.insuranceModal.clearAvailable();
+        // ⭐ v2.28.9:新一手清掉旧的实时命中高亮(.live-hit)
+        if (typeof clearLiveHitHighlights === 'function') clearLiveHitHighlights();
+        // ⭐ v2.28.13:新一手清掉我的头像底部牌型标签(下次发底牌时再写)
+        const myWinTag = document.querySelector('.my-seat .win-tag');
+        if (myWinTag && !myWinTag.classList.contains('showdown-tag')) {
+          myWinTag.textContent = '';
+        }
         // ⭐ v2.28 批次 D5:动态牌局信息更新
         if (data.handNo) {
           const hnEl = document.getElementById('table-hand-no');
@@ -27092,6 +27333,12 @@
             setTimeout(() => window.soundEngine.play('dealHole'), 80 * i);
           }
         }
+        // ⭐ v2.28.13:发完底牌后更新头像底部牌型标签 + 翻前对子高亮
+        // 发牌动画约 4×80 + 翻面 300 ≈ 620ms,留余量到 800ms
+        setTimeout(() => {
+          if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
+          if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
+        }, 800);
         if (typeof showToast === 'function') showToast('发底牌');
         break;
       }
@@ -27105,6 +27352,30 @@
           for (let i = 0; i < n; i++) {
             setTimeout(() => window.soundEngine.play('dealBoard'), 120 * i);
           }
+        }
+        // ⭐ v2.28.9 + v2.28.12 + v2.28.13:发牌动画完成后实时检查命中高亮 + 更新牌型标签
+        // 翻牌 3 张:烧牌 600ms + 3张×160ms 间隔 + 翻面 300ms ≈ 1380ms,但 setStage 还有过渡
+        //          → 主调 2400ms 给足时间,再 1200ms 补一次防 timing 漂移
+        // 转牌/河牌 1 张 ≈ 1000ms,主调 1500ms,再 600ms 补一次
+        if (data.street === 'flop') {
+          setTimeout(() => {
+            if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
+            if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
+          }, 2400);
+          // 补救:1200ms 后再调一次
+          setTimeout(() => {
+            if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
+            if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
+          }, 3600);
+        } else {
+          setTimeout(() => {
+            if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
+            if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
+          }, 1500);
+          setTimeout(() => {
+            if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
+            if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
+          }, 2100);
         }
         if (typeof showToast === 'function') showToast('发 ' + data.street);
         break;
@@ -27155,7 +27426,10 @@
         // ⭐ v2.28 批次 A1:行动音效
         if (window.soundEngine) {
           const soundMap = { fold:'fold', check:'check', call:'call', bet:'bet', raise:'raise', allin:'allin' };
-          if (soundMap[data.action]) window.soundEngine.play(soundMap[data.action]);
+          const soundName = soundMap[data.action];
+          // ⭐ v2.28.4 诊断 log:确认音效跟 action 严格匹配
+          console.log('[ACTION_EXEC sound] seatId=', data.seatId, 'action=', data.action, '→ play sound:', soundName || '(none)');
+          if (soundName) window.soundEngine.play(soundName);
         }
         // ⭐ v2.28 批次 C2:他人 All-In 且我还在牌局中 → 标记保险可用(演示用)
         // 真实业务:后端推 INSURANCE_AVAILABLE 事件
@@ -28357,13 +28631,21 @@
   // 解析单张牌 "K♥" → { rank: 'K', suit: '♥', value: 13, red: true }
   function parseCard(cardStr) {
     if (!cardStr) return null;
+    // ⭐ v2.28.4 Bug 1 修复:遇到 '?' 或非法卡(没有花色)→ 返回安全 fallback,而不是 null
+    // 否则 revealSeatCards 渲染时 c.rank 是空字符串,显示成"白卡缺数字"
+    if (cardStr === '?' || cardStr === '??' || cardStr === '?♠' || cardStr === '?♥' || cardStr === '?♦' || cardStr === '?♣') {
+      return { rank: '?', suit: '♠', value: 0, red: false };
+    }
     // 提取 rank(2-9, 10, J, Q, K, A) 和 suit(♠♥♦♣)
     const suitMatch = cardStr.match(/[♠♥♦♣]/);
-    if (!suitMatch) return null;
+    if (!suitMatch) {
+      // 没花色:返回 fallback
+      return { rank: cardStr || '?', suit: '♠', value: 0, red: false };
+    }
     const suit = suitMatch[0];
     const rank = cardStr.replace(suit, '').trim();
     return {
-      rank,
+      rank: rank || '?',
       suit,
       value: RANK_VALUES[rank] || 0,
       red: suit === '♥' || suit === '♦'
@@ -28731,6 +29013,257 @@
     document.querySelectorAll('.showdown-tag').forEach(el => el.remove());
     document.querySelectorAll('.reveal-flip').forEach(el => el.classList.remove('reveal-flip'));
   }
+
+  // ⭐ v2.28.13:实时更新我的头像底部牌型标签(.my-seat .win-tag)
+  // ─────────────────────────────────────────────────────────────────────
+  // 业务规则:
+  //   - 翻前(只有 2 张底牌):显示"一对 X"或"高牌 X"
+  //   - 翻牌/转牌/河牌:基于当前已发的所有牌算最佳牌型
+  //   - 格式:类型 + 关键 rank(业内专业,跟 PokerStars/KKPoker 一致)
+  // 关键 rank 映射:
+  //   高牌/一对 → 标最高 rank
+  //   两对 → "两对 K-10"(两个对子的 rank)
+  //   三条 → "三条 K"
+  //   葫芦 → "葫芦 K 带 10"(三条 rank + 对子 rank)
+  //   四条 → "四条 K"
+  //   顺子 → "K 顺"(最大 rank)
+  //   同花 → "同花 K"(最大 rank)
+  //   同花顺 → "K 同花顺"
+  //   皇家同花顺 → "皇家同花顺"
+  // ─────────────────────────────────────────────────────────────────────
+  function updateMyHandTypeLabel() {
+    if (typeof DEMO_HOLE_CARDS === 'undefined' || !DEMO_HOLE_CARDS.my) return;
+    const myCards = DEMO_HOLE_CARDS.my;
+    if (!myCards || myCards.length < 2) return;
+
+    // 取当前已发的公共牌
+    const board = (typeof getCurrentBoard === 'function') ? getCurrentBoard() : [];
+
+    // 计算最佳牌型(2 张底牌也能算 — evaluateBestHand 不足 5 张时也会评估)
+    let evalResult = null;
+    try {
+      evalResult = evaluateBestHand(myCards.concat(board));
+    } catch (e) {
+      return;
+    }
+    if (!evalResult) return;
+
+    // 翻前特殊处理(只有 2 张牌,evaluateBestHand 返回 strength=-1 "不足5张")
+    let label = '';
+    if (board.length === 0) {
+      // 解析 2 张底牌
+      const c1 = parseCard(myCards[0]);
+      const c2 = parseCard(myCards[1]);
+      if (!c1 || !c2) return;
+      if (c1.rank === c2.rank) {
+        label = '一对 ' + c1.rank;
+      } else {
+        const hi = c1.value >= c2.value ? c1.rank : c2.rank;
+        label = '高牌 ' + hi;
+      }
+    } else {
+      // 翻牌后用 evalResult
+      const type = evalResult.type;
+      const cards = evalResult.cards || [];
+      // 按 rank 出现次数分组(算 kickers)
+      const rankCounts = {};
+      cards.forEach(c => { rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1; });
+      // 按 value 排序辅助
+      function rankByValue(rank) {
+        const map = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14 };
+        return map[rank] || 0;
+      }
+      const sortedRanks = Object.keys(rankCounts).sort((a, b) => rankByValue(b) - rankByValue(a));
+
+      if (type === '皇家同花顺') {
+        label = '皇家同花顺';
+      } else if (type === '同花顺') {
+        label = sortedRanks[0] + ' 同花顺';
+      } else if (type === '四条') {
+        const four = Object.keys(rankCounts).find(r => rankCounts[r] === 4);
+        label = '四条 ' + (four || sortedRanks[0]);
+      } else if (type === '葫芦') {
+        const three = Object.keys(rankCounts).find(r => rankCounts[r] === 3);
+        const pair = Object.keys(rankCounts).find(r => rankCounts[r] === 2);
+        label = '葫芦 ' + (three || '?') + ' 带 ' + (pair || '?');
+      } else if (type === '同花') {
+        label = '同花 ' + sortedRanks[0];
+      } else if (type === '顺子') {
+        label = sortedRanks[0] + ' 顺';
+      } else if (type === '三条') {
+        const three = Object.keys(rankCounts).find(r => rankCounts[r] === 3);
+        label = '三条 ' + (three || sortedRanks[0]);
+      } else if (type === '两对') {
+        const pairs = Object.keys(rankCounts).filter(r => rankCounts[r] === 2)
+          .sort((a, b) => rankByValue(b) - rankByValue(a));
+        label = '两对 ' + (pairs[0] || '?') + '-' + (pairs[1] || '?');
+      } else if (type === '一对') {
+        const pair = Object.keys(rankCounts).find(r => rankCounts[r] === 2);
+        label = '一对 ' + (pair || sortedRanks[0]);
+      } else {
+        // 高牌
+        label = '高牌 ' + sortedRanks[0];
+      }
+    }
+
+    // 更新 .my-seat .win-tag 文本(没有就创建)
+    const mySeat = document.querySelector('.my-seat');
+    if (!mySeat) return;
+    let tag = mySeat.querySelector('.win-tag');
+    if (!tag) {
+      tag = document.createElement('div');
+      tag.className = 'win-tag';
+      mySeat.appendChild(tag);
+    }
+    // 摊牌标签(.showdown-tag)优先级高,有摊牌标签时不动
+    if (tag.classList.contains('showdown-tag')) return;
+    tag.textContent = label;
+    console.log('[hand-label]', label);
+  }
+  window.updateMyHandTypeLabel = updateMyHandTypeLabel;
+
+  // ⭐ v2.28.9:实时命中高亮(每次发新公共牌后调用)
+  // ─────────────────────────────────────────────────────────────────────
+  // 业务规则(v2.28.13 更新):
+  //   - 翻前(0 张公共牌):手牌是对子才亮(2 张底牌),高牌不亮
+  //   - 翻牌/转牌(3-4 张公共牌):对子及以上亮,命中几张亮几张,高牌不亮
+  //   - 河牌(5 张公共牌):必亮"最佳 5 张"全部组合,高牌也亮
+  //   - 持续到下次发新公共牌(届时重算)或新一手 HAND_START(届时清空)
+  // ─────────────────────────────────────────────────────────────────────
+  function highlightCurrentMyHand() {
+    // 先清掉旧的实时高亮(.live-hit),保留摊牌高亮(.hand-highlight)互不干扰
+    document.querySelectorAll('.live-hit').forEach(el => el.classList.remove('live-hit'));
+
+    if (typeof DEMO_HOLE_CARDS === 'undefined' || !DEMO_HOLE_CARDS.my) return;
+    const myCards = DEMO_HOLE_CARDS.my;
+    if (!myCards || myCards.length < 2) return;
+
+    // 取当前已发的公共牌
+    const board = getCurrentBoard();
+    // ⭐ v2.28.13:翻前(board=0)也要处理(手牌对子要亮),不再 return
+
+    // ⭐ v2.28.13 改造命中规则:
+    //   - 翻前(board=0):手牌是对子才亮(亮 2 张底牌),高牌不亮
+    //   - 翻牌/转牌(board=3/4):对子及以上,命中几张亮几张,高牌不亮
+    //   - 河牌(board=5):必亮"最佳 5 张",高牌也亮(摊牌前的最终视觉)
+    const isRiver = board.length === 5;
+    const isPreflop = board.length === 0;
+
+    // 翻前特殊处理:只看手牌是不是对子
+    if (isPreflop) {
+      const c1 = parseCard(myCards[0]);
+      const c2 = parseCard(myCards[1]);
+      if (!c1 || !c2 || c1.rank !== c2.rank) {
+        // 高牌,不亮
+        console.log('[live-hit] 翻前高牌,不亮');
+        return;
+      }
+      // 翻前手牌对子 → 亮 2 张底牌
+      document.querySelectorAll('.my-seat .my-cards .card').forEach(el => {
+        el.style.removeProperty('transform');
+        el.style.removeProperty('opacity');
+        el.classList.add('live-hit');
+      });
+      console.log('[live-hit] 翻前对子', c1.rank, ', 高亮 2 张底牌');
+      return;
+    }
+
+    // 翻牌/转牌/河牌:计算最佳牌型
+    let evalResult = null;
+    try {
+      evalResult = evaluateBestHand(myCards.concat(board));
+    } catch (e) {
+      return;
+    }
+    if (!evalResult || !evalResult.cards) return;
+    // 翻牌/转牌:高牌不亮(strength=0);河牌:即便高牌也亮
+    if (!isRiver && evalResult.strength < 1) {
+      console.log('[live-hit] 翻牌/转牌高牌,不亮');
+      return;
+    }
+
+    // ⭐ v2.28.11 + v2.28.13:双路命中匹配
+    // 1) 精确 rank+suit 集合(理想情况,牌堆无重复)
+    // 2) Rank-based fallback(应对花色重复或数据不一致)
+    //
+    // 命中规则:
+    //   - 翻牌/转牌:对子/三条/四条/葫芦/两对 → 只亮 count≥2 的 rank(成对部分);
+    //                顺子/同花/同花顺/皇家 → 5 张全亮
+    //   - 河牌:5 张全亮(含 kicker)
+    const hitSetExact = new Set(evalResult.cards.map(c => c.rank + c.suit));
+    const rankCounts = {};
+    evalResult.cards.forEach(c => {
+      rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1;
+    });
+    const coreRankSet = new Set();
+    const strength = evalResult.strength;
+    if (isRiver) {
+      // 河牌:5 张全亮(含 kicker)
+      Object.keys(rankCounts).forEach(r => coreRankSet.add(r));
+    } else if (strength === 4 || strength === 5 || strength === 8 || strength === 9) {
+      // 顺子/同花/同花顺/皇家同花顺 → 5 张全核心
+      Object.keys(rankCounts).forEach(r => coreRankSet.add(r));
+    } else {
+      // 一对/两对/三条/葫芦/四条 → 只亮 count≥2 的 rank
+      Object.entries(rankCounts).forEach(([rank, count]) => {
+        if (count >= 2) coreRankSet.add(rank);
+      });
+    }
+
+    function shouldHighlight(rank, suit) {
+      if (hitSetExact.has(rank + suit)) {
+        return coreRankSet.has(rank);
+      }
+      return coreRankSet.has(rank);
+    }
+
+    // 1. 公共牌区:命中的加 .live-hit
+    const cardsEl = document.getElementById('community-cards');
+    let lit = 0;
+    const litElements = [];
+    if (cardsEl) {
+      cardsEl.querySelectorAll('.card').forEach(el => {
+        const rEl = el.querySelector('.rank');
+        const sEl = el.querySelector('.suit');
+        if (!rEl || !sEl) return;
+        if (shouldHighlight(rEl.textContent, sEl.textContent)) {
+          // ⭐ v2.28.12 关键修复:dealBoardAnimation 给 slot 设了 inline style transform/opacity
+          //   inline style 优先级高,会覆盖 .live-hit CSS,必须先清掉才能让 CSS !important 生效
+          el.style.removeProperty('transform');
+          el.style.removeProperty('opacity');
+          el.classList.add('live-hit');
+          litElements.push('board-' + rEl.textContent + sEl.textContent);
+          lit++;
+        }
+      });
+    }
+
+    // 2. 我的底牌:命中的加 .live-hit
+    document.querySelectorAll('.my-seat .my-cards .card').forEach(el => {
+      const rEl = el.querySelector('.rank');
+      const sEl = el.querySelector('.suit');
+      if (!rEl || !sEl) return;
+      if (shouldHighlight(rEl.textContent, sEl.textContent)) {
+        el.style.removeProperty('transform');
+        el.style.removeProperty('opacity');
+        el.classList.add('live-hit');
+        litElements.push('my-' + rEl.textContent + sEl.textContent);
+        lit++;
+      }
+    });
+
+    console.log('[live-hit] type:', evalResult.type, ', 核心 ranks:', [...coreRankSet].join(','), ', 高亮元素:', litElements.join(' | '));
+    // ⭐ v2.28.11 诊断:验证 .live-hit 真的加到 DOM 上(稳定后可删)
+    const liveHitCount = document.querySelectorAll('.live-hit').length;
+    console.log('[live-hit] DOM 中 .live-hit 节点数:', liveHitCount);
+  }
+  window.highlightCurrentMyHand = highlightCurrentMyHand;
+
+  // 清掉实时命中高亮(HAND_START 调用)
+  function clearLiveHitHighlights() {
+    document.querySelectorAll('.live-hit').forEach(el => el.classList.remove('live-hit'));
+  }
+  window.clearLiveHitHighlights = clearLiveHitHighlights;
 
   // 摊牌主流程
   function revealAllHands() {
@@ -29334,6 +29867,8 @@
       const currentSec = Math.ceil(remaining / 1000);
       if (turnTimer._lastTickSec !== currentSec) {
         turnTimer._lastTickSec = currentSec;
+        // ⭐ v2.28.15 诊断:tick 没声音排查(稳定后可删)
+        console.log('[tick] 触发 tick, 剩余秒=', currentSec, ', remaining=', remaining);
         window.soundEngine.play('tick');
       }
     } else if (remaining > 5000) {
@@ -29649,7 +30184,12 @@
       const pct = Math.max(0, Math.min(100,
         (rect.bottom - pendingY) / rect.height * 100
       ));
-      const amount = MIN_RAISE + (MAX_RAISE - MIN_RAISE) * pct / 100;
+      // ⭐ v2.28.8 Bug 1 修复:用 dynamicMaxRaise/dynamicMinRaise(真实可加注上下限)
+      // 旧 bug:用静态 MAX_RAISE(可能是 2000+),而真实上限是我的筹码(如 1860)
+      //         导致滑杆顶部很大一段位置都被 setAmount 截断到 All-In,无法滑到中间值
+      const lo = dynamicMinRaise || MIN_RAISE;
+      const hi = dynamicMaxRaise || MAX_RAISE;
+      const amount = lo + (hi - lo) * pct / 100;
       setAmount(amount);
       pendingY = null;
     }
@@ -29781,6 +30321,9 @@
   if (abRaiseBtn) {
     abRaiseBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // ⭐ v2.28.5 诊断 log:确认加注按钮被点击(用户报告"点过牌却是加注",可能是按钮区域重叠)
+      const reqDiag = window.currentActionRequest && window.currentActionRequest();
+      console.log('[ab-raise click] state=', reqDiag && reqDiag.state, 'clientX=', e.clientX, 'clientY=', e.clientY, 'target=', e.target.id);
       // ⭐ v2.24 子项 5 占位:P 态下点加注 → 进 S1/S2 滑杆(子项 5 实现)
       //   暂时直接 send 最低加注作为占位,子项 5 会接滑杆
       if (hasLiveRequest()) {
@@ -29815,18 +30358,24 @@
       //   P4: 全下(call 即 all-in)
       if (hasLiveRequest()) {
         const req = window.currentActionRequest();
+        // ⭐ v2.28.5 诊断 log(稳定后可删)
+        console.log('[ab-check click] state=', req.state, 'callAmount=', req.callAmount);
         switch (req.state) {
           case 'p1':
           case 'p3':
+            console.log('[ab-check click] → send check');
             sendClientAction('check');
             break;
           case 'p2':
+            console.log('[ab-check click] → send call', req.callAmount);
             sendClientAction('call', req.callAmount);
             break;
           case 'p4':
+            console.log('[ab-check click] → send allin');
             sendClientAction('allin');
             break;
           default:
+            console.log('[ab-check click] → send check (default)');
             sendClientAction('check');
         }
         return;

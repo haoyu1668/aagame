@@ -17333,24 +17333,26 @@
       const oldCenter = getRelativeCenter(existingMark);
       const targetRect = targetSeat.getBoundingClientRect();
       const pageRect = page.getBoundingClientRect();
+      // ⭐ v2.28.24:zoom 因子(getBoundingClientRect 返回缩放后的视口坐标,要转回容器内逻辑坐标)
+      const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
       // ⭐ v2.20.2 按座位位置计算 D 标终点中心
       // 距离统一 16px,朝向桌面中央
       let newCenter;
       if (seatId === 's1') {
         // 头像右下角:右缘外 + 底部下方
-        newCenter = { x: targetRect.right - pageRect.left, y: targetRect.bottom - pageRect.top };
+        newCenter = { x: (targetRect.right - pageRect.left) / zoom, y: (targetRect.bottom - pageRect.top) / zoom };
       } else if (seatId === 's2') {
         // 头像左下角:左缘外 + 底部下方
-        newCenter = { x: targetRect.left - pageRect.left, y: targetRect.bottom - pageRect.top };
+        newCenter = { x: (targetRect.left - pageRect.left) / zoom, y: (targetRect.bottom - pageRect.top) / zoom };
       } else if (seatId === 's3' || seatId === 's4' || seatId === 's5') {
         // 头像左上角:左缘外 + 上方
-        newCenter = { x: targetRect.left - pageRect.left, y: targetRect.top - pageRect.top };
+        newCenter = { x: (targetRect.left - pageRect.left) / zoom, y: (targetRect.top - pageRect.top) / zoom };
       } else if (seatId === 'my') {
         // 自己:头像左上角
-        newCenter = { x: targetRect.left - pageRect.left, y: targetRect.top - pageRect.top };
+        newCenter = { x: (targetRect.left - pageRect.left) / zoom, y: (targetRect.top - pageRect.top) / zoom };
       } else {
         // s6/s7/s8:头像右上角
-        newCenter = { x: targetRect.right - pageRect.left, y: targetRect.top - pageRect.top };
+        newCenter = { x: (targetRect.right - pageRect.left) / zoom, y: (targetRect.top - pageRect.top) / zoom };
       }
 
       // 抽出来飞行
@@ -26167,10 +26169,12 @@
       const myRect = mySeat.getBoundingClientRect();
       const targetRect = targetSeat.getBoundingClientRect();
       const tableRect = pageTable.getBoundingClientRect();
-      const startX = myRect.left + myRect.width / 2 - tableRect.left;
-      const startY = myRect.top + myRect.height / 2 - tableRect.top;
-      const endX = targetRect.left + targetRect.width / 2 - tableRect.left;
-      const endY = targetRect.top + targetRect.height / 2 - tableRect.top;
+      // ⭐ v2.28.24:zoom 因子补偿(getBoundingClientRect 返回缩放后视口坐标)
+      const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
+      const startX = (myRect.left + myRect.width / 2 - tableRect.left) / zoom;
+      const startY = (myRect.top + myRect.height / 2 - tableRect.top) / zoom;
+      const endX = (targetRect.left + targetRect.width / 2 - tableRect.left) / zoom;
+      const endY = (targetRect.top + targetRect.height / 2 - tableRect.top) / zoom;
       // 创建飞行元素
       const fly = document.createElement('div');
       fly.className = 'gift-flying';
@@ -29399,15 +29403,29 @@
   // 5. 真实业务:WebSocket 推 deal:hole / deal:flop / deal:turn / deal:river
   // ───────────────────────────────────────────────────────────────
 
+  // ⭐ v2.28.24:读 #page-table 的 zoom CSS 因子,飞行动画坐标需要除以这个因子
+  //   因为 zoom 让 getBoundingClientRect 返回缩放后的视口坐标,
+  //   但飞行元素 append 在 #page-table 内会被再缩一次 → 坐标双重缩放 → 飞不到位
+  //   解决:用视口坐标 / zoom = 容器内的逻辑坐标(飞行元素 style.left/top 真正生效的坐标空间)
+  function getZoomFactor() {
+    const page = document.getElementById('page-table');
+    if (!page) return 1;
+    const cs = window.getComputedStyle(page);
+    const z = parseFloat(cs.zoom);
+    return (z && !isNaN(z) && z > 0) ? z : 1;
+  }
+
   // 获取某 DOM 相对牌桌容器的中心坐标
   function getRelativeCenter(el) {
     const page = document.getElementById('page-table');
     if (!page || !el) return { x: 0, y: 0 };
     const pageRect = page.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
+    const zoom = getZoomFactor();
+    // ⭐ v2.28.24:除以 zoom 因子,转回容器内逻辑坐标
     return {
-      x: elRect.left - pageRect.left + elRect.width / 2,
-      y: elRect.top - pageRect.top + elRect.height / 2
+      x: (elRect.left - pageRect.left + elRect.width / 2) / zoom,
+      y: (elRect.top - pageRect.top + elRect.height / 2) / zoom
     };
   }
 
@@ -29690,7 +29708,9 @@
     const page = document.getElementById('page-table');
     if (page) {
       const r = page.getBoundingClientRect();
-      return { x: r.width / 2, y: r.height * 0.3 };
+      const zoom = getZoomFactor();
+      // ⭐ v2.28.24:兜底也要除以 zoom 因子
+      return { x: (r.width / 2) / zoom, y: (r.height * 0.3) / zoom };
     }
     return { x: 195, y: 250 };
   }

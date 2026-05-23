@@ -1591,6 +1591,280 @@
     border-radius: 2px;
   }
 
+  /* ⭐ v2.23 收藏页样式
+     ───────────────────────────────────────────
+     布局结构:
+       .fav-sticky      顶部吸顶(返回栏 + 收藏数说明)
+       .fav-list        列表容器(纵向滚动)
+         .fav-item-wrap   每一项的包裹(支持滑动)
+           .fav-item      卡片本体
+           .fav-delete    右滑露出的删除按钮
+       .fav-empty       空状态
+     ─────────────────────────────────────────── */
+
+  .fav-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bg-base, #16181f);
+    padding-bottom: 6px;
+  }
+  .fav-sticky .sub-topbar { position: relative; }
+  .fav-clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 100ms;
+  }
+  .fav-clear-btn:active { background: rgba(255, 255, 255, 0.08); }
+  .fav-clear-btn svg { width: 18px; height: 18px; }
+
+  .fav-summary {
+    padding: 8px 16px 4px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .fav-count {
+    color: #4dff4d;
+    font-weight: 800;
+    font-size: 14px;
+  }
+  .fav-count-label {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  /* 列表容器 */
+  .fav-list {
+    padding: 8px 12px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* 列表项包裹层(滑动容器) */
+  .fav-item-wrap {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    background: rgba(220, 80, 80, 0.85);  /* 滑出时显示的删除底色 */
+  }
+
+  /* 卡片本体 */
+  .fav-item {
+    position: relative;
+    background: var(--bg-card, #1f2230);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 12px 14px;
+    transition: transform 200ms cubic-bezier(.2, .8, .3, 1);
+    cursor: pointer;
+    will-change: transform;
+  }
+  .fav-item:active {
+    background: rgba(31, 34, 48, 0.95);
+  }
+  /* 滑出态:卡片左移 80px,露出删除按钮 */
+  .fav-item.slid-out {
+    transform: translateX(-80px);
+  }
+
+  /* 第一行:牌局号 + 输赢 */
+  .fav-row-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .fav-hand-id {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: 'SF Mono', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60%;
+  }
+  .fav-result-badge {
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.3px;
+  }
+  .fav-result-badge.win {
+    background: rgba(77, 255, 77, 0.18);
+    color: #4dff4d;
+    border: 1px solid rgba(77, 255, 77, 0.3);
+  }
+  .fav-result-badge.loss {
+    background: rgba(255, 90, 90, 0.18);
+    color: #ff7a7a;
+    border: 1px solid rgba(255, 90, 90, 0.3);
+  }
+  .fav-result-badge.unknown {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  /* 第二行:牌型 + 盈亏 */
+  .fav-row-mid {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .fav-hand-type {
+    font-size: 16px;
+    font-weight: 800;
+    color: #ffd84a;
+  }
+  .fav-profit {
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .fav-profit.positive { color: #4dff4d; }
+  .fav-profit.negative { color: #ff7a7a; }
+  .fav-profit.zero { color: rgba(255, 255, 255, 0.5); }
+
+  /* 第三行:公共牌(缩略) */
+  .fav-board {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .fav-board-card {
+    width: 24px;
+    height: 32px;
+    border-radius: 3px;
+    background: white;
+    color: #222;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  .fav-board-card.red { color: #d63232; }
+  .fav-board-card .r { font-size: 11px; }
+  .fav-board-card .s { font-size: 9px; margin-top: 1px; }
+  .fav-board-empty {
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 11px;
+    font-style: italic;
+  }
+
+  /* 第四行:时间 + 桌名 */
+  .fav-row-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  .fav-room-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60%;
+  }
+
+  /* 删除按钮(右滑露出) */
+  .fav-delete {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 80px;
+    background: transparent;
+    color: white;
+    border: none;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-family: inherit;
+  }
+  .fav-delete svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* 空状态 */
+  .fav-empty {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px 40px;
+    text-align: center;
+  }
+  .fav-empty.show { display: flex; }
+  .fav-empty-icon {
+    width: 64px;
+    height: 64px;
+    color: rgba(255, 216, 74, 0.35);
+    margin-bottom: 16px;
+  }
+  .fav-empty-icon svg { width: 100%; height: 100%; }
+  .fav-empty-title {
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.75);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .fav-empty-hint {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    line-height: 1.6;
+  }
+
+  /* 收藏入口右上角徽章(我的页 → 收藏 图标右上) */
+  .func-item {
+    position: relative;
+  }
+  .fav-badge {
+    position: absolute;
+    top: 2px;
+    right: 50%;
+    margin-right: -28px;
+    background: linear-gradient(135deg, #ffd84a, #d9a629);
+    color: #4a2900;
+    font-size: 9px;
+    font-weight: 800;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+  .fav-badge.show { display: flex; }
+
   /* 日期+统计卡 容器(带边框) */
   .records-card {
     margin: 14px 16px 0;
@@ -2374,6 +2648,162 @@
   @keyframes demoRunning {
     0%, 100% { box-shadow: 0 0 8px rgba(77, 255, 77, 0.5); }
     50%      { box-shadow: 0 0 14px rgba(77, 255, 77, 1); }
+  }
+
+  /* ⭐ v2.22 模式指示器(右上角)+ 网络状态条(顶部) */
+  .mode-indicator-wrap {
+    position: absolute;
+    /* 默认 top:50 right:8 会跟 DEV-2 重叠,改成更靠左避开 */
+    top: 50px;
+    /* 放在屏幕中线偏右,跟 DEV-2(right:8)和 DEV-1(left:8)都不重叠 */
+    right: 180px;
+    z-index: 102;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* WS 模式下:DEV 切换器隐藏,模式指示器可以挪回右上角 */
+  body.app-mode-ws .mode-indicator-wrap {
+    right: 8px;
+  }
+  .mode-indicator {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.7);
+    color: #ffd84a;
+    border: 1px solid rgba(255, 216, 74, 0.5);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    transition: transform 100ms;
+  }
+  .mode-indicator:active { transform: scale(0.95); }
+  /* 演示模式:黄色 */
+  .mode-indicator.mode-demo {
+    color: #ffd84a;
+    border-color: rgba(255, 216, 74, 0.5);
+  }
+  /* WS Mock 模式:橙色 */
+  .mode-indicator.mode-ws-mock {
+    color: #ff9a3c;
+    border-color: rgba(255, 154, 60, 0.6);
+  }
+  /* WS 真实模式:绿色 + 脉冲呼吸(表示真连接) */
+  .mode-indicator.mode-ws-real {
+    color: #4dff4d;
+    border-color: rgba(77, 255, 77, 0.6);
+    animation: modeLiveBlink 2s ease-in-out infinite;
+  }
+  @keyframes modeLiveBlink {
+    0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), 0 0 4px rgba(77, 255, 77, 0.3); }
+    50%      { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), 0 0 12px rgba(77, 255, 77, 0.8); }
+  }
+  /* 模式菜单(点击指示器展开) */
+  .mode-indicator-menu {
+    position: absolute;
+    top: 26px;
+    right: 0;
+    background: rgba(20, 24, 31, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 4px 0;
+    display: none;
+    min-width: 110px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  }
+  .mode-indicator-menu.open { display: block; }
+  .mim-item {
+    padding: 8px 12px;
+    color: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 100ms;
+  }
+  .mim-item:hover, .mim-item:active {
+    background: rgba(77, 255, 77, 0.15);
+    color: #4dff4d;
+  }
+
+  /* 网络状态条(顶部 banner,只在断线/重连时显示) */
+  .net-banner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 103;
+    background: rgba(220, 80, 80, 0.95);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 12px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    animation: netBannerSlideDown 250ms ease-out;
+  }
+  .net-banner.show { display: flex; }
+  .net-banner.success {
+    background: rgba(40, 180, 80, 0.95);
+  }
+  .net-banner.warning {
+    background: rgba(245, 166, 35, 0.95);
+  }
+  @keyframes netBannerSlideDown {
+    0% { transform: translateY(-100%); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  .net-banner-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: netSpin 0.8s linear infinite;
+  }
+  .net-banner.success .net-banner-spinner,
+  .net-banner.kick .net-banner-spinner {
+    display: none;
+  }
+  @keyframes netSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ⭐ v2.22 WS 模式下隐藏 DEV 切换器和浮动按钮(后端推送驱动,不需要手动测试) */
+  body.app-mode-ws .dev-state-switcher,
+  body.app-mode-ws .dev-quick-demo {
+    display: none !important;
+  }
+
+  /* ⭐ v2.22 WS Mock 启动按钮(只在 WS Mock 模式下显示) */
+  .ws-mock-start-btn {
+    position: absolute;
+    bottom: 200px;
+    left: 8px;
+    z-index: 101;
+    background: linear-gradient(135deg, #ff9a3c, #e07820);
+    color: white;
+    border: 1px solid rgba(255, 154, 60, 0.7);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 154, 60, 0.3);
+    display: none;
+    font-family: inherit;
+    letter-spacing: 0.5px;
+    transition: transform 100ms;
+  }
+  .ws-mock-start-btn:active { transform: scale(0.95); }
+  /* 只在 WS Mock 模式显示 */
+  body.app-mode-ws .ws-mock-start-btn {
+    display: block;
+  }
+  body.app-mode-ws .mode-ws-real ~ .ws-mock-start-btn {
+    display: none;   /* 真实 WS 模式下不显示 mock 按钮 */
   }
 
   /* ⭐ v2.20.3 完整一手演示快捷按钮(独立浮动,可拖动)
@@ -3948,7 +4378,16 @@
 
   /* ============================================================
      ⭐ v2.18.4 9 态弹窗 CSS(P1-P4 轮到我 / Y1-Y3 预选 / S1-S2 滑杆)
+     ⭐ v2.24 子项 1 新增:data-state="none" → 行动轮结束/未开始,P 区所有按钮隐藏
      ============================================================ */
+
+  /* ⭐ v2.24:无行动请求态 → 整片 P 区按钮 + tile 全部隐藏(不挡牌桌) */
+  .action-area[data-state="none"] .ab-btn,
+  .action-area[data-state="none"] .ab-tile,
+  .action-area[data-state="none"] .ab-add-time,
+  .action-area[data-state="none"] .ab-check-fold {
+    display: none !important;
+  }
 
   /* ---------- 通用:5 快捷键 / 加注按钮 的显隐 ---------- */
   /* 只有 P1 加注、P2 下注、P3 过牌-加注 显示 5 快捷键 */
@@ -10558,6 +10997,25 @@
           <span class="dqd-label">一手演示</span>
         </button>
       </div>
+
+      <!-- ⭐ v2.22 模式指示器(右上角小标签),点击可切换模式 -->
+      <div class="mode-indicator-wrap" id="mode-indicator-wrap">
+        <div class="mode-indicator mode-demo" id="mode-indicator">DEMO</div>
+        <div class="mode-indicator-menu" id="mode-indicator-menu">
+          <div class="mim-item" data-mode="demo">演示模式</div>
+          <div class="mim-item" data-mode="ws_mock">WS Mock</div>
+          <div class="mim-item" data-mode="ws_real">WS 真实</div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.22 网络状态条(顶部 banner,断线时显示) -->
+      <div class="net-banner" id="net-banner">
+        <div class="net-banner-spinner"></div>
+        <span class="net-banner-text" id="net-banner-text">正在连接...</span>
+      </div>
+
+      <!-- ⭐ v2.22 WS Mock 启动按钮(只在 WS Mock 模式下显示,模拟后端推一手) -->
+      <button class="ws-mock-start-btn" id="ws-mock-start-btn">▶▶ 推一手 (Mock)</button>
       <div class="show-muck-modal" id="show-muck-modal">
         <div class="sm-card">
           <div class="sm-title">展示底牌?</div>
@@ -11426,6 +11884,48 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ============ 子页面：收藏 (v2.23) ============ -->
+    <div class="page" id="page-favorites">
+      <!-- 顶部吸顶 -->
+      <div class="fav-sticky">
+        <div class="sub-topbar">
+          <div class="sub-back" data-back="me">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+          </div>
+          <div class="sub-title">收藏</div>
+          <div class="fav-clear-btn" id="fav-clear-btn" title="全部清空">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+              <path d="M10 11v6M14 11v6"></path>
+            </svg>
+          </div>
+        </div>
+        <div class="fav-summary">
+          <span class="fav-count" id="fav-count">0</span>
+          <span class="fav-count-label">条收藏 · 滑动条目可删除</span>
+        </div>
+      </div>
+
+      <!-- 列表区域 -->
+      <div class="fav-list" id="fav-list">
+        <!-- 列表项动态渲染 -->
+      </div>
+
+      <!-- 空状态 -->
+      <div class="fav-empty" id="fav-empty">
+        <div class="fav-empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+        </div>
+        <div class="fav-empty-title">还没有收藏的牌局</div>
+        <div class="fav-empty-hint">在牌桌点击牌谱 → ⭐ 按钮<br>把关键手收藏到这里</div>
       </div>
     </div>
 
@@ -14416,6 +14916,8 @@
     document.getElementById('rp-page-num').textContent = currentReplayIndex + '/' + totalReplayCount;
     document.getElementById('rp-prev').classList.toggle('disabled', currentReplayIndex <= 1);
     document.getElementById('rp-next').classList.toggle('disabled', currentReplayIndex >= totalReplayCount);
+    // ⭐ v2.23 同步 ⭐ 按钮的收藏状态
+    if (typeof syncStarButtonState === 'function') syncStarButtonState();
   }
 
   // 打开牌谱
@@ -14441,20 +14943,403 @@
     });
   }
 
-  // 收藏按钮(占位:等后端 /api/replay/star)
-  // 业务:收藏单手牌谱,我的页"收藏"入口能看到
-  // 现状:仅前端切换金色UI,不存任何地方(避免演示误导)
+  // ⭐ v2.23 收藏数据层(localStorage 持久化)
+  // ═════════════════════════════════════════════════════════════════
+  // key: 'aagame_favorites'
+  // 数据结构:{ version, items: [{ handNo, addedAt, ...快照 }] }
+  // ═════════════════════════════════════════════════════════════════
+  const favoritesStore = (function() {
+    const STORAGE_KEY = 'aagame_favorites';
+    const VERSION = 1;
+    let listeners = [];
+
+    function loadRaw() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return { version: VERSION, items: [] };
+        const data = JSON.parse(raw);
+        if (!data.items) data.items = [];
+        return data;
+      } catch (e) {
+        return { version: VERSION, items: [] };
+      }
+    }
+    function saveRaw(data) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        notifyListeners();
+      } catch (e) {
+        console.warn('[fav] save failed:', e);
+      }
+    }
+    function notifyListeners() {
+      listeners.forEach(cb => { try { cb(); } catch (e) {} });
+    }
+
+    function add(item) {
+      if (!item || !item.handNo) return false;
+      const data = loadRaw();
+      // 已存在则更新,不存在则新增
+      const idx = data.items.findIndex(it => it.handNo === item.handNo);
+      const record = Object.assign({}, item, { addedAt: Date.now() });
+      if (idx >= 0) {
+        data.items[idx] = record;
+      } else {
+        data.items.unshift(record);   // 新增的放最前面
+      }
+      saveRaw(data);
+      return true;
+    }
+    function remove(handNo) {
+      const data = loadRaw();
+      const before = data.items.length;
+      data.items = data.items.filter(it => it.handNo !== handNo);
+      if (data.items.length === before) return false;
+      saveRaw(data);
+      return true;
+    }
+    function has(handNo) {
+      const data = loadRaw();
+      return data.items.some(it => it.handNo === handNo);
+    }
+    function list() {
+      // 按 addedAt 倒序(最新收藏在前)
+      const data = loadRaw();
+      return data.items.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+    }
+    function count() {
+      return loadRaw().items.length;
+    }
+    function clear() {
+      saveRaw({ version: VERSION, items: [] });
+    }
+    function onChange(cb) { listeners.push(cb); }
+
+    return { add, remove, has, list, count, clear, onChange };
+  })();
+  window.favoritesStore = favoritesStore;
+
+  // ⭐ v2.23 收藏按钮(替换 v2.15 占位逻辑)
+  // 从当前打开的牌谱(demoReplay)生成收藏快照
+  function buildFavoriteSnapshot(replay) {
+    if (!replay) return null;
+    // 找我自己的玩家
+    const me = (replay.players || []).find(p => p.isMe);
+    const handType = (me && me.handType) || '';
+    // 拿最后一轮的公共牌作为完整公共牌
+    const lastRound = replay.rounds && replay.rounds.length
+      ? replay.rounds[replay.rounds.length - 1]
+      : null;
+    const board = (lastRound && lastRound.community) || [];
+    return {
+      handNo: replay.handId,
+      roomName: replay.roomName || '俱乐部 NLH',
+      blinds: replay.blinds || '',
+      myCards: me ? (me.hole || []).slice(0, 2) : [],   // 我的底牌(前 2 张)
+      myResult: me ? (me.win ? 'win' : 'loss') : 'unknown',
+      myProfit: me ? (me.result || 0) : 0,
+      board: board,
+      handType: handType,
+      potSize: replay.finalPot || 0,
+      playerCount: (replay.players || []).length
+    };
+  }
+  window.buildFavoriteSnapshot = buildFavoriteSnapshot;
+
   const rpStarBtn = document.getElementById('rp-star-btn');
   if (rpStarBtn) {
     rpStarBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // 视觉上仍然切换金色(让用户感觉到点击反馈),但提示是占位
-      rpStarBtn.classList.toggle('on');
-      if (typeof showToast === 'function') {
-        showToast('收藏功能开发中,等后端接口');
+      // 取当前打开的牌谱(demoReplay 或后端拉的真实数据)
+      const replay = (typeof currentReplayData !== 'undefined' && currentReplayData) || demoReplay;
+      if (!replay || !replay.handId) {
+        if (typeof showToast === 'function') showToast('牌谱数据未加载');
+        return;
+      }
+      if (favoritesStore.has(replay.handId)) {
+        favoritesStore.remove(replay.handId);
+        rpStarBtn.classList.remove('on');
+        if (typeof showToast === 'function') showToast('已取消收藏');
+      } else {
+        const snap = buildFavoriteSnapshot(replay);
+        favoritesStore.add(snap);
+        rpStarBtn.classList.add('on');
+        if (typeof showToast === 'function') showToast('已收藏到「我的 · 收藏」');
       }
     });
   }
+
+  // 牌谱弹窗打开时,根据收藏状态初始化 ⭐ 按钮高亮
+  function syncStarButtonState() {
+    if (!rpStarBtn) return;
+    const replay = (typeof currentReplayData !== 'undefined' && currentReplayData) || demoReplay;
+    if (replay && replay.handId && favoritesStore.has(replay.handId)) {
+      rpStarBtn.classList.add('on');
+    } else {
+      rpStarBtn.classList.remove('on');
+    }
+  }
+  window.syncStarButtonState = syncStarButtonState;
+
+  // ⭐ v2.23 子项 3+4:渲染收藏列表 + 滑动删除交互
+  function renderFavoritesPage() {
+    const listEl = document.getElementById('fav-list');
+    const emptyEl = document.getElementById('fav-empty');
+    const countEl = document.getElementById('fav-count');
+    if (!listEl || !emptyEl) return;
+
+    const items = favoritesStore.list();
+    if (countEl) countEl.textContent = items.length;
+
+    if (items.length === 0) {
+      listEl.innerHTML = '';
+      emptyEl.classList.add('show');
+      return;
+    }
+    emptyEl.classList.remove('show');
+
+    listEl.innerHTML = items.map(it => renderFavItemHTML(it)).join('');
+
+    // 给每个 wrap 绑定滑动 + 点击
+    listEl.querySelectorAll('.fav-item-wrap').forEach(wrap => {
+      bindFavItemInteraction(wrap);
+    });
+  }
+  window.renderFavoritesPage = renderFavoritesPage;
+
+  // 渲染一项 HTML
+  function renderFavItemHTML(it) {
+    // 输赢徽章
+    const isWin = it.myResult === 'win';
+    const isLoss = it.myResult === 'loss';
+    const resultClass = isWin ? 'win' : (isLoss ? 'loss' : 'unknown');
+    const resultText = isWin ? '赢' : (isLoss ? '输' : '—');
+
+    // 盈亏
+    const profit = Number(it.myProfit) || 0;
+    const profitClass = profit > 0 ? 'positive' : (profit < 0 ? 'negative' : 'zero');
+    const profitText = (profit > 0 ? '+' : '') + profit.toLocaleString();
+
+    // 公共牌
+    const board = Array.isArray(it.board) ? it.board : [];
+    const boardHtml = board.length === 0
+      ? '<span class="fav-board-empty">未到翻牌</span>'
+      : board.map(card => renderMiniBoardCard(card)).join('');
+
+    // 时间格式化
+    const timeStr = formatFavTime(it.addedAt);
+
+    // handNo 显示(去掉 # 前缀美化)
+    const handNoShort = (it.handNo || '').replace(/^#/, '').substring(0, 16) || '未知';
+    const roomName = it.roomName || '未知房间';
+    const handType = it.handType || '—';
+    const escapeAttr = (s) => String(s || '').replace(/"/g, '&quot;');
+
+    return `
+      <div class="fav-item-wrap" data-hand-no="${escapeAttr(it.handNo)}">
+        <button class="fav-delete" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+          </svg>
+          删除
+        </button>
+        <div class="fav-item">
+          <div class="fav-row-top">
+            <span class="fav-hand-id">#${handNoShort}</span>
+            <span class="fav-result-badge ${resultClass}">${resultText}</span>
+          </div>
+          <div class="fav-row-mid">
+            <span class="fav-hand-type">${handType}</span>
+            <span class="fav-profit ${profitClass}">${profitText}</span>
+          </div>
+          <div class="fav-board">${boardHtml}</div>
+          <div class="fav-row-bottom">
+            <span class="fav-room-name">${roomName}</span>
+            <span class="fav-time">${timeStr}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 渲染一张缩略牌(K♥ → 卡片)
+  function renderMiniBoardCard(card) {
+    if (!card || typeof card !== 'string') return '';
+    // 兼容 'K♥' 这种格式:rank 是除最后一个字符外的部分,suit 是最后一个字符
+    const suit = card.slice(-1);
+    const rank = card.slice(0, -1);
+    const isRed = suit === '♥' || suit === '♦';
+    return `<div class="fav-board-card${isRed ? ' red' : ''}"><span class="r">${rank}</span><span class="s">${suit}</span></div>`;
+  }
+
+  // 时间格式化:今天 / 昨天 / 月-日
+  function formatFavTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const now = new Date();
+    const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    const yest = new Date(now.getTime() - 86400000);
+    const isYest = d.getFullYear() === yest.getFullYear() && d.getMonth() === yest.getMonth() && d.getDate() === yest.getDate();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    if (sameDay) return '今天 ' + hh + ':' + mm;
+    if (isYest) return '昨天 ' + hh + ':' + mm;
+    const M = String(d.getMonth() + 1).padStart(2, '0');
+    const D = String(d.getDate()).padStart(2, '0');
+    return M + '-' + D + ' ' + hh + ':' + mm;
+  }
+
+  // 绑定滑动 + 点击交互
+  function bindFavItemInteraction(wrap) {
+    const item = wrap.querySelector('.fav-item');
+    const deleteBtn = wrap.querySelector('.fav-delete');
+    if (!item || !deleteBtn) return;
+    const handNo = wrap.dataset.handNo;
+
+    let startX = 0, startY = 0, currentX = 0, dragging = false, slideMoved = false;
+    const SWIPE_THRESHOLD = 40;
+
+    function onTouchStart(e) {
+      const pt = e.touches ? e.touches[0] : e;
+      startX = pt.clientX;
+      startY = pt.clientY;
+      currentX = 0;
+      dragging = true;
+      slideMoved = false;
+      item.style.transition = 'none';
+    }
+    function onTouchMove(e) {
+      if (!dragging) return;
+      const pt = e.touches ? e.touches[0] : e;
+      const dx = pt.clientX - startX;
+      const dy = pt.clientY - startY;
+      // 主要是横向滑动才认作 swipe
+      if (Math.abs(dy) > Math.abs(dx)) return;
+      slideMoved = true;
+      // 只允许左滑(露出右侧删除)
+      currentX = Math.max(-100, Math.min(0, dx));
+      // 如果已经处于滑出态(slid-out),起点偏移 -80
+      if (wrap.classList.contains('slid-out')) {
+        currentX = Math.max(-100, Math.min(0, -80 + dx));
+      }
+      item.style.transform = 'translateX(' + currentX + 'px)';
+      if (e.cancelable) e.preventDefault();
+    }
+    function onTouchEnd() {
+      if (!dragging) return;
+      dragging = false;
+      item.style.transition = '';
+      item.style.transform = '';
+      // 判断是否滑出
+      const finalSlid = currentX <= -SWIPE_THRESHOLD;
+      wrap.classList.toggle('slid-out', finalSlid);
+    }
+
+    item.addEventListener('touchstart', onTouchStart, { passive: true });
+    item.addEventListener('touchmove', onTouchMove, { passive: false });
+    item.addEventListener('touchend', onTouchEnd);
+    item.addEventListener('touchcancel', onTouchEnd);
+
+    // 鼠标支持(桌面端测试)
+    item.addEventListener('mousedown', (e) => {
+      onTouchStart(e);
+      const upHandler = () => {
+        onTouchEnd();
+        document.removeEventListener('mousemove', moveHandler);
+        document.removeEventListener('mouseup', upHandler);
+      };
+      const moveHandler = (ev) => onTouchMove(ev);
+      document.addEventListener('mousemove', moveHandler);
+      document.addEventListener('mouseup', upHandler);
+    });
+
+    // 点击卡片:已滑出态 → 点击收回;否则进牌谱详情
+    item.addEventListener('click', (e) => {
+      if (slideMoved) {
+        slideMoved = false;
+        return;
+      }
+      if (wrap.classList.contains('slid-out')) {
+        wrap.classList.remove('slid-out');
+        return;
+      }
+      // 进牌谱详情:暂复用现有牌谱弹窗(后期接真实牌谱 by handNo)
+      if (typeof showToast === 'function') {
+        showToast('打开牌谱: #' + handNo.slice(0, 12) + '...');
+      }
+      // 真实业务:此处应该 fetch /api/replay/:handNo → 替换 demoReplay
+      // 现在简化:直接打开演示牌谱弹窗
+      const replayMask = document.getElementById('replay-modal-mask');
+      if (replayMask) {
+        replayMask.classList.add('show');
+        if (typeof renderReplayModal === 'function') renderReplayModal();
+      }
+    });
+
+    // 点删除按钮
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 删除时加个 fade-out 动画
+      wrap.style.transition = 'opacity 200ms, max-height 200ms 200ms, margin 200ms 200ms, padding 200ms 200ms';
+      wrap.style.maxHeight = wrap.offsetHeight + 'px';
+      requestAnimationFrame(() => {
+        wrap.style.opacity = '0';
+        wrap.style.maxHeight = '0';
+        wrap.style.margin = '0';
+        wrap.style.padding = '0';
+      });
+      setTimeout(() => {
+        favoritesStore.remove(handNo);
+        renderFavoritesPage();
+      }, 420);
+      if (typeof showToast === 'function') showToast('已删除');
+    });
+  }
+
+  // 全部清空按钮
+  const favClearBtn = document.getElementById('fav-clear-btn');
+  if (favClearBtn) {
+    favClearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const cnt = favoritesStore.count();
+      if (cnt === 0) {
+        if (typeof showToast === 'function') showToast('没有收藏可清空');
+        return;
+      }
+      if (confirm('确定要清空全部 ' + cnt + ' 条收藏吗?')) {
+        favoritesStore.clear();
+        renderFavoritesPage();
+        if (typeof showToast === 'function') showToast('已清空全部收藏');
+      }
+    });
+  }
+
+  // ⭐ v2.23 子项 5:我的页"收藏"图标右上角徽章(显示当前收藏数)
+  function updateFavBadge() {
+    const cnt = favoritesStore.count();
+    document.querySelectorAll('[data-goto-todo="favorites"]').forEach(item => {
+      let badge = item.querySelector('.fav-badge');
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'fav-badge';
+        item.appendChild(badge);
+      }
+      if (cnt > 0) {
+        badge.textContent = cnt > 99 ? '99+' : cnt;
+        badge.classList.add('show');
+      } else {
+        badge.classList.remove('show');
+      }
+    });
+  }
+  window.updateFavBadge = updateFavBadge;
+
+  // 初次加载更新徽章 + 监听收藏变化自动更新
+  setTimeout(updateFavBadge, 200);
+  favoritesStore.onChange(() => {
+    updateFavBadge();
+  });
 
   // 分页按钮
   const rpPrev = document.getElementById('rp-prev');
@@ -15274,6 +16159,990 @@
     return stSeat;
   }
   window.postStraddle = postStraddle;
+
+  // ⭐ v2.22 WebSocket 事件协议常量(前后端契约单一来源)
+  // ═════════════════════════════════════════════════════════════════
+  // 后端 → 前端事件(server events,服务器主动推送)
+  // 前端 → 后端事件(client events,玩家行动)
+  // ═════════════════════════════════════════════════════════════════
+  const WS_EVENTS = {
+    // ───── 后端 → 前端 ─────
+    HAND_START:       'hand:start',         // 新一手开始 { handNo, dealerSeat, players[] }
+    BLIND_POST:       'blind:post',         // 下盲注     { sbSeat, sbAmount, bbSeat, bbAmount, straddleSeat?, straddleAmount? }
+    CARD_DEAL_HOLE:   'card:deal_hole',     // 发底牌     { myCards: [c1, c2] }(其他玩家只发牌背)
+    CARD_DEAL_BOARD:  'card:deal_board',    // 发公共牌   { street: 'flop'|'turn'|'river', cards: [...] }
+    ACTION_REQUEST:   'action:request',     // 请求我行动 { seatId, options: ['fold','check','call','raise','allin'], minRaise, maxRaise, callAmount, timeoutSec }
+    ACTION_EXEC:      'action:exec',        // 玩家行动   { seatId, action, amount? }(可能是我自己也可能是其他玩家)
+    STREET_NEXT:      'street:next',        // 进入下一街 { street }(行动轮结束后)
+    POT_COLLECT:      'pot:collect',        // 筹码归底池 {}
+    SHOWDOWN:         'showdown',           // 摊牌      { players: [{seatId, cards, handType}] }
+    PAYOUT:           'payout',             // 派彩      { winners: [{seatId, amount, handType}] }
+    HAND_END:         'hand:end',           // 一手结束   { handNo, mySnap: { chipsAfter, profit } }
+
+    // ───── 连接管理 ─────
+    CONN_PING:        'conn:ping',          // 心跳      { ts }
+    CONN_PONG:        'conn:pong',          // 心跳回应   { ts }
+    CONN_RECONNECT:   'conn:reconnect',     // 服务器要求重连
+    CONN_KICK:        'conn:kick',          // 服务器踢人 { reason }
+
+    // ───── 前端 → 后端 ─────
+    CLIENT_ACTION:    'client:action',      // 我的行动   { handNo, action, amount? }
+    CLIENT_SIT:       'client:sit',         // 入座      { seatId, buyin }
+    CLIENT_LEAVE:     'client:leave',       // 离桌      {}
+    CLIENT_STRADDLE:  'client:straddle'     // 抓头选择   { straddle: true|false }
+  };
+  window.WS_EVENTS = WS_EVENTS;
+
+  // ⭐ v2.22 Mock 后端 server(纯前端 setTimeout 模拟事件流)
+  // ═════════════════════════════════════════════════════════════════
+  // 用途:在真实后端就绪前,模拟一手牌的完整事件流验证前端路由
+  // 替换:真实后端来了把 mockServer.startHand() 改成连真实 WebSocket 即可
+  // ═════════════════════════════════════════════════════════════════
+  const mockServer = (function() {
+    let timers = [];
+    let running = false;
+    let handCounter = 1;
+    // ⭐ v2.24 子项 1:半交互流 — 轮到我时挂起 resolve,等 CLIENT_ACTION 回来再继续
+    let pendingMyTurn = null;     // { resolve, requestData }
+    let currentHandNo = null;
+    let myChipsNow = 2000;        // mock 维护我的栈
+
+    function emit(type, data, delay) {
+      const id = setTimeout(() => {
+        if (window.wsClient && window.wsClient.onMessage) {
+          window.wsClient.onMessage({ type, data, ts: Date.now() });
+        }
+      }, delay);
+      timers.push(id);
+    }
+
+    // ⭐ v2.24 子项 1:发起"轮到我"请求,返回 Promise
+    //   翻前/翻后通用:接收 callAmount、potSize、可选动作集
+    function askMyAction(opts) {
+      return new Promise((resolve) => {
+        const data = Object.assign({
+          handNo:     currentHandNo,
+          seatId:     'my',
+          options:    ['fold', 'call', 'raise', 'allin'],
+          callAmount: 0,
+          minRaise:   0,
+          maxRaise:   myChipsNow,
+          myChips:    myChipsNow,
+          timeoutSec: 15,
+          potSize:    0
+        }, opts || {});
+        pendingMyTurn = { resolve, requestData: data };
+        // 发 ACTION_REQUEST 给前端
+        if (window.wsClient && window.wsClient.onMessage) {
+          window.wsClient.onMessage({
+            type: WS_EVENTS.ACTION_REQUEST,
+            data: data,
+            ts: Date.now()
+          });
+        }
+      });
+    }
+
+    // ⭐ v2.24 子项 1:接收前端 CLIENT_ACTION → 兑现 promise,继续推流
+    function fulfillMyTurn(action, amount) {
+      if (!pendingMyTurn) return;
+      const { resolve } = pendingMyTurn;
+      pendingMyTurn = null;
+      resolve({ action, amount: amount || 0 });
+    }
+
+    async function startHand() {
+      if (running) return;
+      running = true;
+      stopAllTimers();
+      timers = [];
+
+      const handNo = '#H' + (Date.now() % 1000000) + '-' + (handCounter++);
+      currentHandNo = handNo;
+      myChipsNow = 2000;
+      const players = [
+        { seatId: 's1', name: 'FastBr...', avatar: 'F', chips: 1820 },
+        { seatId: 's2', name: 'AOE',       avatar: 'A', chips: 1900 },
+        { seatId: 's3', name: 'Palpit...', avatar: 'P', chips: 1620 },
+        { seatId: 's4', name: '听尽天...', avatar: '听', chips: 2100 },
+        { seatId: 's5', name: 'SoftLu...', avatar: 'S', chips: 880 },
+        { seatId: 's6', name: 'Breeze',    avatar: 'B', chips: 1470 },
+        { seatId: 's7', name: 'Occan...',  avatar: 'O', chips: 950 },
+        { seatId: 's8', name: '贝加岭',    avatar: '贝', chips: 1880 },
+        { seatId: 'my', name: '我',        avatar: '我', chips: 2000, isMe: true }
+      ];
+
+      emit(WS_EVENTS.HAND_START, { handNo, dealerSeat: 's1', players, sb: 10, bb: 20 }, 0);
+      emit(WS_EVENTS.BLIND_POST, { sbSeat: 's2', sbAmount: 10, bbSeat: 's3', bbAmount: 20 }, 400);
+      emit(WS_EVENTS.CARD_DEAL_HOLE, { myCards: ['K♥', '10♦'] }, 1400);
+
+      // ──────────────────────────────────────────────────────────
+      // ⭐ v2.24 翻前行动循环(半交互):他人按脚本,我自己等输入
+      // ──────────────────────────────────────────────────────────
+      await wait(3400);   // 等发牌动画结束
+      let currentBetPre = 20;   // 翻前从 BB 起步
+      let potPre = 30;          // SB+BB
+
+      // s4 弃, s5 跟, s6 弃, s7 跟, s8 弃
+      await execAction({ seatId: 's4', action: 'fold' });
+      await execAction({ seatId: 's5', action: 'call', amount: 20 }); potPre += 20;
+      await execAction({ seatId: 's6', action: 'fold' });
+      await execAction({ seatId: 's7', action: 'call', amount: 20 }); potPre += 20;
+      await execAction({ seatId: 's8', action: 'fold' });
+
+      // 我(UTG+5 后):轮到我 → askMyAction
+      const myPre = await askMyAction({
+        options: ['fold', 'call', 'raise', 'allin'],
+        callAmount: 20,
+        minRaise: 40,            // 最小加注总额(对手最高下注 20 + 1bb)
+        maxRaise: myChipsNow,
+        myChips: myChipsNow,
+        potSize: potPre
+      });
+      await applyMyAction(myPre, 20);
+      if (myPre.action === 'call') potPre += 20;
+      if (myPre.action === 'raise' || myPre.action === 'bet') { currentBetPre = myPre.amount; potPre += myPre.amount; }
+      if (myPre.action === 'allin') { currentBetPre = Math.max(currentBetPre, myPre.amount); potPre += myPre.amount; }
+
+      // 如果我加注/全下,其他人可能要重新决策。此 mock 简化:他们按原脚本继续
+      await execAction({ seatId: 's1', action: 'call', amount: currentBetPre }); potPre += currentBetPre;
+      await execAction({ seatId: 's2', action: 'fold' });
+      // 大盲面对 currentBetPre:若 ==20 就过牌,>20 就跟注
+      if (currentBetPre > 20) {
+        await execAction({ seatId: 's3', action: 'call', amount: currentBetPre - 20 });
+        potPre += (currentBetPre - 20);
+      } else {
+        await execAction({ seatId: 's3', action: 'check' });
+      }
+
+      emit(WS_EVENTS.STREET_NEXT, { street: 'flop' }, 100);
+      await wait(400);
+      emit(WS_EVENTS.POT_COLLECT, {}, 100);
+      await wait(1200);
+      emit(WS_EVENTS.CARD_DEAL_BOARD, { street: 'flop', cards: ['J♦', '7♣', 'K♥'] }, 100);
+      await wait(2000);
+
+      // ──────────────────────────────────────────────────────────
+      // 翻牌:我弃了就跳过我;否则面对下注决策
+      // ──────────────────────────────────────────────────────────
+      let folded = (myPre.action === 'fold');
+      let potFlop = potPre;
+      if (!folded) {
+        await execAction({ seatId: 's3', action: 'check' });
+        await execAction({ seatId: 's5', action: 'check' });
+        await execAction({ seatId: 's7', action: 'bet',  amount: 40 }); potFlop += 40;
+        // 轮到我:面临 40 跟注
+        const myFlop = await askMyAction({
+          options: ['fold', 'call', 'raise', 'allin'],
+          callAmount: 40,
+          minRaise: 80,
+          maxRaise: myChipsNow,
+          myChips: myChipsNow,
+          potSize: potFlop
+        });
+        await applyMyAction(myFlop, 40);
+        if (myFlop.action === 'fold') folded = true;
+        else if (myFlop.action === 'call') potFlop += 40;
+        if (!folded) {
+          await execAction({ seatId: 's1', action: 'call', amount: 40 });
+          await execAction({ seatId: 's3', action: 'call', amount: 40 });
+          await execAction({ seatId: 's5', action: 'fold' });
+        }
+
+        emit(WS_EVENTS.STREET_NEXT, { street: 'turn' }, 100);
+        await wait(400);
+        emit(WS_EVENTS.POT_COLLECT, {}, 100);
+        await wait(1200);
+        emit(WS_EVENTS.CARD_DEAL_BOARD, { street: 'turn', cards: ['A♠'] }, 100);
+        await wait(1800);
+
+        // ──────────────────────────────────────────────────────────
+        // 转牌
+        // ──────────────────────────────────────────────────────────
+        await execAction({ seatId: 's3', action: 'check' });
+        await execAction({ seatId: 's7', action: 'bet',  amount: 80 });
+        const myTurn = await askMyAction({
+          options: ['fold', 'call', 'raise', 'allin'],
+          callAmount: 80,
+          minRaise: 160,
+          maxRaise: myChipsNow,
+          myChips: myChipsNow,
+          potSize: potFlop + 80
+        });
+        await applyMyAction(myTurn, 80);
+        if (myTurn.action === 'fold') folded = true;
+        if (!folded) {
+          await execAction({ seatId: 's1', action: 'fold' });
+          await execAction({ seatId: 's3', action: 'call', amount: 80 });
+
+          emit(WS_EVENTS.STREET_NEXT, { street: 'river' }, 100);
+          await wait(400);
+          emit(WS_EVENTS.POT_COLLECT, {}, 100);
+          await wait(1200);
+          emit(WS_EVENTS.CARD_DEAL_BOARD, { street: 'river', cards: ['5♦'] }, 100);
+          await wait(1800);
+
+          // ──────────────────────────────────────────────────────────
+          // 河牌:s3 过 s7 过 我决策
+          // ──────────────────────────────────────────────────────────
+          await execAction({ seatId: 's3', action: 'check' });
+          await execAction({ seatId: 's7', action: 'check' });
+          const myRiver = await askMyAction({
+            options: ['fold', 'check', 'raise', 'allin'],
+            callAmount: 0,
+            minRaise: 20,
+            maxRaise: myChipsNow,
+            myChips: myChipsNow,
+            potSize: potFlop + 160
+          });
+          await applyMyAction(myRiver, 0);
+          if (myRiver.action !== 'fold' && myRiver.action !== 'check') {
+            await execAction({ seatId: 's3', action: 'fold' });
+            await execAction({ seatId: 's7', action: 'call', amount: myRiver.amount });
+          } else {
+            // 都过的话直接摊牌
+          }
+
+          emit(WS_EVENTS.POT_COLLECT, {}, 100);
+          await wait(1200);
+
+          // 摊牌
+          emit(WS_EVENTS.SHOWDOWN, {
+            players: [
+              { seatId: 'my', cards: ['K♥', '10♦'], handType: '两对' },
+              { seatId: 's7', cards: ['5♣', '5♦'], handType: '三条' }
+            ]
+          }, 100);
+          await wait(2800);
+          emit(WS_EVENTS.PAYOUT, {
+            winners: [{ seatId: 's7', amount: 720, handType: '三条' }]
+          }, 100);
+          await wait(2200);
+        }
+      }
+
+      emit(WS_EVENTS.HAND_END, { handNo, mySnap: { chipsAfter: myChipsNow, profit: myChipsNow - 2000 } }, 100);
+
+      setTimeout(() => { running = false; }, 2000);
+    }
+
+    // ⭐ v2.24 辅助:emit 一个 ACTION_EXEC + 等 STEP
+    function execAction(action) {
+      const STEP = 1100;
+      return new Promise(resolve => {
+        emit(WS_EVENTS.ACTION_EXEC, action, 0);
+        setTimeout(resolve, STEP);
+      });
+    }
+
+    // ⭐ v2.24 辅助:把"我"的行动广播为 ACTION_EXEC + 扣减栈
+    function applyMyAction(act, callAmt) {
+      const STEP = 600;   // 我的行动反馈快一点
+      const a = { seatId: 'my', action: act.action };
+      if (act.action === 'call')  { a.amount = callAmt; myChipsNow -= callAmt; }
+      if (act.action === 'raise' || act.action === 'bet') {
+        a.amount = act.amount;
+        myChipsNow -= act.amount;
+      }
+      if (act.action === 'allin') {
+        a.amount = myChipsNow;
+        myChipsNow = 0;
+      }
+      // check/fold 无金额
+      return new Promise(resolve => {
+        emit(WS_EVENTS.ACTION_EXEC, a, 0);
+        setTimeout(resolve, STEP);
+      });
+    }
+
+    // 辅助:延时
+    function wait(ms) {
+      return new Promise(resolve => {
+        const id = setTimeout(resolve, ms);
+        timers.push(id);
+      });
+    }
+
+    function stopAllTimers() {
+      timers.forEach(id => clearTimeout(id));
+      timers = [];
+      pendingMyTurn = null;
+      running = false;
+    }
+
+    function isRunning() { return running; }
+
+    // 接收前端发来的事件(client:action 等)
+    function receive(event) {
+      if (event.type === WS_EVENTS.CLIENT_ACTION) {
+        // ⭐ v2.24:如果有待处理的"轮到我"请求,兑现 promise → 推动流程
+        if (pendingMyTurn) {
+          fulfillMyTurn(event.data.action, event.data.amount);
+        } else {
+          // 没有待处理(异常 / 早到):直接 echo ACTION_EXEC
+          emit(WS_EVENTS.ACTION_EXEC, {
+            seatId: 'my',
+            action: event.data.action,
+            amount: event.data.amount
+          }, 100);
+        }
+      }
+    }
+
+    return { startHand, stopAllTimers, isRunning, receive, fulfillMyTurn };
+  })();
+  window.mockServer = mockServer;
+
+  // ⭐ v2.22 WebSocket 客户端封装(单例)
+  // ═════════════════════════════════════════════════════════════════
+  // 用途:连接管理 + 自动重连 + 心跳 + 事件路由入口
+  // 模式:
+  //   - mock 模式(默认):走 mockServer,不发起真实网络请求
+  //   - real 模式:连真实 WebSocket(wss://...),需要传 url
+  // ═════════════════════════════════════════════════════════════════
+  const wsClient = (function() {
+    let ws = null;                  // WebSocket 实例(real 模式)
+    let mode = 'mock';              // 'mock' | 'real'
+    let url = null;
+    let connected = false;
+    let reconnectTimer = null;
+    let pingTimer = null;
+    let reconnectAttempt = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_BASE_DELAY = 1000;   // 指数退避起始 1s
+    const PING_INTERVAL = 15000;          // 15s 心跳一次
+
+    // 状态机变更回调(给 UI 用)
+    let stateChangeCallbacks = [];
+    function notifyState(state) {
+      stateChangeCallbacks.forEach(cb => {
+        try { cb(state); } catch (e) {}
+      });
+    }
+    function onStateChange(cb) { stateChangeCallbacks.push(cb); }
+
+    function connect(opts) {
+      opts = opts || {};
+      mode = opts.mode || 'mock';
+      url = opts.url || null;
+
+      if (mode === 'mock') {
+        // mock 模式立即"连接成功"
+        connected = true;
+        reconnectAttempt = 0;
+        notifyState({ status: 'connected', mode: 'mock' });
+        return;
+      }
+
+      // real 模式:连真实 WebSocket
+      if (!url) {
+        console.warn('[ws] real mode requires url');
+        return;
+      }
+      try {
+        ws = new WebSocket(url);
+        notifyState({ status: 'connecting', mode: 'real' });
+        ws.onopen = () => {
+          connected = true;
+          reconnectAttempt = 0;
+          notifyState({ status: 'connected', mode: 'real' });
+          startPing();
+        };
+        ws.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === WS_EVENTS.CONN_PONG) return;   // 心跳回应不路由
+            handleServerEvent(msg);
+          } catch (err) {
+            console.warn('[ws] parse error:', err);
+          }
+        };
+        ws.onclose = () => {
+          connected = false;
+          stopPing();
+          notifyState({ status: 'disconnected', mode: 'real' });
+          scheduleReconnect();
+        };
+        ws.onerror = (e) => {
+          console.warn('[ws] error:', e);
+        };
+      } catch (e) {
+        console.warn('[ws] connect failed:', e);
+        scheduleReconnect();
+      }
+    }
+
+    function disconnect() {
+      stopPing();
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      if (mode === 'mock') {
+        mockServer.stopAllTimers();
+      } else if (ws) {
+        try { ws.close(); } catch (e) {}
+        ws = null;
+      }
+      connected = false;
+      notifyState({ status: 'disconnected', mode });
+    }
+
+    function startPing() {
+      stopPing();
+      pingTimer = setInterval(() => {
+        send(WS_EVENTS.CONN_PING, { ts: Date.now() });
+      }, PING_INTERVAL);
+    }
+    function stopPing() {
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+    }
+
+    function scheduleReconnect() {
+      if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+        notifyState({ status: 'failed', mode, reason: 'max_attempts' });
+        return;
+      }
+      const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempt);
+      reconnectAttempt++;
+      notifyState({ status: 'reconnecting', mode, attempt: reconnectAttempt, delay });
+      reconnectTimer = setTimeout(() => {
+        connect({ mode, url });
+      }, delay);
+    }
+
+    // 前端 → 后端
+    function send(type, data) {
+      const event = { type, data, ts: Date.now() };
+      if (mode === 'mock') {
+        mockServer.receive(event);
+        return;
+      }
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.warn('[ws] not connected, drop:', type);
+        return;
+      }
+      try {
+        ws.send(JSON.stringify(event));
+      } catch (e) {
+        console.warn('[ws] send failed:', e);
+      }
+    }
+
+    // mock server 直接调用这个推消息(等同于 ws.onmessage)
+    function onMessage(event) {
+      handleServerEvent(event);
+    }
+
+    // 操作 API
+    function startMockHand() {
+      if (mode !== 'mock') return;
+      mockServer.startHand();
+    }
+    function isConnected() { return connected; }
+    function getMode() { return mode; }
+
+    return {
+      connect, disconnect, send, onMessage,
+      onStateChange, startMockHand,
+      isConnected, getMode
+    };
+  })();
+  window.wsClient = wsClient;
+
+  // ⭐ v2.22 事件路由层(后端 → 前端动画)
+  // ═════════════════════════════════════════════════════════════════
+  // 每个 WS_EVENTS 事件 → 一个动画函数,前端动画层 0 修改
+  // ═════════════════════════════════════════════════════════════════
+
+  // WS 模式下:存储当前手的玩家信息(从 hand:start 拿)
+  let wsCurrentHand = null;
+
+  // ⭐ v2.24 子项 1:当前 ACTION_REQUEST 上下文(给子项 2-7 用)
+  // 收到请求时填充,玩家行动后或超时清空。子项 2-6 的按钮 onClick 读这里取 handNo/minRaise/...
+  let currentActionRequest = null;
+  window.currentActionRequest = () => currentActionRequest;
+
+  /**
+   * ⭐ v2.24 子项 1:ACTION_REQUEST → P 弹窗显示器
+   *
+   * 决策逻辑(符合手机德州扑克标准):
+   *   callAmount === 0     无人下注/我已平 + 翻前 BB 第一次行动  → P3(过牌/加注)
+   *   callAmount === 0     无人下注且我可以开下注                → P1(下注)
+   *   callAmount > 0       跟注金额 < 我的栈                     → P2(跟注/加注)
+   *   callAmount >= myChips 跟注就要 All-In                      → P4(全下)
+   *
+   * 入参 data:
+   *   { seatId, options:['fold','check','call','raise','allin'],
+   *     callAmount, minRaise, maxRaise, timeoutSec, handNo, myChips,
+   *     hasActedThisStreet, potSize }
+   */
+  function showActionPopupFromRequest(data) {
+    const area = document.getElementById('action-area');
+    if (!area) return;
+
+    // ⭐ v2.24 防御:仅在 WS 模式下接管 P 弹窗,demo 模式不响应(避免污染演示流)
+    const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
+    if (currentMode === 'demo') {
+      console.log('[action-request] ignored in demo mode');
+      return;
+    }
+
+    // 1. 决策 P 态
+    const callAmt   = Number(data.callAmount || 0);
+    const myChips   = Number(data.myChips || (data.options && data.options.includes('call') ? Infinity : 0));
+    const opts      = data.options || [];
+    let state = 'p1';
+
+    if (callAmt > 0 && callAmt >= myChips) {
+      state = 'p4';                              // 跟注就要 All-In
+    } else if (callAmt > 0) {
+      state = 'p2';                              // 跟注 X
+    } else if (opts.includes('check')) {
+      state = 'p3';                              // 可过牌 → 过牌/加注
+    } else {
+      state = 'p1';                              // 无人下注且不可过牌(罕见,起始 raise 场景)
+    }
+
+    // 2. 记录请求上下文(子项 2-7 读)
+    currentActionRequest = {
+      handNo:        data.handNo,
+      seatId:        data.seatId || 'my',
+      options:       opts,
+      callAmount:    callAmt,
+      minRaise:      Number(data.minRaise || 0),
+      maxRaise:      Number(data.maxRaise || 0),
+      myChips:       myChips,
+      timeoutSec:    Number(data.timeoutSec || 15),
+      potSize:       Number(data.potSize || 0),
+      state:         state,
+      requestedAt:   Date.now()
+    };
+
+    // 3. 填充按钮金额文案
+    //    - P1/P3 跟注按钮变"过牌"(无金额)
+    //    - P2    跟注按钮显示 callAmount
+    //    - P4    跟注按钮变"全下"
+    const checkAmount = document.getElementById('ab-check-amount');
+    if (checkAmount) {
+      checkAmount.textContent = (state === 'p2') ? formatMoney(callAmt) : '';
+    }
+
+    // 4. 加注按钮 raise/bet 切换:P2 显"下注"(有人下注的回应仍叫加注…但德扑标准:面对下注时按钮叫"加注";本街首次主动下注叫"下注")
+    //    项目锁死:本街尚无下注 → "下注";已有下注 → "加注"
+    const raiseBtn = document.getElementById('ab-raise-btn');
+    if (raiseBtn) {
+      raiseBtn.dataset.action = (callAmt === 0 && opts.includes('raise')) ? 'bet' : 'raise';
+    }
+
+    // 5. P3 大盲位常用 → 显示 Y3 风格的"过/弃"合并按钮?
+    //    本子项不做合并(简单 P3 即可),Y3 由用户主动选预选时进入
+
+    // 6. 切 action-area 状态(沿用 DEV 切换器同一套 data-state)
+    area.dataset.state = state;
+    const pageTable = document.getElementById('page-table');
+    if (pageTable) {
+      ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => {
+        pageTable.classList.remove('state-' + s);
+      });
+      pageTable.classList.add('state-' + state);
+    }
+    // 清除上一轮预选(预选不跨轮)
+    area.querySelectorAll('.ab-btn.preselected').forEach(el => el.classList.remove('preselected'));
+
+    // 7. 启动倒计时(P 组才启动)
+    const timeoutMs = (Number(data.timeoutSec) || 15) * 1000;
+    if (typeof startTimer === 'function') {
+      startTimer(timeoutMs);
+    }
+
+    // 8. 提示
+    if (typeof showToast === 'function') {
+      const stateLabel = ({ p1: '请下注', p2: `请跟注/加注/弃牌`, p3: '请过牌/加注', p4: '面临全下决策' })[state];
+      showToast(stateLabel);
+    }
+
+    console.log('[action-request]', state, currentActionRequest);
+  }
+  window.showActionPopupFromRequest = showActionPopupFromRequest;
+
+  /**
+   * ⭐ v2.24 子项 1:玩家行动完成 / 超时 / 取消 → 关弹窗 + 清上下文
+   * 子项 2-7 的 send 函数会调它。
+   */
+  function clearActionRequest() {
+    currentActionRequest = null;
+    const area = document.getElementById('action-area');
+    if (!area) return;
+    // ⭐ v2.24 切回 'none' 态(对应新增 CSS 4380 行,P 区所有按钮全部 display:none !important)
+    area.dataset.state = 'none';
+    const pageTable = document.getElementById('page-table');
+    if (pageTable) {
+      ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => {
+        pageTable.classList.remove('state-' + s);
+      });
+    }
+    area.querySelectorAll('.ab-btn.preselected').forEach(el => el.classList.remove('preselected'));
+    // 关闭滑杆(如有)
+    const sliderOverlay = document.getElementById('raise-slider-overlay');
+    if (sliderOverlay) sliderOverlay.classList.remove('show');
+    // 停倒计时
+    if (typeof stopTimer === 'function') stopTimer(false);
+  }
+  window.clearActionRequest = clearActionRequest;
+
+  // 简单金额格式化:整数不带小数,小数最多 2 位
+  function formatMoney(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return '0';
+    if (Math.floor(n) === n) return String(n);
+    return n.toFixed(2).replace(/\.?0+$/, '');
+  }
+
+  function handleServerEvent(event) {
+    if (!event || !event.type) return;
+    const data = event.data || {};
+    console.log('[ws] recv:', event.type, data);
+
+    switch (event.type) {
+      case WS_EVENTS.HAND_START: {
+        // 重置桌面 + 渲染玩家 + 设庄家
+        fullResetTable();
+        wsCurrentHand = data;
+        // 渲染所有玩家到座位
+        if (data.players) {
+          data.players.forEach(p => {
+            if (p.seatId === 'my') return;   // my-seat 单独处理
+            const el = document.querySelector('.seat.' + p.seatId);
+            if (!el) return;
+            el.className = 'seat ' + p.seatId;
+            el.innerHTML = `
+              <div class="seat-avatar">${p.avatar || p.name.charAt(0)}
+                <svg class="seat-turn-ring" viewBox="-30 -30 60 60">
+                  <circle cx="0" cy="0" r="26"/>
+                  <circle class="turn-head-glow" cx="0" cy="-26" r="3"/>
+                </svg>
+              </div>
+              <div class="seat-cards-back"><div class="mini-card"></div><div class="mini-card"></div></div>
+              <div class="seat-name-chip">${p.name}</div>
+              <div class="seat-chips">${p.chips}</div>
+            `;
+          });
+        }
+        // 设盲注
+        if (typeof data.sb === 'number' && typeof data.bb === 'number') {
+          currentBlinds = { sb: data.sb, bb: data.bb, straddle: data.bb * 2 };
+        }
+        // 设庄家(无动画)
+        if (data.dealerSeat) setDealer(data.dealerSeat, false);
+        if (typeof showToast === 'function') showToast('▶ 新一手 ' + (data.handNo || ''));
+        break;
+      }
+
+      case WS_EVENTS.BLIND_POST: {
+        if (data.sbSeat) {
+          setSeatBet(data.sbSeat, data.sbAmount);
+          attachBlindLabel(data.sbSeat, 'SB');
+        }
+        if (data.bbSeat) {
+          setSeatBet(data.bbSeat, data.bbAmount);
+          attachBlindLabel(data.bbSeat, 'BB');
+        }
+        if (data.straddleSeat) {
+          setSeatBet(data.straddleSeat, data.straddleAmount);
+          attachBlindLabel(data.straddleSeat, '抓头');
+        }
+        if (typeof showToast === 'function') showToast('盲注:SB ' + data.sbAmount + ' / BB ' + data.bbAmount);
+        break;
+      }
+
+      case WS_EVENTS.CARD_DEAL_HOLE: {
+        // 发底牌动画(我自己的牌从后端来)
+        if (data.myCards && data.myCards.length === 2) {
+          // 把我自己的牌存到 DEMO_HOLE_CARDS['my'](复用现有翻牌逻辑)
+          if (typeof DEMO_HOLE_CARDS !== 'undefined') {
+            DEMO_HOLE_CARDS.my = data.myCards;
+          }
+        }
+        clearBlindLabels();   // 发牌前清盲注标签
+        dealHoleCardsAnimation();
+        if (typeof showToast === 'function') showToast('发底牌');
+        break;
+      }
+
+      case WS_EVENTS.CARD_DEAL_BOARD: {
+        // 发公共牌(街切换)
+        if (data.street) dealBoardAnimation(data.street);
+        if (typeof showToast === 'function') showToast('发 ' + data.street);
+        break;
+      }
+
+      case WS_EVENTS.ACTION_REQUEST: {
+        // ⭐ v2.24 子项 1:后端请求我自己行动 → 决策 P 态 → 弹 P 弹窗
+        // 入参 data: { seatId, options:['fold','check','call','raise','allin'],
+        //              callAmount, minRaise, maxRaise, timeoutSec, handNo,
+        //              myChips, hasActedThisStreet }
+        setActingSeat(data.seatId || 'my');
+        showActionPopupFromRequest(data);
+        break;
+      }
+
+      case WS_EVENTS.ACTION_EXEC: {
+        // 任意玩家(包括我自己)的行动结果广播
+        setActingSeat(data.seatId);   // 头像绿环
+        const labelMap = {
+          fold:  { cls: 'action-fold',  text: '弃牌' },
+          check: { cls: 'action-check', text: '过牌' },
+          call:  { cls: 'action-call',  text: '跟注' },
+          bet:   { cls: 'action-raise', text: '下注' },
+          raise: { cls: 'action-raise', text: '加注' },
+          allin: { cls: 'action-allin', text: 'ALL-IN' }
+        };
+        const info = labelMap[data.action];
+        if (info) attachActionTag(data.seatId, info.cls, info.text);
+        // 更新座位下注 / 弃牌灰显
+        if (data.action === 'fold') {
+          const el = data.seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + data.seatId);
+          if (el) el.classList.add('folded');
+        } else if (data.action === 'call' || data.action === 'bet' || data.action === 'raise' || data.action === 'allin') {
+          if (typeof data.amount === 'number') setSeatBet(data.seatId, data.amount);
+        }
+        // ⭐ v2.24 子项 1:我自己的行动 ACK → 关 P 弹窗 + 清上下文
+        if (data.seatId === 'my' && currentActionRequest) {
+          clearActionRequest();
+        }
+        break;
+      }
+
+      case WS_EVENTS.STREET_NEXT: {
+        // 街切换前:清动作气泡 + 停 acting
+        setActingSeat(null);
+        clearActionTags();
+        break;
+      }
+
+      case WS_EVENTS.POT_COLLECT: {
+        // 筹码归底池(每街结束触发)
+        betChipsToPotAnimation();
+        break;
+      }
+
+      case WS_EVENTS.SHOWDOWN: {
+        // 摊牌:翻所有非弃牌玩家的底牌 + 牌型识别 + 高亮
+        // 把后端给的 cards 写到 DEMO_HOLE_CARDS,复用现有 revealAllHands 逻辑
+        if (data.players && typeof DEMO_HOLE_CARDS !== 'undefined') {
+          data.players.forEach(p => {
+            if (p.cards && p.cards.length === 2) {
+              DEMO_HOLE_CARDS[p.seatId] = p.cards;
+            }
+          });
+        }
+        setStage('showdown');   // 触发 revealAllHands
+        if (typeof showToast === 'function') showToast('摊牌!');
+        break;
+      }
+
+      case WS_EVENTS.PAYOUT: {
+        if (data.winners && data.winners.length > 0) {
+          const winner = data.winners[0];
+          if (typeof showToast === 'function') {
+            showToast('派彩 → ' + (winner.seatId === 'my' ? '我' : winner.seatId) +
+                      (winner.handType ? '(' + winner.handType + ')' : ''));
+          }
+          potToWinnerAnimation(winner.seatId);
+        }
+        break;
+      }
+
+      case WS_EVENTS.HAND_END: {
+        if (typeof showToast === 'function') showToast('一手结束');
+        // 真实业务:更新我的筹码胶囊 + 准备下一手
+        break;
+      }
+
+      case WS_EVENTS.CONN_PING:
+      case WS_EVENTS.CONN_PONG:
+        // 心跳,不路由
+        break;
+
+      case WS_EVENTS.CONN_RECONNECT:
+        wsClient.disconnect();
+        setTimeout(() => wsClient.connect({ mode: wsClient.getMode() }), 500);
+        break;
+
+      case WS_EVENTS.CONN_KICK:
+        wsClient.disconnect();
+        if (typeof showToast === 'function') showToast('已下线: ' + (data.reason || '未知原因'));
+        break;
+
+      default:
+        console.warn('[ws] unhandled event:', event.type);
+    }
+  }
+  window.handleServerEvent = handleServerEvent;
+
+  // ⭐ v2.22 模式开关:演示模式(本地 setTimeout) vs WebSocket 模式
+  // ═════════════════════════════════════════════════════════════════
+  // 控制方式:
+  //   1. URL hash:#ws=1 → WS 模式(默认 mock 数据);#ws=real → 真实 WS;否则演示模式
+  //   2. DEV 按钮:▶ 切换模式
+  // ═════════════════════════════════════════════════════════════════
+  let appMode = 'demo';   // 'demo' | 'ws_mock' | 'ws_real'
+
+  function detectModeFromUrl() {
+    const hash = (location.hash || '').toLowerCase();
+    if (hash.indexOf('ws=real') !== -1) return 'ws_real';
+    if (hash.indexOf('ws=1') !== -1 || hash.indexOf('ws=mock') !== -1) return 'ws_mock';
+    return 'demo';
+  }
+
+  function setAppMode(newMode) {
+    if (newMode === appMode) return;
+    const oldMode = appMode;
+    appMode = newMode;
+
+    // 切到 WS 模式:断开演示 + 连接 ws
+    if (newMode === 'ws_mock') {
+      // 中断演示
+      if (window._demoHandCancel) window._demoHandCancel.cancelled = true;
+      // ⭐ v2.24 子项 1:WS 模式默认隐藏 P 区(等 ACTION_REQUEST 才显示)
+      if (typeof window.clearActionRequest === 'function') window.clearActionRequest();
+      wsClient.connect({ mode: 'mock' });
+      document.body.classList.add('app-mode-ws');
+      document.body.classList.remove('app-mode-demo');
+    } else if (newMode === 'ws_real') {
+      if (window._demoHandCancel) window._demoHandCancel.cancelled = true;
+      // ⭐ v2.24 同上
+      if (typeof window.clearActionRequest === 'function') window.clearActionRequest();
+      // TODO: 配置真实 WS URL(后端就绪时填)
+      const realUrl = 'wss://aagame-six.vercel.app/ws';
+      wsClient.connect({ mode: 'real', url: realUrl });
+      document.body.classList.add('app-mode-ws');
+      document.body.classList.remove('app-mode-demo');
+    } else {
+      // 切回 demo:恢复初始 P1 态(让 DEV 切换器和演示流能用)
+      wsClient.disconnect();
+      const area = document.getElementById('action-area');
+      if (area && area.dataset.state === 'none') {
+        area.dataset.state = 'p1';   // 回到初始演示态
+      }
+      document.body.classList.add('app-mode-demo');
+      document.body.classList.remove('app-mode-ws');
+    }
+
+    updateModeIndicator();
+    if (typeof showToast === 'function') {
+      const labels = { demo: '演示模式', ws_mock: 'WS Mock 模式', ws_real: 'WS 真实模式' };
+      showToast('已切换到 ' + (labels[newMode] || newMode));
+    }
+  }
+
+  function updateModeIndicator() {
+    const el = document.getElementById('mode-indicator');
+    if (!el) return;
+    const labels = { demo: 'DEMO', ws_mock: 'WS·MOCK', ws_real: 'WS·LIVE' };
+    el.textContent = labels[appMode] || appMode;
+    el.className = 'mode-indicator mode-' + appMode.replace('_', '-');
+  }
+
+  window.setAppMode = setAppMode;
+  window.getAppMode = () => appMode;
+
+  // 初始化:从 URL hash 读模式
+  setTimeout(() => {
+    const initialMode = detectModeFromUrl();
+    if (initialMode !== 'demo') {
+      setAppMode(initialMode);
+    } else {
+      // demo 模式默认不连 ws
+      document.body.classList.add('app-mode-demo');
+    }
+    updateModeIndicator();
+  }, 100);
+
+  // 监听 hash 变化
+  window.addEventListener('hashchange', () => {
+    setAppMode(detectModeFromUrl());
+  });
+
+  // ⭐ v2.22 模式指示器交互(点击展开菜单 + 切换模式)
+  (function initModeIndicator() {
+    const wrap = document.getElementById('mode-indicator-wrap');
+    const indicator = document.getElementById('mode-indicator');
+    const menu = document.getElementById('mode-indicator-menu');
+    if (!wrap || !indicator || !menu) return;
+
+    indicator.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+    // 点击外部关闭
+    document.addEventListener('click', () => {
+      menu.classList.remove('open');
+    });
+    // 菜单项点击
+    menu.querySelectorAll('.mim-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mode = item.dataset.mode;
+        if (mode) setAppMode(mode);
+        menu.classList.remove('open');
+      });
+    });
+  })();
+
+  // ⭐ v2.22 网络状态条:订阅 wsClient 状态变化
+  (function initNetBanner() {
+    const banner = document.getElementById('net-banner');
+    const text = document.getElementById('net-banner-text');
+    if (!banner || !text) return;
+
+    wsClient.onStateChange((state) => {
+      // mock 模式不显示 banner(本地不会断线)
+      if (state.mode === 'mock' && state.status === 'connected') {
+        banner.classList.remove('show');
+        return;
+      }
+      switch (state.status) {
+        case 'connecting':
+          banner.className = 'net-banner show warning';
+          text.textContent = '正在连接服务器...';
+          break;
+        case 'connected':
+          banner.className = 'net-banner show success';
+          text.textContent = '已连接';
+          // 2 秒后自动隐藏成功提示
+          setTimeout(() => banner.classList.remove('show'), 2000);
+          break;
+        case 'disconnected':
+          banner.className = 'net-banner show';
+          text.textContent = '连接已断开';
+          break;
+        case 'reconnecting':
+          banner.className = 'net-banner show warning';
+          text.textContent = '正在重连(第 ' + state.attempt + ' 次)...';
+          break;
+        case 'failed':
+          banner.className = 'net-banner show kick';
+          text.textContent = '连接失败,请刷新页面';
+          break;
+      }
+    });
+  })();
+
+  // ⭐ v2.22 WS Mock 启动按钮(模拟后端推一手)
+  (function initWsMockBtn() {
+    const btn = document.getElementById('ws-mock-start-btn');
+    if (!btn) return;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (appMode !== 'ws_mock') {
+        if (typeof showToast === 'function') showToast('请先切换到 WS Mock 模式');
+        return;
+      }
+      if (!wsClient.isConnected()) {
+        if (typeof showToast === 'function') showToast('未连接');
+        return;
+      }
+      wsClient.startMockHand();
+    });
+  })();
 
   // ⭐ v2.21 行动轮 JS(子项 1-6)
   // ═════════════════════════════════════════════════════════════════
@@ -17093,18 +18962,26 @@
   }
 
   // 归零默认动作:有未跟注的金额 → 弃牌;否则过牌
-  // 现阶段不真改演示数据,只 toast 提示
+  // ⭐ v2.24 子项 7:P 态(真实行动请求)下自动 send → 关闭弹窗 + 推动流程
   function onTimeout() {
-    // 看跟注按钮金额是否大于 0(代表有人加注我没跟):有则弃牌,无则过牌
+    const req = window.currentActionRequest && window.currentActionRequest();
+    if (req) {
+      // 业内标准:超时未行动 → 有跟注金额则弃牌,否则过牌
+      const action = req.callAmount > 0 ? 'fold' : 'check';
+      if (typeof showToast === 'function') showToast(`超时:默认${action === 'fold' ? '弃牌' : '过牌'}`);
+      window.sendClientAction(action);
+      return;
+    }
+    // 非真实请求态(演示):保留旧逻辑只 toast
     const amountEl = document.getElementById('ab-check-amount');
     const callAmount = amountEl ? parseInt(amountEl.textContent, 10) || 0 : 0;
     const action = callAmount > 0 ? '弃牌' : '过牌';
     if (typeof showToast === 'function') showToast(`超时:默认${action}`);
-    // 真实业务:发送 action:default 给服务端,等推送下一玩家 turn:start
   }
 
   // +15S 按钮:每轮 1 次
-  // 真实业务:点击 → 扣费 → 服务端确认 → 推 turn:extend → 客户端 addTime(15000)
+  // ⭐ v2.24 子项 7:P 态(真实行动请求)下:先通知后端 → 收到 turn:extend 才本地延时
+  //   非 P 态(演示):本地直接延时
   if (addTimeBtn) {
     addTimeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -17115,6 +18992,16 @@
       if (!turnTimer.running) {
         if (typeof showToast === 'function') showToast('当前不在计时中');
         return;
+      }
+      const req = window.currentActionRequest && window.currentActionRequest();
+      if (req && window.wsClient && typeof window.wsClient.send === 'function') {
+        // 真实业务:通知后端,后端验证扣费 + 推 turn:extend
+        // mock:简化为前端直接延时 + 同时发 send 让后端记日志
+        window.wsClient.send(WS_EVENTS.CLIENT_ACTION, {
+          handNo: req.handNo,
+          action: 'addtime',
+          amount: 15
+        });
       }
       addTime(ADD_TIME_MS);
       turnTimer.addTimeUsedThisRound = true;
@@ -17187,13 +19074,19 @@
     const MIN_RAISE = BB * 2;   // 最小加注 = 2 BB = 80
     const MAX_RAISE = MY_CHIPS; // All-In
 
+    // ⭐ v2.24 子项 5:动态 min/max/BB,P 态打开时由 currentActionRequest 注入
+    let dynamicMinRaise = MIN_RAISE;
+    let dynamicMaxRaise = MAX_RAISE;
+    let dynamicBB = BB;
+
     let currentAmount = 120;    // 当前金额
 
     // 更新 UI(滑杆位置 + 金额数字 + BB 倍率 + 左右按钮同步)
     function updateUI() {
       // 滑杆位置百分比(从底部往上,0% = MIN, 100% = MAX)
+      const range = Math.max(1, dynamicMaxRaise - dynamicMinRaise);
       const pct = Math.max(0, Math.min(100,
-        (currentAmount - MIN_RAISE) / (MAX_RAISE - MIN_RAISE) * 100
+        (currentAmount - dynamicMinRaise) / range * 100
       ));
       const pctStr = pct + '%';
       thumb.style.bottom = pctStr;
@@ -17202,22 +19095,22 @@
       cancelBtn.style.bottom = pctStr;
       confirmBtn.style.bottom = pctStr;
       // ⭐ v2.18.1 滑到最顶 = All-In,显示文字而非数字
-      const isAllIn = currentAmount >= MAX_RAISE;
+      const isAllIn = currentAmount >= dynamicMaxRaise;
       if (isAllIn) {
         amountEl.textContent = 'All-In';
-        multiEl.textContent = MAX_RAISE + ' 筹码';
+        multiEl.textContent = dynamicMaxRaise + ' 筹码';
         confirmAmountEl.textContent = 'All-In';
       } else {
         amountEl.textContent = currentAmount;
         confirmAmountEl.textContent = currentAmount;
-        const bbMulti = (currentAmount / BB).toFixed(1).replace(/\.0$/, '');
+        const bbMulti = (currentAmount / dynamicBB).toFixed(1).replace(/\.0$/, '');
         multiEl.textContent = bbMulti + ' BB';
       }
     }
 
     // 设置金额(带边界检查)
     function setAmount(amount) {
-      currentAmount = Math.max(MIN_RAISE, Math.min(MAX_RAISE, Math.round(amount)));
+      currentAmount = Math.max(dynamicMinRaise, Math.min(dynamicMaxRaise, Math.round(amount)));
       updateUI();
     }
 
@@ -17228,8 +19121,19 @@
         const state = actionArea && actionArea.dataset.state;
         if (!['p1','p2','p3','p4'].includes(state)) return;
         e.stopPropagation();
+        // ⭐ v2.24 子项 5:P 态有真实请求 → 用 minRaise/maxRaise 覆盖硬编码
+        const req = window.currentActionRequest && window.currentActionRequest();
+        if (req) {
+          dynamicMinRaise = Math.max(req.minRaise || (req.callAmount || 0) + currentBlinds.bb, currentBlinds.bb);
+          dynamicMaxRaise = req.maxRaise || req.myChips || MAX_RAISE;
+          dynamicBB = currentBlinds.bb || BB;
+        } else {
+          dynamicMinRaise = MIN_RAISE;
+          dynamicMaxRaise = MAX_RAISE;
+          dynamicBB = BB;
+        }
         // 默认金额 = MIN_RAISE * 1.5(可改成上次的金额或推荐值)
-        setAmount(MIN_RAISE * 1.5);
+        setAmount(dynamicMinRaise * 1.5);
         overlay.classList.add('show');
       });
     }
@@ -17238,18 +19142,51 @@
     cancelBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       overlay.classList.remove('show');
+      // ⭐ v2.24 子项 5:P 态下取消滑杆 → 回到原 P 态(不清请求)
+      const req = window.currentActionRequest && window.currentActionRequest();
+      if (req && actionArea) {
+        actionArea.dataset.state = req.state;
+        const pageTable = document.getElementById('page-table');
+        if (pageTable) {
+          ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => pageTable.classList.remove('state-' + s));
+          pageTable.classList.add('state-' + req.state);
+        }
+      }
     });
     // 点遮罩空白处 → 关弹窗(但点滑杆轨道不算关)
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.classList.remove('show');
+      if (e.target === overlay) {
+        overlay.classList.remove('show');
+        const req = window.currentActionRequest && window.currentActionRequest();
+        if (req && actionArea) {
+          actionArea.dataset.state = req.state;
+          const pageTable = document.getElementById('page-table');
+          if (pageTable) {
+            ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => pageTable.classList.remove('state-' + s));
+            pageTable.classList.add('state-' + req.state);
+          }
+        }
+      }
     });
 
-    // 确认加注按钮 → 关弹窗 + 发送(当前 toast 演示)
+    // 确认加注按钮 → 关弹窗 + 发送
     confirmBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       overlay.classList.remove('show');
+      // ⭐ v2.24 子项 5:P 态 → send raise/bet/allin;否则保留 toast 演示
+      const req = window.currentActionRequest && window.currentActionRequest();
+      if (req) {
+        const isAllIn = currentAmount >= dynamicMaxRaise;
+        if (isAllIn) {
+          window.sendClientAction('allin');
+        } else {
+          // 翻前/翻后 无人下注 → bet,否则 → raise
+          const action = (req.callAmount === 0) ? 'bet' : 'raise';
+          window.sendClientAction(action, currentAmount);
+        }
+        return;
+      }
       if (typeof showToast === 'function') showToast(`加注 ${currentAmount}`);
-      // 真实业务:发送 player:raise + amount 给服务端
     });
 
     // 滑杆拖动:支持鼠标 + 触摸
@@ -17353,9 +19290,37 @@
     });
   }
 
+  // ⭐ v2.24 子项 2/3/4:P 区按钮 → wsClient.send(CLIENT_ACTION) 工具函数
+  //   - hasLiveRequest():是否处于"轮到我"的真实请求态
+  //   - sendClientAction(action, amount):发到 ws,本地关闭弹窗
+  function hasLiveRequest() {
+    // ⭐ v2.24 防御:demo 模式下永远返回 false,避免污染演示流
+    const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
+    if (currentMode === 'demo') return false;
+    return !!(window.currentActionRequest && window.currentActionRequest());
+  }
+  function sendClientAction(action, amount) {
+    const req = window.currentActionRequest && window.currentActionRequest();
+    if (!req) return false;
+    const payload = { handNo: req.handNo, action: action };
+    if (typeof amount === 'number' && amount > 0) payload.amount = amount;
+    if (window.wsClient && typeof window.wsClient.send === 'function') {
+      window.wsClient.send(WS_EVENTS.CLIENT_ACTION, payload);
+    }
+    // 乐观关弹窗(收到 ACTION_EXEC ACK 也会再清一次,幂等)
+    if (typeof window.clearActionRequest === 'function') window.clearActionRequest();
+    return true;
+  }
+  window.sendClientAction = sendClientAction;
+
   if (abFoldBtn) {
     abFoldBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // ⭐ v2.24 子项 2:P 态(真实行动请求) → 直接 send fold
+      if (hasLiveRequest()) {
+        sendClientAction('fold');
+        return;
+      }
       if (togglePreselect(abFoldBtn)) return;   // 预选态下只切高亮,不弹 toast
       if (typeof showToast === 'function') showToast('弃牌(开发中)');
     });
@@ -17363,6 +19328,26 @@
   if (abRaiseBtn) {
     abRaiseBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // ⭐ v2.24 子项 5 占位:P 态下点加注 → 进 S1/S2 滑杆(子项 5 实现)
+      //   暂时直接 send 最低加注作为占位,子项 5 会接滑杆
+      if (hasLiveRequest()) {
+        const req = window.currentActionRequest();
+        // 进 S1/S2 滑杆态(沿用 DEV 切换器逻辑)
+        const area = document.getElementById('action-area');
+        const sliderState = (req.state === 'p2' || req.state === 'p1' && req.callAmount === 0 && abRaiseBtn.dataset.action === 'bet') ? 's2' : 's1';
+        if (area) {
+          area.dataset.state = sliderState;
+          const pageTable = document.getElementById('page-table');
+          if (pageTable) {
+            ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => pageTable.classList.remove('state-' + s));
+            pageTable.classList.add('state-' + sliderState);
+          }
+        }
+        const sliderOverlay = document.getElementById('raise-slider-overlay');
+        if (sliderOverlay) sliderOverlay.classList.add('show');
+        if (typeof showToast === 'function') showToast('调整加注金额(子项 5 实现)');
+        return;
+      }
       // Step 3 做:点加注 → 弹滑杆精调弹窗
       if (typeof showToast === 'function') showToast('加注(滑杆弹窗开发中)');
     });
@@ -17370,6 +19355,29 @@
   if (abCheckBtn) {
     abCheckBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // ⭐ v2.24 子项 3/4:P 态下点中央右键
+      //   P1: 无人下注 + 不可过 → 罕见,降级 check(后端拒收会兜底)
+      //   P2: 跟注 callAmount
+      //   P3: 过牌
+      //   P4: 全下(call 即 all-in)
+      if (hasLiveRequest()) {
+        const req = window.currentActionRequest();
+        switch (req.state) {
+          case 'p1':
+          case 'p3':
+            sendClientAction('check');
+            break;
+          case 'p2':
+            sendClientAction('call', req.callAmount);
+            break;
+          case 'p4':
+            sendClientAction('allin');
+            break;
+          default:
+            sendClientAction('check');
+        }
+        return;
+      }
       if (togglePreselect(abCheckBtn)) return;
       if (typeof showToast === 'function') showToast('跟注/过牌(开发中)');
     });
@@ -17379,8 +19387,36 @@
     tile.addEventListener('click', (e) => {
       e.stopPropagation();
       const tileName = tile.dataset.raiseTile;
-      const amount = tile.dataset.amount;
-      if (typeof showToast === 'function') showToast(`选中 ${tileName} 加注 ${amount}(开发中)`);
+      const amountAttr = parseFloat(tile.dataset.amount) || 0;
+      // ⭐ v2.24 子项 6:P 态 → 按 tile 比例 send raise/bet/allin
+      const req = window.currentActionRequest && window.currentActionRequest();
+      if (req) {
+        // 重新计算实际下注:基于 potSize 和 tile 比例(更准确,不依赖 data-amount 硬编码)
+        const pot = req.potSize || 0;
+        const myChips = req.myChips || Infinity;
+        let amount = amountAttr;
+        switch (tileName) {
+          case '1/5':  amount = Math.round(pot / 5);  break;
+          case '1/3':  amount = Math.round(pot / 3);  break;
+          case '1/2':  amount = Math.round(pot / 2);  break;
+          case '1':    amount = Math.round(pot);      break;
+          case 'all-in': amount = myChips;            break;
+        }
+        // 边界:不低于 minRaise(All-In 除外)
+        if (tileName !== 'all-in') {
+          amount = Math.max(amount, req.minRaise || 0);
+          amount = Math.min(amount, myChips);
+        }
+        // 如果 ≥ myChips → 切 All-In
+        if (amount >= myChips) {
+          window.sendClientAction('allin');
+        } else {
+          const action = (req.callAmount === 0) ? 'bet' : 'raise';
+          window.sendClientAction(action, amount);
+        }
+        return;
+      }
+      if (typeof showToast === 'function') showToast(`选中 ${tileName} 加注 ${amountAttr}(开发中)`);
     });
   });
   // 关闭弹窗:✕ 按钮 / 点遮罩(关闭时重置付费状态)
@@ -21218,11 +23254,13 @@
     });
   });
 
-  // 我的页"收藏"入口 — 占位 toast(等做牌桌交互那次一起做完整收藏页)
-  // 注意:不用 data-goto,因为通用处理器会跳 showSubPage 找不到页面
+  // ⭐ v2.23 我的页"收藏"入口 → 跳收藏子页面
   document.querySelectorAll('[data-goto-todo="favorites"]').forEach(btn => {
     btn.addEventListener('click', () => {
-      showToast('收藏功能开发中,请在牌桌上点 ⭐ 按钮收藏关键牌局');
+      if (typeof showSubPage === 'function') {
+        showSubPage('favorites');
+        if (typeof renderFavoritesPage === 'function') renderFavoritesPage();
+      }
     });
   });
 

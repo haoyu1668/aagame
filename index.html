@@ -4648,6 +4648,997 @@
     100% { box-shadow: 0 0 0 2.5px var(--green-main); transform: translateX(-50%) scale(1); }
   }
 
+  /* ============================================================
+     ⭐ v2.27 子项 3+4:行动历史时间轴样式
+     ───────────────────────────────────────────────────────────
+     - 按钮:顶部右侧圆形 ⏱ 图标,跟 ID 胶囊错开位置
+     - 面板:右侧滑入 280px,留 110px 给左侧观察牌桌
+     - 头部:标题 + 关闭按钮 + 牌局号副标题
+     - 主体:5 段折叠(翻前/翻牌/转牌/河牌/摊牌)
+     - 单条记录:头像 + 名字 + 动作色块 + 金额 + 相对时间
+     ============================================================ */
+
+  /* 历史按钮(顶部右侧) */
+  .history-toggle-btn {
+    position: absolute;
+    top: 12px;
+    right: 50px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    z-index: 50;
+    transition: background 0.15s, transform 0.15s;
+  }
+  .history-toggle-btn:active { transform: scale(0.92); }
+  .history-toggle-btn svg { width: 18px; height: 18px; }
+  .history-toggle-btn.has-new {
+    background: rgba(77, 255, 77, 0.25);
+    border-color: rgba(77, 255, 77, 0.6);
+  }
+  .history-toggle-btn .history-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 7px;
+    background: var(--green-main);
+    color: #0d2a0d;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+    display: none;
+  }
+  .history-toggle-btn .history-badge.show { display: inline-block; }
+
+  /* 历史面板遮罩(半透明,点击关闭) */
+  .history-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease-out;
+    z-index: 200;
+  }
+  .history-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* 历史面板本体(右侧滑入) */
+  .history-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 280px;
+    height: 100%;
+    background: linear-gradient(180deg, #1c1f28 0%, #16181f 100%);
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: -4px 0 18px rgba(0, 0, 0, 0.55);
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(.2, .8, .2, 1);
+    display: flex;
+    flex-direction: column;
+    z-index: 201;
+  }
+  .history-overlay.show .history-panel { transform: translateX(0); }
+
+  /* 头部 */
+  .history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 14px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .history-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .history-title-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--green-main);
+  }
+  .history-close {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .history-close:active { transform: scale(0.9); }
+  .history-hand-no {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    padding: 4px 14px 6px;
+    font-family: ui-monospace, monospace;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  /* 主体(滚动区) */
+  .history-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 0 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .history-body::-webkit-scrollbar { width: 3px; }
+  .history-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 2px;
+  }
+  .history-empty {
+    text-align: center;
+    padding: 60px 16px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+  }
+
+  /* 街分组卡片 */
+  .history-street-group {
+    margin: 6px 10px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .history-street-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .history-street-header:active { background: rgba(255, 255, 255, 0.04); }
+  .history-street-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .history-street-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .history-street-count {
+    background: rgba(77, 255, 77, 0.12);
+    color: var(--green-main);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 700;
+  }
+  .history-street-arrow {
+    transition: transform 0.18s;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  .history-street-group.collapsed .history-street-arrow {
+    transform: rotate(-90deg);
+  }
+  .history-street-body {
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    max-height: 1000px;
+    overflow: hidden;
+    transition: max-height 0.25s ease-out;
+  }
+  .history-street-group.collapsed .history-street-body {
+    max-height: 0;
+  }
+
+  /* 单条记录(紧凑型) */
+  .history-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    line-height: 1.3;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+  .history-entry:last-child { border-bottom: none; }
+
+  .history-avatar {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4a5060, #2a2d38);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .history-avatar.me {
+    background: linear-gradient(135deg, #4dff4d, #2faf2f);
+    color: #0d2a0d;
+  }
+
+  .history-entry-name {
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-action-tag {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    background: #6a6a6a;
+  }
+  .history-action-tag.act-fold  { background: #707070; }
+  .history-action-tag.act-check { background: #4488e8; }
+  .history-action-tag.act-call  { background: #3ecf8e; }
+  .history-action-tag.act-bet,
+  .history-action-tag.act-raise { background: #f08a28; }
+  .history-action-tag.act-allin { background: #e84444; }
+  .history-action-tag.act-sb,
+  .history-action-tag.act-bb,
+  .history-action-tag.act-straddle { background: #d4af37; color: #2a1500; }
+  .history-action-tag.act-show  { background: #b88aff; }
+  .history-action-tag.act-win   { background: var(--green-main); color: #0d2a0d; }
+
+  .history-entry-amount {
+    flex: 1;
+    text-align: right;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 600;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .history-entry-amount.is-zero {
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 400;
+  }
+
+  .history-entry-time {
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* 摊牌特殊:显示牌型 + 牌 */
+  .history-entry.is-showdown .history-entry-extra {
+    flex: 1;
+    text-align: right;
+    color: #ffd96a;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  /* 派彩特殊:整行绿背景 */
+  .history-entry.is-payout {
+    background: rgba(77, 255, 77, 0.06);
+  }
+  .history-entry.is-payout .history-entry-amount {
+    color: var(--green-main);
+    font-weight: 700;
+  }
+
+  /* ============================================================
+     ⭐ v2.28 批次 A2:网络断线视觉反馈
+     ───────────────────────────────────────────────────────────
+     - 断线时 body 加 .ws-disconnected 类
+     - P 区按钮 + 滑杆 + 历史按钮 全部禁用(灰度 + 不响应)
+     - action-area 顶部覆盖一层"连接中断"半透明灰罩
+     ============================================================ */
+  body.ws-disconnected .action-area .ab-btn,
+  body.ws-disconnected .action-area .ab-tile,
+  body.ws-disconnected .ab-add-time,
+  body.ws-disconnected .raise-slider-overlay {
+    pointer-events: none;
+    filter: grayscale(0.6) brightness(0.7);
+    opacity: 0.55;
+  }
+  body.ws-disconnected .history-toggle-btn {
+    opacity: 0.5;
+  }
+  /* P 区上方提示条 */
+  .action-area.disconnected-overlay::before {
+    content: '⚠ 连接中断,等待恢复...';
+    position: absolute;
+    top: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(232, 68, 68, 0.92);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 12px;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    z-index: 110;
+    pointer-events: none;
+    animation: discoBlink 1.4s ease-in-out infinite;
+  }
+  @keyframes discoBlink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+
+  /* ============================================================
+     ⭐ v2.28 批次 B2:抓头(Straddle)选择弹窗
+     ───────────────────────────────────────────────────────────
+     - 当我处于"大盲左侧第一个"位置时弹出
+     - 8 秒倒计时,超时默认不抓
+     - 业内标准:TGPoker/KKPoker 都有
+     ============================================================ */
+  .straddle-modal-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 180;
+  }
+  .straddle-modal-mask.show { display: flex; }
+  .straddle-modal {
+    width: 260px;
+    background: linear-gradient(160deg, #232733 0%, #16181f 100%);
+    border-radius: 14px;
+    padding: 18px 16px 14px;
+    border: 1px solid rgba(255, 215, 105, 0.3);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.6);
+    text-align: center;
+    color: white;
+  }
+  .straddle-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #ffd96a;
+    margin-bottom: 8px;
+  }
+  .straddle-desc {
+    font-size: 12px;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .straddle-amount {
+    font-size: 14px;
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 14px;
+  }
+  .straddle-amount span {
+    color: #ffd96a;
+    font-weight: 700;
+    font-size: 18px;
+    margin-left: 4px;
+  }
+  .straddle-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .straddle-btn {
+    flex: 1;
+    padding: 11px 0;
+    border-radius: 9px;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .straddle-btn:active { transform: scale(0.96); }
+  .straddle-no {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.8);
+  }
+  .straddle-yes {
+    background: linear-gradient(135deg, #ffd96a, #d4af37);
+    color: #2a1500;
+  }
+  .straddle-timer {
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .straddle-timer-fill {
+    height: 100%;
+    background: #ffd96a;
+    width: 100%;
+    transition: width 0.1s linear;
+  }
+  .straddle-timer-text {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+  }
+
+  /* ============================================================
+     ⭐ v2.28 批次 C3:牌局结算汇总弹窗(HAND_END 时弹)
+     ───────────────────────────────────────────────────────────
+     业内标准:一手结束后玩家能快速看到盈亏快照,可选择收藏
+     ============================================================ */
+  .settlement-modal-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 175;
+  }
+  .settlement-modal-mask.show { display: flex; }
+  .settlement-modal {
+    width: 280px;
+    background: linear-gradient(160deg, #232733 0%, #16181f 100%);
+    border-radius: 14px;
+    padding: 18px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.65);
+    color: white;
+  }
+  .settlement-header {
+    text-align: center;
+    margin-bottom: 14px;
+  }
+  .settlement-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 3px;
+  }
+  .settlement-handno {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    font-family: ui-monospace, monospace;
+  }
+  .settlement-profit-card {
+    background: rgba(77, 255, 77, 0.08);
+    border: 1px solid rgba(77, 255, 77, 0.3);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .settlement-profit-card.loss {
+    background: rgba(232, 68, 68, 0.08);
+    border-color: rgba(232, 68, 68, 0.3);
+  }
+  .settlement-profit-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 4px;
+  }
+  .settlement-profit-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--green-main);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .settlement-profit-card.loss .settlement-profit-value {
+    color: #ff6464;
+  }
+  .settlement-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .settlement-row:last-of-type { border-bottom: none; }
+  .settlement-row-label { color: rgba(255,255,255,0.5); }
+  .settlement-row-value { color: white; font-weight: 600; }
+  .settlement-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .settlement-btn {
+    flex: 1;
+    padding: 10px 0;
+    border-radius: 8px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .settlement-btn:active { transform: scale(0.96); }
+  .settlement-fav {
+    background: linear-gradient(135deg, #ffd96a, #d4af37);
+    color: #2a1500;
+  }
+  .settlement-fav.faved {
+    background: rgba(255, 217, 106, 0.2);
+    color: #ffd96a;
+    border: 1px solid rgba(255, 217, 106, 0.5);
+  }
+  .settlement-close {
+    background: rgba(255,255,255,0.1);
+    color: white;
+  }
+
+  /* ============================================================
+     ⭐ v2.28 批次 C2:保险(Insurance)弹窗
+     ───────────────────────────────────────────────────────────
+     业内标准(参考 HHPoker/TGPoker):
+     - All-In 后,落后玩家可买保险,对冲翻牌/转牌/河牌的特定结果
+     - 显示边池、胜率、赔率
+     - 滑杆选择买入额度,最高赔付 = 买入 × 赔率
+     ============================================================ */
+  .insurance-available-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green-main);
+    box-shadow: 0 0 6px rgba(77,255,77,0.7);
+    display: none;
+  }
+  .insurance-available-badge.show { display: block; }
+
+  .insurance-modal-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 185;
+  }
+  .insurance-modal-mask.show { display: flex; }
+  .insurance-modal {
+    width: 290px;
+    background: linear-gradient(160deg, #232733 0%, #16181f 100%);
+    border-radius: 14px;
+    padding: 16px 16px 14px;
+    border: 1px solid rgba(77, 255, 77, 0.25);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.65);
+    color: white;
+  }
+  .insurance-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .insurance-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--green-main);
+  }
+  .insurance-close {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: rgba(255,255,255,0.7);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .insurance-desc {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .insurance-status-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .insurance-status-item {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 8px 6px;
+    text-align: center;
+  }
+  .insurance-status-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 3px;
+  }
+  .insurance-status-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    font-variant-numeric: tabular-nums;
+  }
+  .insurance-buy-section { margin-bottom: 12px; }
+  .insurance-buy-label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 8px;
+  }
+  .insurance-slider {
+    width: 100%;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    outline: none;
+    margin-bottom: 8px;
+  }
+  .insurance-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--green-main);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(77,255,77,0.5);
+  }
+  .insurance-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--green-main);
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(77,255,77,0.5);
+  }
+  .insurance-amount-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--green-main);
+    font-variant-numeric: tabular-nums;
+  }
+  .insurance-payout-tag {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(255,217,106,0.85);
+  }
+  .insurance-payout-tag span {
+    color: #ffd96a;
+    font-weight: 700;
+    margin-left: 3px;
+  }
+  .insurance-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .insurance-btn {
+    flex: 1;
+    padding: 11px 0;
+    border-radius: 9px;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .insurance-btn:active { transform: scale(0.96); }
+  .insurance-skip {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.8);
+  }
+  .insurance-buy {
+    background: linear-gradient(135deg, #4dff4d, #2faf2f);
+    color: #0d2a0d;
+  }
+  .insurance-timer-text {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+  }
+  .insurance-timer-text span {
+    color: var(--green-main);
+    font-weight: 700;
+  }
+
+  /* ============================================================
+     ⭐ v2.28 批次 D1:Y4 跟任何 / Y5 全下任何 浮动按钮组
+     ───────────────────────────────────────────────────────────
+     业内标准:在 Y 态时挂一个额外的"快捷预选"组,玩家可选
+     "跟任何"或"全下任何",不管对手怎么加注都生效
+     位置:action-area 上方 70px,左右两个小按钮
+     不重叠:跟 P 区主按钮垂直错开,跟 Y1-Y3 高亮共存
+     ============================================================ */
+  .preselect-extras {
+    position: absolute;
+    bottom: 178px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    gap: 12px;
+    z-index: 30;
+    pointer-events: none;
+  }
+  .preselect-extras.show { display: flex; pointer-events: auto; }
+  .preselect-extra-btn {
+    width: 64px;
+    height: 44px;
+    padding: 4px 8px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .preselect-extra-btn:active { transform: scale(0.94); }
+  .preselect-extra-btn .pe-label {
+    font-size: 12px;
+    line-height: 1.1;
+  }
+  .preselect-extra-btn .pe-hint {
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1;
+  }
+  .preselect-extra-btn[data-extra="call_any"] {
+    border-color: rgba(62, 207, 142, 0.55);
+  }
+  .preselect-extra-btn[data-extra="allin_any"] {
+    border-color: rgba(232, 68, 68, 0.55);
+  }
+  .preselect-extra-btn.preselected {
+    background: rgba(77, 255, 77, 0.18);
+    border-color: var(--green-main);
+    box-shadow: 0 0 0 2px var(--green-main), 0 0 14px rgba(77,255,77,0.5);
+  }
+  .preselect-extra-btn.preselected .pe-hint {
+    color: var(--green-main);
+  }
+
+  /* ============================================================
+     ⭐ v2.28 批次 D2:边池高亮交互
+     ───────────────────────────────────────────────────────────
+     点击中央边池行 → 高亮"有资格争夺该池"的玩家头像
+     3 秒后自动取消
+     ============================================================ */
+  .pot-row {
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .pot-row:active {
+    background: rgba(0,0,0,0.5);
+  }
+  .pot-row-active {
+    background: rgba(77, 255, 77, 0.18) !important;
+    border: 1px solid rgba(77, 255, 77, 0.5);
+  }
+  /* 资格玩家头像高亮(绿色发光) */
+  .seat.pot-eligible .seat-avatar,
+  .my-seat.pot-eligible .seat-avatar {
+    box-shadow:
+      0 0 0 3px var(--green-main),
+      0 0 18px rgba(77, 255, 77, 0.7);
+    animation: potEligiblePulse 1.2s ease-in-out infinite;
+  }
+  @keyframes potEligiblePulse {
+    0%, 100% { box-shadow: 0 0 0 3px var(--green-main), 0 0 12px rgba(77,255,77,0.5); }
+    50%      { box-shadow: 0 0 0 4px var(--green-main), 0 0 22px rgba(77,255,77,0.9); }
+  }
+
+  /* ============================================================
+     ⭐ v2.28 批次 D3:看客模式 / 离桌留座 顶部状态条
+     ───────────────────────────────────────────────────────────
+     位置:牌桌顶部正下方(top: 56px),不挡 ID 胶囊和按钮
+     蓝色发光圆点 + 状态文字 + "坐回"按钮
+     ============================================================ */
+  .sit-out-banner {
+    position: absolute;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px 6px 12px;
+    background: rgba(68, 136, 232, 0.92);
+    color: white;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    z-index: 60;
+    animation: sobSlideIn 0.25s ease-out;
+  }
+  @keyframes sobSlideIn {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  .sob-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 6px rgba(255,255,255,0.8);
+    animation: sobBlink 1.4s ease-in-out infinite;
+  }
+  @keyframes sobBlink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+  .sob-text {
+    flex: 1;
+    white-space: nowrap;
+  }
+  .sob-resume {
+    margin-left: 4px;
+    padding: 3px 10px;
+    background: white;
+    color: #4488e8;
+    border: none;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .sob-resume:active { transform: scale(0.96); }
+
+  /* 离桌留座 / 旁观 时给座位加灰度 */
+  .my-seat.reserved .seat-avatar,
+  .my-seat.spectator .seat-avatar {
+    filter: grayscale(0.7) brightness(0.7);
+    opacity: 0.7;
+  }
+  /* 旁观模式下整个 P 区禁用 */
+  body.spectator-mode .action-area .ab-btn {
+    pointer-events: none;
+    opacity: 0.4;
+    filter: grayscale(0.6);
+  }
+
+  /* ============================================================
+     ⭐ v2.28 批次 D4:道具打赏弹窗
+     ───────────────────────────────────────────────────────────
+     - 点对手头像 → 弹此弹窗,选道具发送
+     - 飞行动画:从我的座位飞向对手座位
+     - 历史记录:推一条 gift 类型到 historyStore
+     ============================================================ */
+  .gift-modal-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 190;
+  }
+  .gift-modal-mask.show { display: flex; }
+  .gift-modal {
+    width: 280px;
+    background: linear-gradient(160deg, #232733 0%, #16181f 100%);
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid rgba(255, 215, 105, 0.25);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.65);
+    color: white;
+  }
+  .gift-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .gift-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: white;
+  }
+  .gift-title span {
+    color: #ffd96a;
+    margin: 0 4px;
+  }
+  .gift-close {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .gift-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .gift-item {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 10px 6px 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+  }
+  .gift-item:active {
+    transform: scale(0.94);
+    background: rgba(255,215,106,0.12);
+  }
+  .gift-item:hover {
+    background: rgba(255,215,106,0.08);
+  }
+  .gift-icon {
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .gift-name {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 4px;
+  }
+  .gift-cost {
+    font-size: 11px;
+    color: #ffd96a;
+    font-weight: 700;
+  }
+  .gift-balance {
+    text-align: center;
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+  }
+  .gift-balance span {
+    color: var(--green-main);
+    font-weight: 700;
+    margin-left: 3px;
+  }
+
+  /* 飞行动画的礼物图标(JS 动态创建) */
+  .gift-flying {
+    position: absolute;
+    font-size: 32px;
+    z-index: 250;
+    pointer-events: none;
+    text-shadow: 0 0 12px rgba(255,215,106,0.8);
+    transition: transform 0.9s cubic-bezier(.34, 1.56, .64, 1), opacity 0.3s;
+  }
+
   /* =====================================================
      ⭐ v2.16 临时三态切换器(开发用,WebSocket 接入后删)
      ===================================================== */
@@ -5974,6 +6965,34 @@
     color: var(--green-main);
     background: rgba(77,255,77,0.15);
     border: 1px solid rgba(77,255,77,0.4);
+  }
+
+  /* ⭐ v2.28 批次 A3:抽屉开关样式(iOS 风格) */
+  .drawer-switch {
+    width: 36px;
+    height: 20px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.12);
+    position: relative;
+    transition: background 0.18s;
+    cursor: pointer;
+  }
+  .drawer-switch.on {
+    background: var(--green-main);
+  }
+  .drawer-switch-dot {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform 0.18s;
+  }
+  .drawer-switch.on .drawer-switch-dot {
+    transform: translateX(16px);
   }
 
   /* ===================================================
@@ -10812,10 +11831,11 @@
             <path d="M12 2C9.243 2 7 4.243 7 7v3.528c0 .54-.213 1.057-.595 1.439L4.293 14.08A1 1 0 005 15.793h14a1 1 0 00.707-1.707l-2.112-2.118a2.039 2.039 0 01-.595-1.44V7c0-2.757-2.243-5-5-5zm0 19a3 3 0 003-3H9a3 3 0 003 3z"/>
           </svg>
         </div>
-        <div class="tb-icon insurance">
+        <div class="tb-icon insurance" id="table-insurance-btn">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
           </svg>
+          <span class="insurance-available-badge" id="insurance-available-badge"></span>
         </div>
         <!-- ⭐ v2.18 可存证按钮(占位:等设计师/AE 出透明 GIF 后,直接换成 <img>) -->
         <div class="evidence-box" id="evidence-box">
@@ -10842,6 +11862,15 @@
             </div>
           </div>
         </div>
+
+        <!-- ⭐ v2.27 子项 4:行动历史按钮(竖屏顶部右侧,小圆形带 ⏱ 图标) -->
+        <button class="history-toggle-btn" id="history-toggle-btn" aria-label="行动历史">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 7v5l3 2"/>
+          </svg>
+          <span class="history-badge" id="history-badge"></span>
+        </button>
       </div>
 
       <!-- 9 个座位(s1~s8 由 renderSeats 动态填充内容) -->
@@ -11208,6 +12237,169 @@
         </div>
       </div>
 
+      <!-- ⭐ v2.27 子项 3:行动历史面板(右侧滑入,280px 宽,留 110px 给左侧观察牌桌) -->
+      <div class="history-overlay" id="history-overlay">
+        <div class="history-panel" id="history-panel">
+          <div class="history-header">
+            <div class="history-title">
+              <svg class="history-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 7v5l3 2"/>
+              </svg>
+              <span>行动历史</span>
+            </div>
+            <button class="history-close" id="history-close-btn" aria-label="关闭">✕</button>
+          </div>
+          <div class="history-hand-no" id="history-hand-no">--</div>
+          <div class="history-body" id="history-body">
+            <div class="history-empty">尚无行动记录</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.28 批次 B2:抓头(Straddle)选择弹窗 -->
+      <div class="straddle-modal-mask" id="straddle-modal-mask">
+        <div class="straddle-modal">
+          <div class="straddle-title">是否抓头?</div>
+          <div class="straddle-desc">
+            抓头 = 2 倍大盲(BB),提前自愿下注,可在翻前最后行动。
+          </div>
+          <div class="straddle-amount">
+            金额: <span id="straddle-amount-val">40</span>
+          </div>
+          <div class="straddle-actions">
+            <button class="straddle-btn straddle-no" id="straddle-no-btn">不抓</button>
+            <button class="straddle-btn straddle-yes" id="straddle-yes-btn">抓头</button>
+          </div>
+          <div class="straddle-timer">
+            <div class="straddle-timer-fill" id="straddle-timer-fill"></div>
+          </div>
+          <div class="straddle-timer-text"><span id="straddle-timer-sec">8</span>s 后默认不抓</div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.28 批次 C3:牌局结算汇总弹窗(HAND_END 时弹) -->
+      <div class="settlement-modal-mask" id="settlement-modal-mask">
+        <div class="settlement-modal">
+          <div class="settlement-header">
+            <div class="settlement-title">本手结算</div>
+            <div class="settlement-handno" id="settlement-handno">--</div>
+          </div>
+          <div class="settlement-profit-card" id="settlement-profit-card">
+            <div class="settlement-profit-label">我的盈亏</div>
+            <div class="settlement-profit-value" id="settlement-profit-value">+0</div>
+          </div>
+          <div class="settlement-row">
+            <span class="settlement-row-label">底池总额</span>
+            <span class="settlement-row-value" id="settlement-pot">0</span>
+          </div>
+          <div class="settlement-row">
+            <span class="settlement-row-label">我的牌型</span>
+            <span class="settlement-row-value" id="settlement-handtype">--</span>
+          </div>
+          <div class="settlement-row">
+            <span class="settlement-row-label">赢家</span>
+            <span class="settlement-row-value" id="settlement-winner">--</span>
+          </div>
+          <div class="settlement-row">
+            <span class="settlement-row-label">当前筹码</span>
+            <span class="settlement-row-value" id="settlement-chips">0</span>
+          </div>
+          <div class="settlement-actions">
+            <button class="settlement-btn settlement-fav" id="settlement-fav-btn">⭐ 收藏本手</button>
+            <button class="settlement-btn settlement-close" id="settlement-close-btn">关闭</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.28 批次 C2:保险(Insurance)弹窗 -->
+      <!-- 业内标准:All-In 后,落后玩家可买保险,对冲翻牌/转牌/河牌的特定结果 -->
+      <div class="insurance-modal-mask" id="insurance-modal-mask">
+        <div class="insurance-modal">
+          <div class="insurance-header">
+            <div class="insurance-title">买保险</div>
+            <button class="insurance-close" id="insurance-close-btn">✕</button>
+          </div>
+          <div class="insurance-desc">
+            对方先手概率领先,买保险可对冲下一张牌不利结果。
+          </div>
+          <div class="insurance-status-row">
+            <div class="insurance-status-item">
+              <div class="insurance-status-label">边池</div>
+              <div class="insurance-status-value" id="insurance-pot-value">--</div>
+            </div>
+            <div class="insurance-status-item">
+              <div class="insurance-status-label">胜率</div>
+              <div class="insurance-status-value" id="insurance-equity-value">--</div>
+            </div>
+            <div class="insurance-status-item">
+              <div class="insurance-status-label">赔率</div>
+              <div class="insurance-status-value" id="insurance-odds-value">--</div>
+            </div>
+          </div>
+          <div class="insurance-buy-section">
+            <div class="insurance-buy-label">买入额度</div>
+            <input type="range" class="insurance-slider" id="insurance-slider" min="0" max="100" value="50">
+            <div class="insurance-amount-display">
+              <span id="insurance-buy-amount">100</span>
+              <span class="insurance-payout-tag">最高赔付 <span id="insurance-payout-amount">200</span></span>
+            </div>
+          </div>
+          <div class="insurance-actions">
+            <button class="insurance-btn insurance-skip" id="insurance-skip-btn">不买</button>
+            <button class="insurance-btn insurance-buy" id="insurance-buy-btn">买入保险</button>
+          </div>
+          <div class="insurance-timer-text">
+            <span id="insurance-timer-sec">12</span>s 后默认不买
+          </div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.28 批次 D4:道具打赏弹窗(点对手头像 → 弹) -->
+      <div class="gift-modal-mask" id="gift-modal-mask">
+        <div class="gift-modal">
+          <div class="gift-header">
+            <div class="gift-title">给 <span id="gift-target-name">--</span> 送礼</div>
+            <button class="gift-close" id="gift-close-btn">✕</button>
+          </div>
+          <div class="gift-grid">
+            <div class="gift-item" data-gift="rose" data-cost="5">
+              <div class="gift-icon">🌹</div>
+              <div class="gift-name">玫瑰</div>
+              <div class="gift-cost">5</div>
+            </div>
+            <div class="gift-item" data-gift="beer" data-cost="10">
+              <div class="gift-icon">🍺</div>
+              <div class="gift-name">啤酒</div>
+              <div class="gift-cost">10</div>
+            </div>
+            <div class="gift-item" data-gift="kiss" data-cost="20">
+              <div class="gift-icon">💋</div>
+              <div class="gift-name">飞吻</div>
+              <div class="gift-cost">20</div>
+            </div>
+            <div class="gift-item" data-gift="fire" data-cost="50">
+              <div class="gift-icon">🔥</div>
+              <div class="gift-name">火力</div>
+              <div class="gift-cost">50</div>
+            </div>
+            <div class="gift-item" data-gift="heart" data-cost="100">
+              <div class="gift-icon">❤️</div>
+              <div class="gift-name">爱心</div>
+              <div class="gift-cost">100</div>
+            </div>
+            <div class="gift-item" data-gift="crown" data-cost="500">
+              <div class="gift-icon">👑</div>
+              <div class="gift-name">皇冠</div>
+              <div class="gift-cost">500</div>
+            </div>
+          </div>
+          <div class="gift-balance">
+            余额: <span id="gift-balance-value">--</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 底部工具栏 -->
       <div class="table-bottombar">
         <div class="bb-left">
@@ -11570,6 +12762,13 @@
           <div class="drawer-item" data-drawer-action="规则说明">
             <span>规则说明</span>
             <span class="arrow">›</span>
+          </div>
+          <!-- ⭐ v2.28 批次 A3:音效开关(localStorage 持久化) -->
+          <div class="drawer-item drawer-toggle" data-drawer-action="音效开关">
+            <span>桌面音效</span>
+            <div class="drawer-switch" id="drawer-sound-switch">
+              <div class="drawer-switch-dot"></div>
+            </div>
           </div>
           <div class="drawer-item blue" data-drawer-action="离桌留座">
             <span>离桌留座</span>
@@ -14743,12 +15942,21 @@
     });
   }
 
-  // 表情快捷栏:点表情 → 追加到输入框
+  // 表情快捷栏:点表情 → 追加到输入框,或者直接发送
+  // ⭐ v2.28 批次 B1:点击表情时如果输入框有内容 → 追加;为空 → 直接发送
   document.querySelectorAll('.chat-emoji-item').forEach(item => {
     item.addEventListener('click', () => {
       if (!chatInput) return;
-      chatInput.value += item.dataset.emoji;
-      chatInput.focus();
+      const emoji = item.dataset.emoji;
+      if (chatInput.value.trim()) {
+        // 输入框有内容 → 追加到末尾
+        chatInput.value += emoji;
+        chatInput.focus();
+      } else {
+        // 输入框为空 → 直接发送表情
+        sendChatMessage(emoji);
+        if (window.soundEngine) window.soundEngine.play('tap');
+      }
     });
   });
 
@@ -16893,6 +18101,1082 @@
   })();
   window.preselectStore = preselectStore;
 
+  // ⭐ v2.27 子项 1:行动历史数据模型(单一数据源)
+  // ─────────────────────────────────────────────────────────────────────
+  // 业内标准(参考 PokerStars/TGPoker/KKPoker):
+  //   每手牌的所有动作(盲注、行动、街切换、摊牌、派彩)按时间顺序记录
+  //   按街分组(preflop / flop / turn / river / showdown)
+  //   只保留当前手,HAND_START 自动清空
+  // 数据结构:
+  //   {
+  //     handNo,
+  //     handStartAt,        // 时间戳基准(用于"相对时间")
+  //     currentStreet,      // 'preflop' | 'flop' | 'turn' | 'river' | 'showdown'
+  //     entries: [
+  //       {
+  //         id,             // 自增 ID
+  //         type,           // 'blind' | 'action' | 'street' | 'showdown' | 'payout'
+  //         street,
+  //         seatId,
+  //         playerName,
+  //         avatar,
+  //         action,         // fold/check/call/bet/raise/allin/SB/BB/straddle
+  //         amount,
+  //         timestamp,      // 绝对时间戳
+  //         relativeMs,     // 距 handStartAt 的毫秒数
+  //         extra: {}       // 摊牌:cards/handType;派彩:potName/winners
+  //       }
+  //     ]
+  //   }
+  // ─────────────────────────────────────────────────────────────────────
+  const historyStore = (function() {
+    let state = {
+      handNo: null,
+      handStartAt: 0,
+      currentStreet: 'preflop',
+      entries: []
+    };
+    let nextId = 1;
+    const listeners = [];
+
+    function reset(handNo) {
+      state = {
+        handNo: handNo || null,
+        handStartAt: Date.now(),
+        currentStreet: 'preflop',
+        entries: []
+      };
+      nextId = 1;
+      notify();
+    }
+
+    function push(entry) {
+      const now = Date.now();
+      const e = Object.assign({
+        id: nextId++,
+        street: state.currentStreet,
+        timestamp: now,
+        relativeMs: state.handStartAt > 0 ? (now - state.handStartAt) : 0,
+        extra: {}
+      }, entry);
+      state.entries.push(e);
+      notify();
+      return e;
+    }
+
+    function setStreet(street) {
+      if (street && street !== state.currentStreet) {
+        state.currentStreet = street;
+        // 同时插入一条街切换标记(给 UI 分组用)
+        push({
+          type: 'street',
+          street: street,
+          seatId: null,
+          action: street,
+          amount: 0
+        });
+      }
+    }
+
+    function getCurrentStreet() {
+      return state.currentStreet;
+    }
+
+    function list() {
+      return state.entries.slice();
+    }
+
+    function byStreet() {
+      const groups = {
+        preflop:  [],
+        flop:     [],
+        turn:     [],
+        river:    [],
+        showdown: []
+      };
+      state.entries.forEach(e => {
+        const s = e.street || 'preflop';
+        if (groups[s]) groups[s].push(e);
+      });
+      return groups;
+    }
+
+    function count() {
+      return state.entries.length;
+    }
+
+    function getHandNo() { return state.handNo; }
+    function getHandStartAt() { return state.handStartAt; }
+
+    function onChange(cb) {
+      if (typeof cb !== 'function') return;
+      listeners.push(cb);
+    }
+
+    function notify() {
+      listeners.forEach(cb => { try { cb(state); } catch (e) { console.warn('[history] listener error', e); } });
+    }
+
+    return { reset, push, setStreet, getCurrentStreet, list, byStreet, count, getHandNo, getHandStartAt, onChange };
+  })();
+  window.historyStore = historyStore;
+
+  // ⭐ v2.28 批次 A1:桌面音效引擎(Web Audio API 程序合成,免版权 + 0KB 文件)
+  // ─────────────────────────────────────────────────────────────────────
+  // 业内标准(参考 PokerStars/TGPoker/KKPoker):
+  //   - 我的回合开始 → 提醒"叮"(800Hz 短促)
+  //   - 倒计时 ≤ 5s → 滴答警告(每秒一次)
+  //   - 弃牌 → 翻牌噗噗声(低频)
+  //   - 跟注/过牌 → 轻点(中频短)
+  //   - 下注/加注 → 筹码碰撞(混合频率)
+  //   - All-In → 重击 + 强调(低频长)
+  //   - 派彩(我赢) → 上升旋律
+  //   - 派彩(我输)→ 中性下降
+  //   - 发底牌(每张) → 翻牌轻响
+  //   - 发公共牌 → 翻牌清脆
+  // 全部用 oscillator + 包络合成,文件 0 字节,无版权风险
+  // ─────────────────────────────────────────────────────────────────────
+  const soundEngine = (function() {
+    let ctx = null;
+    let enabled = true;
+    let masterGain = null;
+
+    // localStorage 持久化用户偏好
+    try {
+      const saved = localStorage.getItem('aagame_sound_enabled');
+      if (saved === '0') enabled = false;
+    } catch (e) {}
+
+    function ensureCtx() {
+      if (ctx) return ctx;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+        masterGain = ctx.createGain();
+        masterGain.gain.value = 0.35;  // 全局音量
+        masterGain.connect(ctx.destination);
+      } catch (e) {
+        console.warn('[sound] init failed', e);
+        return null;
+      }
+      return ctx;
+    }
+
+    // 通用音效合成函数:type=oscillator 类型,freq=频率,duration=毫秒,vol=音量,attack/decay=包络
+    function playTone(opts) {
+      if (!enabled) return;
+      const c = ensureCtx();
+      if (!c) return;
+      // 用户首次交互后激活 ctx(浏览器限制)
+      if (c.state === 'suspended') {
+        c.resume().catch(() => {});
+      }
+      const now = c.currentTime;
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.type = opts.type || 'sine';
+      osc.frequency.setValueAtTime(opts.freq || 440, now);
+      if (opts.freqEnd) {
+        osc.frequency.exponentialRampToValueAtTime(opts.freqEnd, now + (opts.duration || 200) / 1000);
+      }
+      const vol = opts.vol || 0.5;
+      const att = (opts.attack || 8) / 1000;
+      const dec = (opts.decay || (opts.duration || 200) - 8) / 1000;
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(vol, now + att);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + att + dec);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + att + dec + 0.05);
+    }
+
+    // 噪音合成(用于翻牌/筹码碰撞等"摩擦"声)
+    function playNoise(opts) {
+      if (!enabled) return;
+      const c = ensureCtx();
+      if (!c) return;
+      if (c.state === 'suspended') c.resume().catch(() => {});
+      const duration = (opts.duration || 100) / 1000;
+      const bufferSize = Math.floor(c.sampleRate * duration);
+      const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, opts.decayCurve || 2);
+      }
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      // 带通滤波器让噪音更像"翻牌"
+      const filter = c.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = opts.freq || 2000;
+      filter.Q.value = opts.q || 1;
+      const gain = c.createGain();
+      gain.gain.value = opts.vol || 0.3;
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(masterGain);
+      src.start();
+    }
+
+    // ─── 业务音效预设 ───
+    const sounds = {
+      // 我的回合"叮"(800Hz 提醒)
+      myTurn() {
+        playTone({ type: 'sine', freq: 880, duration: 180, vol: 0.55, attack: 5, decay: 170 });
+        setTimeout(() => playTone({ type: 'sine', freq: 1320, duration: 120, vol: 0.45, attack: 5, decay: 110 }), 90);
+      },
+      // 倒计时滴答(≤5s 每秒一次)
+      tick() {
+        playTone({ type: 'triangle', freq: 1600, duration: 80, vol: 0.32, attack: 2, decay: 75 });
+      },
+      // 弃牌(低频翻牌声)
+      fold() {
+        playNoise({ duration: 140, freq: 800, q: 0.8, vol: 0.28 });
+      },
+      // 过牌(中频短点)
+      check() {
+        playTone({ type: 'sine', freq: 520, duration: 90, vol: 0.4, attack: 4, decay: 85 });
+      },
+      // 跟注(轻快)
+      call() {
+        playTone({ type: 'sine', freq: 660, duration: 100, vol: 0.42, attack: 4, decay: 95 });
+        setTimeout(() => playTone({ type: 'sine', freq: 880, duration: 80, vol: 0.32, attack: 3, decay: 75 }), 50);
+      },
+      // 下注(筹码碰撞)
+      bet() {
+        playNoise({ duration: 80, freq: 4500, q: 2, vol: 0.35 });
+        setTimeout(() => playNoise({ duration: 80, freq: 3200, q: 2, vol: 0.28 }), 40);
+      },
+      // 加注(更响的筹码碰撞)
+      raise() {
+        playNoise({ duration: 90, freq: 4800, q: 2, vol: 0.42 });
+        setTimeout(() => playNoise({ duration: 90, freq: 3000, q: 2, vol: 0.35 }), 50);
+        setTimeout(() => playNoise({ duration: 70, freq: 5200, q: 2, vol: 0.3 }), 110);
+      },
+      // All-In(重击 + 强调)
+      allin() {
+        playTone({ type: 'sawtooth', freq: 220, duration: 280, vol: 0.4, attack: 8, decay: 270, freqEnd: 110 });
+        setTimeout(() => playNoise({ duration: 180, freq: 1500, q: 1.5, vol: 0.45 }), 40);
+        setTimeout(() => playTone({ type: 'square', freq: 880, duration: 120, vol: 0.35, attack: 4, decay: 115 }), 150);
+      },
+      // 派彩(我赢) — 上升和弦
+      winMine() {
+        playTone({ type: 'sine', freq: 523, duration: 140, vol: 0.4, attack: 5, decay: 135 });
+        setTimeout(() => playTone({ type: 'sine', freq: 659, duration: 140, vol: 0.42, attack: 5, decay: 135 }), 90);
+        setTimeout(() => playTone({ type: 'sine', freq: 784, duration: 220, vol: 0.45, attack: 5, decay: 215 }), 180);
+      },
+      // 派彩(他人赢) — 中性下降
+      winOther() {
+        playTone({ type: 'sine', freq: 440, duration: 200, vol: 0.3, attack: 5, decay: 195, freqEnd: 330 });
+      },
+      // 发底牌(每张)
+      dealHole() {
+        playNoise({ duration: 60, freq: 3000, q: 1.5, vol: 0.22 });
+      },
+      // 发公共牌(更响)
+      dealBoard() {
+        playNoise({ duration: 100, freq: 3500, q: 2, vol: 0.32 });
+      },
+      // 弹窗/按钮点击通用
+      tap() {
+        playTone({ type: 'sine', freq: 1200, duration: 50, vol: 0.2, attack: 2, decay: 45 });
+      }
+    };
+
+    function setEnabled(on) {
+      enabled = !!on;
+      try {
+        localStorage.setItem('aagame_sound_enabled', enabled ? '1' : '0');
+      } catch (e) {}
+      // 用户开启时尝试唤醒 ctx(浏览器需用户交互后才能初始化)
+      if (enabled) ensureCtx();
+    }
+    function isEnabled() { return enabled; }
+    function play(name) {
+      if (sounds[name]) sounds[name]();
+    }
+
+    return { play, setEnabled, isEnabled, sounds };
+  })();
+  window.soundEngine = soundEngine;
+
+  // ⭐ v2.28 批次 A2:网络断线检测 — 跟 wsClient.onStateChange 联动
+  // ─────────────────────────────────────────────────────────────────────
+  // 业内标准:断线时禁用所有行动按钮 + 顶部条提示"连接中断"
+  // 实现:订阅 wsClient.onStateChange,断线时给 body 加 .ws-disconnected 类
+  //       P 区按钮 + Y 区按钮 + 加注滑杆都通过 CSS 自动禁用
+  // ─────────────────────────────────────────────────────────────────────
+  function setupNetworkGuard() {
+    if (!window.wsClient || !wsClient.onStateChange) return;
+    wsClient.onStateChange((state) => {
+      const isDown = state.status === 'disconnected' || state.status === 'reconnecting' || state.status === 'error';
+      document.body.classList.toggle('ws-disconnected', isDown);
+      // 断线时如果有 P 弹窗,加上"等待恢复"标记
+      const area = document.getElementById('action-area');
+      if (area) area.classList.toggle('disconnected-overlay', isDown);
+    });
+  }
+  // 延迟调用,等 wsClient 就绪
+  setTimeout(setupNetworkGuard, 100);
+  window.setupNetworkGuard = setupNetworkGuard;
+
+  // ⭐ v2.28 批次 B2:抓头(Straddle)选择弹窗
+  // ─────────────────────────────────────────────────────────────────────
+  // 触发:当我位于"大盲左侧第一个"时,在 BLIND_POST 后弹出
+  // 8 秒倒计时,超时默认不抓
+  // ─────────────────────────────────────────────────────────────────────
+  const straddleModal = {
+    mask: null,
+    timer: null,
+    deadline: 0,
+    rafId: 0,
+
+    init() {
+      this.mask = document.getElementById('straddle-modal-mask');
+      if (!this.mask) return;
+      const yesBtn = document.getElementById('straddle-yes-btn');
+      const noBtn = document.getElementById('straddle-no-btn');
+      if (yesBtn) yesBtn.addEventListener('click', () => this.choose(true));
+      if (noBtn) noBtn.addEventListener('click', () => this.choose(false));
+    },
+
+    show(amount) {
+      if (!this.mask) return;
+      const amtEl = document.getElementById('straddle-amount-val');
+      if (amtEl) amtEl.textContent = amount || 40;
+      this.mask.classList.add('show');
+      this.deadline = performance.now() + 8000;
+      this.startTimer();
+      if (window.soundEngine) window.soundEngine.play('myTurn');
+    },
+
+    hide() {
+      if (!this.mask) return;
+      this.mask.classList.remove('show');
+      this.stopTimer();
+    },
+
+    choose(yes) {
+      this.hide();
+      if (window.wsClient && wsClient.send && WS_EVENTS.CLIENT_STRADDLE) {
+        wsClient.send(WS_EVENTS.CLIENT_STRADDLE, { straddle: yes });
+      }
+      if (window.soundEngine) window.soundEngine.play('tap');
+      if (typeof showToast === 'function') {
+        showToast(yes ? '已选择抓头' : '不抓头');
+      }
+    },
+
+    startTimer() {
+      const fill = document.getElementById('straddle-timer-fill');
+      const secEl = document.getElementById('straddle-timer-sec');
+      const tick = () => {
+        const remaining = Math.max(0, this.deadline - performance.now());
+        const pct = (remaining / 8000) * 100;
+        if (fill) fill.style.width = pct + '%';
+        if (secEl) secEl.textContent = Math.ceil(remaining / 1000);
+        if (remaining <= 0) {
+          this.choose(false);   // 默认不抓
+          return;
+        }
+        this.rafId = requestAnimationFrame(tick);
+      };
+      this.rafId = requestAnimationFrame(tick);
+    },
+
+    stopTimer() {
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = 0;
+      }
+    }
+  };
+  window.straddleModal = straddleModal;
+
+  // ⭐ v2.28 批次 C3:牌局结算汇总弹窗(HAND_END 时弹)
+  // ─────────────────────────────────────────────────────────────────────
+  const settlementModal = {
+    mask: null,
+    currentHandNo: null,
+    isFaved: false,
+
+    init() {
+      this.mask = document.getElementById('settlement-modal-mask');
+      if (!this.mask) return;
+      const closeBtn = document.getElementById('settlement-close-btn');
+      const favBtn = document.getElementById('settlement-fav-btn');
+      if (closeBtn) closeBtn.addEventListener('click', () => this.hide());
+      if (favBtn) favBtn.addEventListener('click', () => this.toggleFav());
+      // 点遮罩外面关闭
+      this.mask.addEventListener('click', (e) => {
+        if (e.target === this.mask) this.hide();
+      });
+    },
+
+    show(data) {
+      if (!this.mask) return;
+      const { handNo, profit, potSize, myHandType, winnerLabel, chipsAfter } = data;
+      this.currentHandNo = handNo;
+
+      const handNoEl = document.getElementById('settlement-handno');
+      const profitCard = document.getElementById('settlement-profit-card');
+      const profitVal = document.getElementById('settlement-profit-value');
+      const potEl = document.getElementById('settlement-pot');
+      const handTypeEl = document.getElementById('settlement-handtype');
+      const winnerEl = document.getElementById('settlement-winner');
+      const chipsEl = document.getElementById('settlement-chips');
+
+      if (handNoEl) handNoEl.textContent = '#' + (handNo || '--');
+      const profitNum = Number(profit) || 0;
+      if (profitVal) profitVal.textContent = (profitNum > 0 ? '+' : '') + profitNum;
+      if (profitCard) profitCard.classList.toggle('loss', profitNum < 0);
+      if (potEl) potEl.textContent = potSize || 0;
+      if (handTypeEl) handTypeEl.textContent = myHandType || '--';
+      if (winnerEl) winnerEl.textContent = winnerLabel || '--';
+      if (chipsEl) chipsEl.textContent = chipsAfter || 0;
+
+      // 同步收藏状态
+      this.isFaved = (window.favoritesStore && handNo) ? window.favoritesStore.has(handNo) : false;
+      const favBtn = document.getElementById('settlement-fav-btn');
+      if (favBtn) {
+        favBtn.classList.toggle('faved', this.isFaved);
+        favBtn.textContent = this.isFaved ? '⭐ 已收藏' : '⭐ 收藏本手';
+      }
+
+      this.mask.classList.add('show');
+    },
+
+    hide() {
+      if (this.mask) this.mask.classList.remove('show');
+    },
+
+    toggleFav() {
+      if (!this.currentHandNo || !window.favoritesStore) return;
+      const favBtn = document.getElementById('settlement-fav-btn');
+      if (this.isFaved) {
+        window.favoritesStore.remove(this.currentHandNo);
+        this.isFaved = false;
+      } else {
+        // 构造收藏快照(从 historyStore 取数据)
+        const snapshot = this.buildSnapshot();
+        if (snapshot) window.favoritesStore.add(snapshot);
+        this.isFaved = true;
+      }
+      if (favBtn) {
+        favBtn.classList.toggle('faved', this.isFaved);
+        favBtn.textContent = this.isFaved ? '⭐ 已收藏' : '⭐ 收藏本手';
+      }
+      if (window.soundEngine) window.soundEngine.play('tap');
+    },
+
+    buildSnapshot() {
+      if (!window.historyStore) return null;
+      const entries = window.historyStore.list();
+      const myEntries = entries.filter(e => e.seatId === 'my');
+      const lastPayout = entries.filter(e => e.type === 'payout' && e.seatId === 'my').pop();
+      const myShowdown = entries.find(e => e.type === 'showdown' && e.seatId === 'my');
+      return {
+        handNo: this.currentHandNo,
+        roomName: '俱乐部 NLH',
+        blinds: '',
+        myCards: (myShowdown && myShowdown.extra && myShowdown.extra.cards) || [],
+        myResult: lastPayout ? 'win' : 'loss',
+        myProfit: lastPayout ? lastPayout.amount : 0,
+        board: [],
+        handType: (myShowdown && myShowdown.extra && myShowdown.extra.handType) || '',
+        potSize: 0,
+        playerCount: Object.keys(window._historyPlayerLookup || {}).length
+      };
+    }
+  };
+  window.settlementModal = settlementModal;
+
+  // ⭐ v2.28 批次 C2:保险(Insurance)弹窗
+  // ─────────────────────────────────────────────────────────────────────
+  // 业内标准:All-In 后落后玩家可买保险对冲不利结果
+  // 触发:ACTION_EXEC 中有 allin 时,延迟 1.5s 检查是否给我自己弹保险
+  // 演示用:All-In 后 30% 概率给我弹(真实业务由后端推 INSURANCE_AVAILABLE)
+  // ─────────────────────────────────────────────────────────────────────
+  const insuranceModal = {
+    mask: null,
+    timer: null,
+    deadline: 0,
+    rafId: 0,
+    config: null,    // { potSize, equity, odds, maxBuy }
+
+    init() {
+      this.mask = document.getElementById('insurance-modal-mask');
+      if (!this.mask) return;
+      const closeBtn = document.getElementById('insurance-close-btn');
+      const skipBtn = document.getElementById('insurance-skip-btn');
+      const buyBtn = document.getElementById('insurance-buy-btn');
+      const slider = document.getElementById('insurance-slider');
+      const insuranceBtn = document.getElementById('table-insurance-btn');
+
+      if (closeBtn) closeBtn.addEventListener('click', () => this.hide());
+      if (skipBtn) skipBtn.addEventListener('click', () => this.skip());
+      if (buyBtn) buyBtn.addEventListener('click', () => this.buy());
+      if (slider) slider.addEventListener('input', () => this.updateAmountDisplay());
+      // 顶部保险按钮也能手动打开(如果有可用保险)
+      if (insuranceBtn) {
+        insuranceBtn.addEventListener('click', () => {
+          if (this.config) {
+            this.show(this.config);
+          } else if (typeof showToast === 'function') {
+            showToast('暂无可用保险');
+          }
+        });
+      }
+      this.mask.addEventListener('click', (e) => {
+        if (e.target === this.mask) this.hide();
+      });
+    },
+
+    // 标记保险可用(顶部按钮闪绿点)
+    markAvailable(cfg) {
+      this.config = cfg;
+      const badge = document.getElementById('insurance-available-badge');
+      if (badge) badge.classList.add('show');
+    },
+
+    clearAvailable() {
+      this.config = null;
+      const badge = document.getElementById('insurance-available-badge');
+      if (badge) badge.classList.remove('show');
+    },
+
+    show(cfg) {
+      if (!this.mask || !cfg) return;
+      this.config = cfg;
+      const potEl = document.getElementById('insurance-pot-value');
+      const equityEl = document.getElementById('insurance-equity-value');
+      const oddsEl = document.getElementById('insurance-odds-value');
+      const slider = document.getElementById('insurance-slider');
+      if (potEl) potEl.textContent = cfg.potSize || 0;
+      if (equityEl) equityEl.textContent = (cfg.equity || 0) + '%';
+      if (oddsEl) oddsEl.textContent = (cfg.odds || 2).toFixed(1) + 'x';
+      if (slider) {
+        slider.min = '0';
+        slider.max = String(cfg.maxBuy || 200);
+        slider.value = String(Math.floor((cfg.maxBuy || 200) / 2));
+      }
+      this.updateAmountDisplay();
+      this.mask.classList.add('show');
+      this.deadline = performance.now() + 12000;
+      this.startTimer();
+      if (window.soundEngine) window.soundEngine.play('myTurn');
+    },
+
+    updateAmountDisplay() {
+      if (!this.config) return;
+      const slider = document.getElementById('insurance-slider');
+      const amtEl = document.getElementById('insurance-buy-amount');
+      const payoutEl = document.getElementById('insurance-payout-amount');
+      const amt = slider ? Number(slider.value) : 0;
+      const payout = Math.floor(amt * (this.config.odds || 2));
+      if (amtEl) amtEl.textContent = amt;
+      if (payoutEl) payoutEl.textContent = payout;
+    },
+
+    hide() {
+      if (!this.mask) return;
+      this.mask.classList.remove('show');
+      this.stopTimer();
+      this.clearAvailable();
+    },
+
+    skip() {
+      if (typeof showToast === 'function') showToast('已跳过保险');
+      this.hide();
+      if (window.soundEngine) window.soundEngine.play('tap');
+    },
+
+    buy() {
+      const slider = document.getElementById('insurance-slider');
+      const amt = slider ? Number(slider.value) : 0;
+      if (amt <= 0) {
+        this.skip();
+        return;
+      }
+      const payout = Math.floor(amt * (this.config && this.config.odds || 2));
+      if (typeof showToast === 'function') {
+        showToast(`已买入 ${amt},最高赔付 ${payout}`);
+      }
+      // 真实业务:wsClient.send(CLIENT_INSURANCE_BUY, { amount: amt })
+      if (window.soundEngine) window.soundEngine.play('bet');
+      this.hide();
+    },
+
+    startTimer() {
+      const secEl = document.getElementById('insurance-timer-sec');
+      const tick = () => {
+        const remaining = Math.max(0, this.deadline - performance.now());
+        if (secEl) secEl.textContent = Math.ceil(remaining / 1000);
+        if (remaining <= 0) {
+          this.skip();
+          return;
+        }
+        this.rafId = requestAnimationFrame(tick);
+      };
+      this.rafId = requestAnimationFrame(tick);
+    },
+
+    stopTimer() {
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = 0;
+      }
+    }
+  };
+  window.insuranceModal = insuranceModal;
+
+  // ⭐ v2.28 批次 D4:道具打赏弹窗
+  // ─────────────────────────────────────────────────────────────────────
+  // 触发:点击对手头像 → 弹此弹窗,选道具发送
+  // 飞行动画:从我的座位飞向对手座位
+  // ─────────────────────────────────────────────────────────────────────
+  const giftModal = {
+    mask: null,
+    targetSeatId: null,
+    targetName: null,
+
+    init() {
+      this.mask = document.getElementById('gift-modal-mask');
+      if (!this.mask) return;
+      const closeBtn = document.getElementById('gift-close-btn');
+      if (closeBtn) closeBtn.addEventListener('click', () => this.hide());
+      this.mask.addEventListener('click', (e) => {
+        if (e.target === this.mask) this.hide();
+      });
+      // 礼物 click
+      this.mask.querySelectorAll('.gift-item').forEach(item => {
+        item.addEventListener('click', () => {
+          this.sendGift(item.dataset.gift, item.querySelector('.gift-icon').textContent, Number(item.dataset.cost));
+        });
+      });
+
+      // 绑定座位点击(委托给 page-table)
+      const pageTable = document.getElementById('page-table');
+      if (pageTable) {
+        pageTable.addEventListener('click', (e) => {
+          // 不能点自己 / 不能在 P 弹窗模式下乱点
+          const seat = e.target.closest('.seat[class*="s"]');
+          if (!seat) return;
+          // 找出 seatId(s1-s8)
+          const match = seat.className.match(/\bs([1-8])\b/);
+          if (!match) return;
+          const seatId = 's' + match[1];
+          // 必须有玩家(座位上有头像/名字)
+          if (!seat.querySelector('.seat-avatar')) return;
+          // 弃牌 / 空座位也不打开
+          if (seat.classList.contains('folded') || seat.classList.contains('empty')) return;
+          // 旁观模式禁止打赏
+          if (document.body.classList.contains('spectator-mode')) {
+            showToast('旁观模式无法打赏');
+            return;
+          }
+          this.show(seatId);
+        });
+      }
+    },
+
+    show(targetSeatId) {
+      if (!this.mask) return;
+      this.targetSeatId = targetSeatId;
+      const lookup = window._historyPlayerLookup || {};
+      this.targetName = (lookup[targetSeatId] && lookup[targetSeatId].name) || targetSeatId;
+      const nameEl = document.getElementById('gift-target-name');
+      if (nameEl) nameEl.textContent = this.targetName;
+      // 同步余额
+      const balanceEl = document.getElementById('gift-balance-value');
+      if (balanceEl) {
+        const balance = (typeof demoUserBalance === 'number') ? demoUserBalance : 0;
+        balanceEl.textContent = balance;
+      }
+      this.mask.classList.add('show');
+      if (window.soundEngine) window.soundEngine.play('tap');
+    },
+
+    hide() {
+      if (this.mask) this.mask.classList.remove('show');
+    },
+
+    sendGift(giftType, giftIcon, cost) {
+      if (!this.targetSeatId) return;
+      // 真实业务:wsClient.send(CLIENT_GIFT, { targetSeatId, giftType, cost })
+      this.flyGift(giftIcon, this.targetSeatId);
+      // 历史记录
+      if (window.historyStore) {
+        const lookup = window._historyPlayerLookup || {};
+        const targetInfo = lookup[this.targetSeatId] || { name: this.targetSeatId, avatar: this.targetSeatId.toUpperCase() };
+        window.historyStore.push({
+          type: 'gift',
+          seatId: 'my',
+          playerName: '我',
+          avatar: '我',
+          action: 'gift',
+          amount: cost,
+          extra: { giftIcon: giftIcon, targetSeatId: this.targetSeatId, targetName: targetInfo.name }
+        });
+      }
+      // toast
+      if (typeof showToast === 'function') {
+        showToast('已送出 ' + giftIcon + ' 给 ' + this.targetName);
+      }
+      if (window.soundEngine) window.soundEngine.play('winMine');
+      this.hide();
+    },
+
+    flyGift(giftIcon, targetSeatId) {
+      const mySeat = document.querySelector('.my-seat');
+      const targetSeat = document.querySelector('.seat.' + targetSeatId);
+      const pageTable = document.getElementById('page-table');
+      if (!mySeat || !targetSeat || !pageTable) return;
+      const myRect = mySeat.getBoundingClientRect();
+      const targetRect = targetSeat.getBoundingClientRect();
+      const tableRect = pageTable.getBoundingClientRect();
+      const startX = myRect.left + myRect.width / 2 - tableRect.left;
+      const startY = myRect.top + myRect.height / 2 - tableRect.top;
+      const endX = targetRect.left + targetRect.width / 2 - tableRect.left;
+      const endY = targetRect.top + targetRect.height / 2 - tableRect.top;
+      // 创建飞行元素
+      const fly = document.createElement('div');
+      fly.className = 'gift-flying';
+      fly.textContent = giftIcon;
+      fly.style.left = startX + 'px';
+      fly.style.top = startY + 'px';
+      pageTable.appendChild(fly);
+      // 触发动画
+      requestAnimationFrame(() => {
+        fly.style.transform = 'translate(' + (endX - startX) + 'px, ' + (endY - startY) + 'px) scale(1.4) rotate(15deg)';
+      });
+      // 0.9 秒后缩小消失
+      setTimeout(() => {
+        fly.style.transition = 'opacity 0.25s';
+        fly.style.opacity = '0';
+      }, 800);
+      setTimeout(() => fly.remove(), 1100);
+    }
+  };
+  window.giftModal = giftModal;
+
+  // 延迟初始化(等 DOM 就绪)
+  setTimeout(() => {
+    straddleModal.init();
+    settlementModal.init();
+    insuranceModal.init();
+    giftModal.init();
+  }, 200);
+
+  // ⭐ v2.27 子项 2:历史时间轴 push 辅助函数(从 _historyPlayerLookup 取头像/名字)
+  function getHistoryPlayer(seatId) {
+    if (!seatId) return { name: '', avatar: '' };
+    if (seatId === 'my') return { name: '我', avatar: '我' };
+    const lookup = window._historyPlayerLookup || {};
+    return lookup[seatId] || { name: seatId, avatar: seatId.toUpperCase() };
+  }
+
+  function historyPushBlind(seatId, blindType, amount) {
+    if (!window.historyStore) return;
+    const p = getHistoryPlayer(seatId);
+    historyStore.push({
+      type: 'blind',
+      seatId: seatId,
+      playerName: p.name,
+      avatar: p.avatar,
+      action: blindType,   // 'SB' | 'BB' | '抓头'
+      amount: Number(amount) || 0
+    });
+  }
+
+  function historyPushAction(seatId, action, amount) {
+    if (!window.historyStore) return;
+    const p = getHistoryPlayer(seatId);
+    historyStore.push({
+      type: 'action',
+      seatId: seatId,
+      playerName: p.name,
+      avatar: p.avatar,
+      action: action,
+      amount: Number(amount) || 0
+    });
+  }
+
+  function historyPushShowdown(seatId, cards, handType) {
+    if (!window.historyStore) return;
+    const p = getHistoryPlayer(seatId);
+    historyStore.push({
+      type: 'showdown',
+      seatId: seatId,
+      playerName: p.name,
+      avatar: p.avatar,
+      action: 'show',
+      amount: 0,
+      extra: { cards: cards || [], handType: handType || '' }
+    });
+  }
+
+  function historyPushPayout(seatId, amount, potName, handType) {
+    if (!window.historyStore) return;
+    const p = getHistoryPlayer(seatId);
+    historyStore.push({
+      type: 'payout',
+      seatId: seatId,
+      playerName: p.name,
+      avatar: p.avatar,
+      action: 'win',
+      amount: Number(amount) || 0,
+      extra: { potName: potName || '底池', handType: handType || '' }
+    });
+  }
+
+  // ⭐ v2.27 子项 4+5:历史面板控制 + 渲染
+  // ─────────────────────────────────────────────────────────────────────
+  // 业内标准(参考 PokerStars/TGPoker/KKPoker):
+  //   - 按街分组,默认"只展开当前街"(C2 决策)
+  //   - 紧凑型单行记录(D 决策):头像 + 名字 + 动作色块 + 金额 + 相对时间
+  //   - 实时滚动:新行追加,自动滚到底部
+  //   - 关闭/打开数据保留(只在 HAND_START 清)
+  //   - 未读徽章:面板关着,有新行 → 顶部按钮显示徽章
+  // ─────────────────────────────────────────────────────────────────────
+  (function initHistoryPanel() {
+    const btn = document.getElementById('history-toggle-btn');
+    const overlay = document.getElementById('history-overlay');
+    const closeBtn = document.getElementById('history-close-btn');
+    const handNoEl = document.getElementById('history-hand-no');
+    const bodyEl = document.getElementById('history-body');
+    const badgeEl = document.getElementById('history-badge');
+    if (!btn || !overlay || !bodyEl) return;
+
+    // 内部状态:面板是否打开,未读计数,街折叠状态
+    let isOpen = false;
+    let unreadCount = 0;
+    const collapsedStreets = new Set();   // 默认空,即全展开;后面渲染时按规则补"非当前街"
+
+    // 中英文街名映射
+    const STREET_LABEL = {
+      preflop:  '翻前',
+      flop:     '翻牌',
+      turn:     '转牌',
+      river:    '河牌',
+      showdown: '摊牌'
+    };
+
+    const ACTION_LABEL = {
+      fold:     '弃牌',
+      check:    '过牌',
+      call:     '跟注',
+      bet:      '下注',
+      raise:    '加注',
+      allin:    'ALL-IN',
+      SB:       '小盲',
+      BB:       '大盲',
+      '抓头':    '抓头',
+      show:     '亮牌',
+      win:      '获胜'
+    };
+
+    const ACTION_CSS_CLASS = {
+      fold:    'act-fold',
+      check:   'act-check',
+      call:    'act-call',
+      bet:     'act-bet',
+      raise:   'act-raise',
+      allin:   'act-allin',
+      SB:      'act-sb',
+      BB:      'act-bb',
+      '抓头':   'act-straddle',
+      show:    'act-show',
+      win:     'act-win'
+    };
+
+    function fmtAmount(n) {
+      n = Number(n) || 0;
+      if (n === 0) return '';
+      if (n >= 1000) return (n / 1000).toFixed(n % 100 === 0 ? 0 : 1).replace(/\.0$/, '') + 'K';
+      return String(Math.round(n));
+    }
+
+    function fmtRelativeTime(relativeMs) {
+      const sec = Math.floor((relativeMs || 0) / 1000);
+      if (sec < 60) return sec + 's';
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return m + 'm' + (s > 0 ? s + 's' : '');
+    }
+
+    function renderEntry(e) {
+      const isMe = e.seatId === 'my';
+      const avClass = 'history-avatar' + (isMe ? ' me' : '');
+      const avTxt = (e.avatar || '?').toString().slice(0, 2);
+      const actClass = ACTION_CSS_CLASS[e.action] || '';
+      const actLabel = ACTION_LABEL[e.action] || e.action || '';
+      const amtStr = fmtAmount(e.amount);
+      const timeStr = fmtRelativeTime(e.relativeMs);
+
+      let rowClass = 'history-entry';
+      let middleHtml = '';
+
+      if (e.type === 'showdown') {
+        rowClass += ' is-showdown';
+        const ht = (e.extra && e.extra.handType) || '';
+        const cards = (e.extra && e.extra.cards) || [];
+        const cardsStr = cards.join(' ');
+        middleHtml = '<span class="history-action-tag ' + actClass + '">' + actLabel + '</span>' +
+                     '<span class="history-entry-extra">' + (ht || cardsStr) + '</span>';
+      } else if (e.type === 'payout') {
+        rowClass += ' is-payout';
+        const potName = (e.extra && e.extra.potName) || '底池';
+        middleHtml = '<span class="history-action-tag ' + actClass + '">' + potName + '</span>' +
+                     '<span class="history-entry-amount">+' + amtStr + '</span>';
+      } else {
+        const amtClass = amtStr ? '' : ' is-zero';
+        middleHtml = '<span class="history-action-tag ' + actClass + '">' + actLabel + '</span>' +
+                     '<span class="history-entry-amount' + amtClass + '">' + (amtStr || '') + '</span>';
+      }
+
+      return '<div class="' + rowClass + '">' +
+                '<div class="' + avClass + '">' + escapeHtml(avTxt) + '</div>' +
+                '<div class="history-entry-name">' + escapeHtml(e.playerName || '') + '</div>' +
+                middleHtml +
+                '<div class="history-entry-time">' + timeStr + '</div>' +
+             '</div>';
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+
+    function render() {
+      const handNo = historyStore.getHandNo();
+      handNoEl.textContent = handNo ? ('#' + handNo) : '--';
+
+      const groups = historyStore.byStreet();
+      const currentStreet = historyStore.getCurrentStreet();
+      const order = ['preflop', 'flop', 'turn', 'river', 'showdown'];
+      const totalEntries = historyStore.count();
+
+      if (totalEntries === 0) {
+        bodyEl.innerHTML = '<div class="history-empty">尚无行动记录</div>';
+        return;
+      }
+
+      // 决策:只展开当前街,其他折叠(用户可手动展开)
+      // 用 Set 跟踪用户手动调整过的;否则默认按当前街规则
+      const html = order.map(street => {
+        const entries = (groups[street] || []).filter(e => e.type !== 'street'); // 街标记不显示
+        if (entries.length === 0) return '';
+        // 当前街默认展开;其他街默认折叠(只在 collapsedStreets 没显式调整过时)
+        const isCurrent = (street === currentStreet);
+        const isCollapsed = collapsedStreets.has(street) || (!isCurrent && !collapsedStreets.has('__user_touched_' + street));
+        const groupClass = 'history-street-group' + (isCollapsed ? ' collapsed' : '');
+        const entriesHtml = entries.map(renderEntry).join('');
+        return '<div class="' + groupClass + '" data-street="' + street + '">' +
+                  '<div class="history-street-header" data-street="' + street + '">' +
+                    '<span class="history-street-name">' + STREET_LABEL[street] + '</span>' +
+                    '<span class="history-street-meta">' +
+                      '<span class="history-street-count">' + entries.length + '</span>' +
+                      '<span class="history-street-arrow">▼</span>' +
+                    '</span>' +
+                  '</div>' +
+                  '<div class="history-street-body">' + entriesHtml + '</div>' +
+                '</div>';
+      }).filter(Boolean).join('');
+
+      bodyEl.innerHTML = html;
+
+      // 自动滚到底部(看最新)
+      if (isOpen) {
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+      }
+    }
+
+    function updateBadge() {
+      if (!badgeEl) return;
+      if (!isOpen && unreadCount > 0) {
+        badgeEl.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+        badgeEl.classList.add('show');
+        btn.classList.add('has-new');
+      } else {
+        badgeEl.classList.remove('show');
+        btn.classList.remove('has-new');
+      }
+    }
+
+    function openPanel() {
+      isOpen = true;
+      unreadCount = 0;
+      overlay.classList.add('show');
+      render();
+      updateBadge();
+    }
+
+    function closePanel() {
+      isOpen = false;
+      overlay.classList.remove('show');
+    }
+
+    // 按钮点击 toggle
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (isOpen) closePanel();
+      else openPanel();
+    });
+
+    // 关闭按钮
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closePanel();
+      });
+    }
+
+    // 遮罩点击(在面板外区域)关闭
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closePanel();
+    });
+
+    // 街分组折叠/展开切换(事件委托)
+    bodyEl.addEventListener('click', (e) => {
+      const header = e.target.closest('.history-street-header');
+      if (!header) return;
+      const street = header.dataset.street;
+      const group = header.closest('.history-street-group');
+      if (!group) return;
+      const willCollapse = !group.classList.contains('collapsed');
+      group.classList.toggle('collapsed', willCollapse);
+      // 记录用户手动调整(下次 render 保留状态)
+      if (willCollapse) {
+        collapsedStreets.add(street);
+      } else {
+        collapsedStreets.delete(street);
+      }
+      collapsedStreets.add('__user_touched_' + street);  // 标记"用户已动过"
+    });
+
+    // 订阅 historyStore 变化:打开时立即重渲,关闭时累计未读
+    historyStore.onChange(() => {
+      if (isOpen) {
+        render();
+      } else {
+        unreadCount += 1;
+        updateBadge();
+      }
+    });
+
+    // HAND_START 重置时也清未读 + 重置折叠状态
+    historyStore.onChange((state) => {
+      if (state && state.entries.length === 0) {
+        unreadCount = 0;
+        collapsedStreets.clear();
+        updateBadge();
+        if (isOpen) render();
+      }
+    });
+  })();
+
   // ⭐ v2.25 子项 1:边池数据模型(单一数据源)
   // ─────────────────────────────────────────────────────────────────────
   // 业内标准:All-In 时按"投入金额从小到大"分层,每层一个池,All-In 玩家只能竞争自己投入的池
@@ -17083,7 +19367,7 @@
     // 第一行单独显示主池金额作为细分(让玩家看清主池 vs 边池切分)
     if (main) {
       rows.push(
-        '<div class="pot-row">' +
+        '<div class="pot-row" data-pot-id="main" data-eligible="' + (main.eligibleSeats || []).join(',') + '">' +
           '<span class="pot-row-name">主池</span>' +
           '<span class="pot-row-amount">' + formatPotMoney(main.amount) + '</span>' +
         '</div>'
@@ -17093,7 +19377,7 @@
       const cls = p.needRefund ? 'pot-row pot-row-refund' : 'pot-row';
       const tag = p.needRefund ? '<span class="pot-row-refund-tag">退还</span>' : '';
       rows.push(
-        '<div class="' + cls + '">' +
+        '<div class="' + cls + '" data-pot-id="' + p.id + '" data-eligible="' + (p.eligibleSeats || []).join(',') + '">' +
           '<span class="pot-row-name">' + p.name + '</span>' +
           '<span class="pot-row-amount">' + formatPotMoney(p.amount) + '</span>' +
           tag +
@@ -17101,6 +19385,30 @@
       );
     });
     listEl.innerHTML = rows.join('');
+
+    // ⭐ v2.28 批次 D2:点边池行 → 高亮资格玩家头像
+    listEl.querySelectorAll('.pot-row[data-pot-id]').forEach(row => {
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasActive = row.classList.contains('pot-row-active');
+        // 清所有高亮
+        listEl.querySelectorAll('.pot-row-active').forEach(r => r.classList.remove('pot-row-active'));
+        document.querySelectorAll('.seat.pot-eligible, .my-seat.pot-eligible').forEach(s => s.classList.remove('pot-eligible'));
+        if (!wasActive) {
+          row.classList.add('pot-row-active');
+          const eligibleStr = row.dataset.eligible || '';
+          eligibleStr.split(',').filter(Boolean).forEach(sid => {
+            const el = sid === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + sid);
+            if (el) el.classList.add('pot-eligible');
+          });
+          // 3 秒后自动取消(避免长期遮挡)
+          setTimeout(() => {
+            row.classList.remove('pot-row-active');
+            document.querySelectorAll('.seat.pot-eligible, .my-seat.pot-eligible').forEach(s => s.classList.remove('pot-eligible'));
+          }, 3000);
+        }
+      });
+    });
   }
   window.renderPotsUI = renderPotsUI;
 
@@ -17176,6 +19484,25 @@
           } else {
             resolvedAction = 'fold';
           }
+          break;
+        case 'call_any':
+          // ⭐ v2.28 批次 D1:跟任何注(Call Any)— 对金额变化免疫
+          stillValid = true;
+          if (callAmt === 0) {
+            resolvedAction = 'check';     // 可过牌时退化为 check
+          } else if (callAmt >= myChips) {
+            resolvedAction = 'allin';     // 跟不起 → 自动 All-In
+            resolvedAmount = 0;
+          } else {
+            resolvedAction = 'call';
+            resolvedAmount = callAmt;
+          }
+          break;
+        case 'allin_any':
+          // ⭐ v2.28 批次 D1:全下任何(All-In Any)— 直接全下
+          stillValid = true;
+          resolvedAction = 'allin';
+          resolvedAmount = 0;
           break;
       }
 
@@ -17348,6 +19675,9 @@
     const isBigBlind = !!data.isBigBlind;
 
     // 1. 决策 Y 态
+    //    ⭐ v2.28 批次 D1:扩展 Y4(跟任何注 Call Any)/ Y5(全下 All-In Any)
+    //    业内标准:Y4 = 不管对手加多少都跟;Y5 = 不管对手加多少都全下
+    //    它们跟 Y1-Y3 不同:对金额变化"免疫"(不会因为加注而失效)
     let yState = 'y2';
     if (expectedCall > 0) {
       yState = 'y1';                    // 有跟注金额 → Y1
@@ -17376,15 +19706,82 @@
     area.dataset.state = yState;
     const pageTable = document.getElementById('page-table');
     if (pageTable) {
-      ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => {
+      ['p1','p2','p3','p4','y1','y2','y3','y4','y5','s1','s2'].forEach(s => {
         pageTable.classList.remove('state-' + s);
       });
       pageTable.classList.add('state-' + yState);
     }
 
+    // 5. ⭐ v2.28 批次 D1:同时显示 Y4(跟任何)和 Y5(全下任何)入口
+    //    无论 Y1/Y2/Y3 哪个态,Y4/Y5 都作为"额外选项"挂在右侧
+    showCallAnyAllInAnyOptions(yState);
+
     console.log('[preselect-show]', yState, currentPreselectContext);
   }
   window.showPreselectFromContext = showPreselectFromContext;
+
+  // ⭐ v2.28 批次 D1:Y4 跟任何注 / Y5 全下任何 入口显示
+  function showCallAnyAllInAnyOptions(yState) {
+    // 用一个独立浮动按钮组挂在 action-area 上方(避开 P 区按钮位置)
+    let group = document.getElementById('preselect-extras');
+    if (!group) {
+      group = document.createElement('div');
+      group.id = 'preselect-extras';
+      group.className = 'preselect-extras';
+      group.innerHTML =
+        '<button class="preselect-extra-btn" data-extra="call_any">' +
+          '<span class="pe-label">跟任何</span>' +
+          '<span class="pe-hint">Call Any</span>' +
+        '</button>' +
+        '<button class="preselect-extra-btn" data-extra="allin_any">' +
+          '<span class="pe-label">全下</span>' +
+          '<span class="pe-hint">All-In</span>' +
+        '</button>';
+      const area = document.getElementById('action-area');
+      if (area && area.parentElement) area.parentElement.appendChild(group);
+      // 绑定事件
+      group.querySelectorAll('.preselect-extra-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const extra = btn.dataset.extra;
+          const wasOn = btn.classList.contains('preselected');
+          // 清所有 preselect-extra-btn 高亮(互斥)
+          group.querySelectorAll('.preselect-extra-btn').forEach(b => b.classList.remove('preselected'));
+          // 清主按钮 preselect(互斥:点 Y4/Y5 时清 Y1/Y2/Y3 的选择)
+          const area = document.getElementById('action-area');
+          if (area) area.querySelectorAll('.ab-btn.preselected').forEach(el => el.classList.remove('preselected'));
+          if (!wasOn) {
+            btn.classList.add('preselected');
+            if (window.preselectStore) {
+              const ctx = window.currentPreselectContext && window.currentPreselectContext();
+              window.preselectStore.set(extra === 'call_any' ? 'call_any' : 'allin_any', {
+                amount: 0,
+                callAmount: ctx ? ctx.expectedCallAmount : 0
+              });
+            }
+            if (window.soundEngine) window.soundEngine.play('tap');
+          } else {
+            // 取消
+            if (window.preselectStore) window.preselectStore.clear();
+          }
+        });
+      });
+    }
+    group.classList.add('show');
+    // 同步当前 preselect 状态高亮
+    const cur = window.preselectStore && window.preselectStore.get();
+    group.querySelectorAll('.preselect-extra-btn').forEach(b => {
+      b.classList.toggle('preselected',
+        cur && (b.dataset.extra === 'call_any' ? cur.action === 'call_any' : cur.action === 'allin_any'));
+    });
+  }
+
+  function hidePreselectExtras() {
+    const group = document.getElementById('preselect-extras');
+    if (group) group.classList.remove('show');
+  }
+  window.hidePreselectExtras = hidePreselectExtras;
+
 
   // ⭐ v2.26 子项 2:预选窗口关闭(轮到我前清除 Y 态)
   let currentPreselectContext = null;
@@ -17395,13 +19792,15 @@
     const area = document.getElementById('action-area');
     if (!area) return;
     // 只有当前是 Y 态时才清(P 态不动)
-    if (['y1','y2','y3'].includes(area.dataset.state)) {
+    if (['y1','y2','y3','y4','y5'].includes(area.dataset.state)) {
       area.dataset.state = 'none';
       const pageTable = document.getElementById('page-table');
       if (pageTable) {
-        ['y1','y2','y3'].forEach(s => pageTable.classList.remove('state-' + s));
+        ['y1','y2','y3','y4','y5'].forEach(s => pageTable.classList.remove('state-' + s));
       }
     }
+    // ⭐ v2.28 批次 D1:也隐藏 call_any / allin_any 浮动按钮组
+    if (window.hidePreselectExtras) window.hidePreselectExtras();
   }
   window.clearPreselectWindow = clearPreselectWindow;
 
@@ -17450,6 +19849,54 @@
         // ⭐ v2.26 子项 5:新一手开始清空预选
         if (window.preselectStore) window.preselectStore.clear();
         if (window.clearPreselectWindow) window.clearPreselectWindow();
+        // ⭐ v2.27 子项 2:新一手开始重置历史时间轴
+        if (window.historyStore) {
+          window.historyStore.reset(data.handNo);
+          // 同时缓存玩家信息(给历史记录用)
+          window._historyPlayerLookup = {};
+          if (data.players) {
+            data.players.forEach(p => {
+              window._historyPlayerLookup[p.seatId] = {
+                name: p.name,
+                avatar: p.avatar || (p.name ? p.name.charAt(0) : '?')
+              };
+            });
+          }
+        }
+        // ⭐ v2.28 批次 C2:新一手清保险可用标记
+        if (window.insuranceModal) window.insuranceModal.clearAvailable();
+        // ⭐ v2.28 批次 D5:动态牌局信息更新
+        if (data.handNo) {
+          const hnEl = document.getElementById('table-hand-no');
+          if (hnEl) hnEl.textContent = '#' + data.handNo;
+        }
+        if (data.blinds) {
+          const bnEl = document.getElementById('table-blinds');
+          if (bnEl) bnEl.textContent = data.blinds;
+        }
+        if (data.stopLoss) {
+          const slEl = document.getElementById('table-stoploss');
+          if (slEl) slEl.textContent = data.stopLoss;
+        }
+        // 启动牌桌时长计时(每秒更新)
+        if (!window._tableSessionStartAt) {
+          window._tableSessionStartAt = Date.now();
+          if (!window._tableSessionTimer) {
+            window._tableSessionTimer = setInterval(() => {
+              const tEl = document.getElementById('table-timer');
+              if (tEl && window._tableSessionStartAt) {
+                const sec = Math.floor((Date.now() - window._tableSessionStartAt) / 1000);
+                const h = Math.floor(sec / 3600);
+                const m = Math.floor((sec % 3600) / 60);
+                const s = sec % 60;
+                tEl.textContent =
+                  String(h).padStart(2,'0') + ':' +
+                  String(m).padStart(2,'0') + ':' +
+                  String(s).padStart(2,'0');
+              }
+            }, 1000);
+          }
+        }
         // 渲染所有玩家到座位
         if (data.players) {
           data.players.forEach(p => {
@@ -17485,16 +19932,19 @@
           setSeatBet(data.sbSeat, data.sbAmount);
           attachBlindLabel(data.sbSeat, 'SB');
           trackBet(data.sbSeat, data.sbAmount);   // ⭐ v2.25 子项 4
+          historyPushBlind(data.sbSeat, 'SB', data.sbAmount);  // ⭐ v2.27 子项 2
         }
         if (data.bbSeat) {
           setSeatBet(data.bbSeat, data.bbAmount);
           attachBlindLabel(data.bbSeat, 'BB');
           trackBet(data.bbSeat, data.bbAmount);   // ⭐ v2.25 子项 4
+          historyPushBlind(data.bbSeat, 'BB', data.bbAmount);  // ⭐ v2.27 子项 2
         }
         if (data.straddleSeat) {
           setSeatBet(data.straddleSeat, data.straddleAmount);
           attachBlindLabel(data.straddleSeat, '抓头');
           trackBet(data.straddleSeat, data.straddleAmount);  // ⭐ v2.25 子项 4
+          historyPushBlind(data.straddleSeat, '抓头', data.straddleAmount);  // ⭐ v2.27 子项 2
         }
         // ⭐ v2.25 子项 4:盲注下完后边池立刻更新(虽然此时只有主池,但保持单一数据源)
         recomputeAndPushPots();
@@ -17512,6 +19962,12 @@
         }
         clearBlindLabels();   // 发牌前清盲注标签
         dealHoleCardsAnimation();
+        // ⭐ v2.28 批次 A1:发牌音效(每张错开 80ms)
+        if (window.soundEngine) {
+          for (let i = 0; i < 4; i++) {
+            setTimeout(() => window.soundEngine.play('dealHole'), 80 * i);
+          }
+        }
         if (typeof showToast === 'function') showToast('发底牌');
         break;
       }
@@ -17519,17 +19975,27 @@
       case WS_EVENTS.CARD_DEAL_BOARD: {
         // 发公共牌(街切换)
         if (data.street) dealBoardAnimation(data.street);
+        // ⭐ v2.28 批次 A1:发公共牌音效(根据张数错开)
+        if (window.soundEngine) {
+          const n = data.street === 'flop' ? 3 : 1;
+          for (let i = 0; i < n; i++) {
+            setTimeout(() => window.soundEngine.play('dealBoard'), 120 * i);
+          }
+        }
         if (typeof showToast === 'function') showToast('发 ' + data.street);
         break;
       }
 
       case WS_EVENTS.ACTION_REQUEST: {
         // ⭐ v2.24 子项 1:后端请求我自己行动 → 决策 P 态 → 弹 P 弹窗
-        // 入参 data: { seatId, options:['fold','check','call','raise','allin'],
-        //              callAmount, minRaise, maxRaise, timeoutSec, handNo,
-        //              myChips, hasActedThisStreet }
         setActingSeat(data.seatId || 'my');
         showActionPopupFromRequest(data);
+        // ⭐ v2.28 批次 A1:我的回合提醒音效(仅当真正轮到我,不是预选自动 send)
+        const isAuto = (data.seatId === 'my' || !data.seatId) &&
+                       window.preselectStore && window.preselectStore.has();
+        if (!isAuto && window.soundEngine && (data.seatId === 'my' || !data.seatId)) {
+          window.soundEngine.play('myTurn');
+        }
         break;
       }
 
@@ -17560,6 +20026,27 @@
         }
         // ⭐ v2.25 子项 4:每次行动后重算边池(让玩家实时看到边池形成)
         recomputeAndPushPots();
+        // ⭐ v2.27 子项 2:推一条行动到历史时间轴
+        historyPushAction(data.seatId, data.action, data.amount);
+        // ⭐ v2.28 批次 A1:行动音效
+        if (window.soundEngine) {
+          const soundMap = { fold:'fold', check:'check', call:'call', bet:'bet', raise:'raise', allin:'allin' };
+          if (soundMap[data.action]) window.soundEngine.play(soundMap[data.action]);
+        }
+        // ⭐ v2.28 批次 C2:他人 All-In 且我还在牌局中 → 标记保险可用(演示用)
+        // 真实业务:后端推 INSURANCE_AVAILABLE 事件
+        if (data.action === 'allin' && data.seatId !== 'my' && window.insuranceModal) {
+          const myFolded = document.querySelector('.my-seat.folded');
+          if (!myFolded) {
+            const potSize = window.potsStore ? window.potsStore.total() : 0;
+            window.insuranceModal.markAvailable({
+              potSize: potSize,
+              equity: 35,         // 演示:35% 胜率
+              odds: 2.3,          // 演示:2.3x 赔率
+              maxBuy: Math.floor(potSize * 0.3) || 100
+            });
+          }
+        }
         // ⭐ v2.24 子项 1:我自己的行动 ACK → 关 P 弹窗 + 清上下文
         if (data.seatId === 'my' && currentActionRequest) {
           clearActionRequest();
@@ -17574,6 +20061,10 @@
         // ⭐ v2.26 子项 5:街切换 → 清预选(新街新决策)
         if (window.preselectStore) window.preselectStore.clear();
         if (window.clearPreselectWindow) window.clearPreselectWindow();
+        // ⭐ v2.27 子项 2:推一条街切换标记
+        if (window.historyStore && data.street) {
+          window.historyStore.setStreet(data.street);
+        }
         break;
       }
 
@@ -17617,6 +20108,15 @@
         }
         setStage('showdown');   // 触发 revealAllHands
         if (typeof showToast === 'function') showToast('摊牌!');
+        // ⭐ v2.27 子项 2:推一条摊牌段标记 + 每个玩家的牌型
+        if (window.historyStore) {
+          window.historyStore.setStreet('showdown');
+          if (data.players) {
+            data.players.forEach(p => {
+              historyPushShowdown(p.seatId, p.cards, p.handType);
+            });
+          }
+        }
         break;
       }
 
@@ -17658,6 +20158,12 @@
                   showToast(potName + ' → ' + who + ' ' + formatPotMoney(winner.amount) + ' ' + ht);
                 }
                 potToWinnerAnimation(winner.seatId);
+                // ⭐ v2.27 子项 2:推派彩记录到历史
+                historyPushPayout(winner.seatId, winner.amount, potName, winner.handType);
+                // ⭐ v2.28 批次 A1:派彩音效(我赢 vs 他人赢)
+                if (window.soundEngine) {
+                  window.soundEngine.play(winner.seatId === 'my' ? 'winMine' : 'winOther');
+                }
                 // 派完该池 → 从 potsStore 移除(让 UI 实时减少边池条目)
                 const remaining = potsStore.list().filter(p => p.id !== pid);
                 potsStore.set(remaining);
@@ -17673,6 +20179,12 @@
                       (winner.handType ? '(' + winner.handType + ')' : ''));
           }
           potToWinnerAnimation(winner.seatId);
+          // ⭐ v2.27 子项 2:推派彩记录到历史(旧格式)
+          historyPushPayout(winner.seatId, winner.amount, '底池', winner.handType);
+          // ⭐ v2.28 批次 A1:派彩音效
+          if (window.soundEngine) {
+            window.soundEngine.play(winner.seatId === 'my' ? 'winMine' : 'winOther');
+          }
           potsStore.clear();
         }
         break;
@@ -17683,7 +20195,26 @@
         // ⭐ v2.26 子项 5:一手结束清预选(避免预选跨手)
         if (window.preselectStore) window.preselectStore.clear();
         if (window.clearPreselectWindow) window.clearPreselectWindow();
-        // 真实业务:更新我的筹码胶囊 + 准备下一手
+        // ⭐ v2.28 批次 C3:弹结算汇总弹窗(延迟 1.5s 让派彩动画播完)
+        const mySnap = data.mySnap || {};
+        const lastPayout = window.historyStore ?
+          window.historyStore.list().filter(e => e.type === 'payout').pop() : null;
+        const myShowdown = window.historyStore ?
+          window.historyStore.list().find(e => e.type === 'showdown' && e.seatId === 'my') : null;
+        const totalPot = window.historyStore ?
+          window.historyStore.list().reduce((s, e) => s + (e.type === 'payout' ? e.amount : 0), 0) : 0;
+        setTimeout(() => {
+          if (window.settlementModal) {
+            window.settlementModal.show({
+              handNo: data.handNo,
+              profit: mySnap.profit || 0,
+              potSize: totalPot,
+              myHandType: (myShowdown && myShowdown.extra && myShowdown.extra.handType) || '--',
+              winnerLabel: lastPayout ? (lastPayout.seatId === 'my' ? '我' : lastPayout.seatId) : '--',
+              chipsAfter: mySnap.chipsAfter || 0
+            });
+          }
+        }, 1500);
         break;
       }
 
@@ -19654,6 +22185,16 @@
       } else {
         checkBtnEl.classList.remove('timer-warn');
       }
+    }
+    // ⭐ v2.28 批次 A1:≤5s 倒计时滴答音效(每整秒一次)
+    if (remaining <= 5000 && remaining > 0 && window.soundEngine) {
+      const currentSec = Math.ceil(remaining / 1000);
+      if (turnTimer._lastTickSec !== currentSec) {
+        turnTimer._lastTickSec = currentSec;
+        window.soundEngine.play('tick');
+      }
+    } else if (remaining > 5000) {
+      turnTimer._lastTickSec = null;
     }
     turnTimer.rafId = requestAnimationFrame(tickTimer);
   }
@@ -23327,6 +25868,11 @@
     tableMenuBtn.addEventListener('click', () => {
       // ⭐ v2.18.6 子项 9:补码和自动补码已挪到顶部组件,这里不再刷新抽屉
       drawerMask.classList.add('show');
+      // ⭐ v2.28 批次 A3:打开时同步音效开关状态
+      const soundSwitch = document.getElementById('drawer-sound-switch');
+      if (soundSwitch && window.soundEngine) {
+        soundSwitch.classList.toggle('on', window.soundEngine.isEnabled());
+      }
     });
 
     // 点遮罩外面关闭
@@ -23338,11 +25884,22 @@
 
     // 点列表项
     drawerMask.querySelectorAll('.drawer-item').forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
         const action = item.dataset.drawerAction;
+        // ⭐ v2.28 批次 A3:音效开关 — toggle 不关抽屉,只切换状态
+        if (action === '音效开关') {
+          e.stopPropagation();
+          const switchEl = item.querySelector('.drawer-switch');
+          if (switchEl && window.soundEngine) {
+            const willOn = !switchEl.classList.contains('on');
+            switchEl.classList.toggle('on', willOn);
+            window.soundEngine.setEnabled(willOn);
+            // 开启时立刻给个反馈音
+            if (willOn) window.soundEngine.play('tap');
+          }
+          return;
+        }
         // ⭐ v2.18.6 子项 9:补码和自动补码已挪到顶部组件,这里不再处理
-        // 关闭抽屉
-        drawerMask.classList.remove('show');
         // 关闭抽屉
         drawerMask.classList.remove('show');
         // "退出房间" 根据来源返回
@@ -23405,9 +25962,34 @@
           document.getElementById('rules-modal-mask').classList.add('show');
           return;
         }
-        // "离桌留座" / "站起旁观" — 等后端支持,前端只提示
-        if (action === '离桌留座' || action === '站起旁观') {
-          showToast(action + '(等待后端支持)');
+        // ⭐ v2.28 批次 D3:"离桌留座" → 暂离不发牌 + 顶部状态条;再次点取消
+        if (action === '离桌留座') {
+          const mySeat = document.querySelector('.my-seat');
+          const isReserved = mySeat && mySeat.classList.contains('reserved');
+          if (mySeat) {
+            mySeat.classList.toggle('reserved', !isReserved);
+          }
+          // 顶部状态条
+          updateSitOutBanner(!isReserved ? 'reserved' : null);
+          showToast(!isReserved ? '已离桌留座,本手开始后将暂不发牌' : '已取消留座');
+          if (window.soundEngine) window.soundEngine.play('tap');
+          return;
+        }
+        // ⭐ v2.28 批次 D3:"站起旁观" → 弃当前手 + 切看客模式;再次点取消
+        if (action === '站起旁观') {
+          const mySeat = document.querySelector('.my-seat');
+          const isSpectator = document.body.classList.contains('spectator-mode');
+          if (mySeat) {
+            mySeat.classList.toggle('spectator', !isSpectator);
+          }
+          document.body.classList.toggle('spectator-mode', !isSpectator);
+          // 弃当前手(如果在牌局中)
+          if (!isSpectator && window.hasLiveRequest && hasLiveRequest()) {
+            if (window.sendClientAction) sendClientAction('fold');
+          }
+          updateSitOutBanner(!isSpectator ? 'spectator' : null);
+          showToast(!isSpectator ? '已站起旁观,不再发牌' : '已返回座位');
+          if (window.soundEngine) window.soundEngine.play('tap');
           return;
         }
         // 其他项暂时提示开发中
@@ -23415,6 +25997,43 @@
       });
     });
   }
+
+  // ⭐ v2.28 批次 D3:顶部"暂离/旁观"状态条(横贯顶部,提醒玩家当前状态)
+  function updateSitOutBanner(mode) {
+    let banner = document.getElementById('sit-out-banner');
+    if (!mode) {
+      if (banner) banner.remove();
+      return;
+    }
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'sit-out-banner';
+      banner.className = 'sit-out-banner';
+      const pageTable = document.getElementById('page-table');
+      if (pageTable) pageTable.appendChild(banner);
+    }
+    const text = mode === 'reserved' ? '离桌留座中 · 暂不发牌' : '旁观中 · 仅观察';
+    banner.innerHTML =
+      '<span class="sob-dot"></span>' +
+      '<span class="sob-text">' + text + '</span>' +
+      '<button class="sob-resume" id="sob-resume-btn">坐回</button>';
+    const resumeBtn = banner.querySelector('#sob-resume-btn');
+    if (resumeBtn) {
+      resumeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mySeat = document.querySelector('.my-seat');
+        if (mySeat) {
+          mySeat.classList.remove('reserved');
+          mySeat.classList.remove('spectator');
+        }
+        document.body.classList.remove('spectator-mode');
+        updateSitOutBanner(null);
+        if (typeof showToast === 'function') showToast('已坐回,下一手开始参与');
+        if (window.soundEngine) window.soundEngine.play('tap');
+      });
+    }
+  }
+  window.updateSitOutBanner = updateSitOutBanner;
 
   // 通用居中弹窗关闭(点 ✕ 或点遮罩外)
   document.querySelectorAll('[data-close-modal]').forEach(btn => {

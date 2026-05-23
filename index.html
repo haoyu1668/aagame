@@ -2321,12 +2321,20 @@
      ====== 牌桌界面 ======
      =================================================== */
   /* 牌桌整页:满屏深绿渐变 */
+  /* ⭐ v2.28.22 方案A:整体 scale 0.85,跟 TGPoker 比例对齐
+     transform-origin: top center 让顶部对齐(余额栏不挪)
+     transform: scale(0.85) 让所有内部元素等比缩小 15% */
   #page-table {
     background: radial-gradient(ellipse at center, #1a7a3e 0%, #0d4d24 70%, #062b14 100%);
     height: 844px;
     overflow: hidden;
     padding-bottom: 0;
     position: relative;
+    transform: scale(0.85);
+    transform-origin: top center;
+    /* 因为缩 15%,要让宽度补回来居中显示,加伪宽度 */
+    width: 117.65%;            /* 1 / 0.85 = 117.65% */
+    margin-left: -8.82%;        /* (117.65 - 100) / 2 居中 */
   }
   /* 手机端:牌桌页铺满 viewport,内部元素用相对定位自适应 */
   @media (max-width: 768px) {
@@ -4075,13 +4083,13 @@
   }
   .ab-check-amount {
     display: none;          /* ⭐ v2.18.4 默认隐藏,只在需要的态(P1/P4/Y1/S1)显式 block */
-    font-size: 12px;
+    font-size: 18px;        /* ⭐ v2.28.21:金额突出,数字醒目让玩家一眼看金额 */
     line-height: 1.1;
     font-weight: 700;
   }
   .ab-check-label {
     display: none;          /* ⭐ v2.18.4 默认隐藏 */
-    font-size: 10px;
+    font-size: 14px;        /* ⭐ v2.28.20:对齐 .ab-fold-label 14px */
     line-height: 1.1;
     margin-top: 1px;
     opacity: 0.95;
@@ -4089,7 +4097,7 @@
   /* ⭐ v2.16 过牌文案默认隐藏,只在 state="check" 时显示 */
   .ab-check-label-check {
     display: none;
-    font-size: 17px;
+    font-size: 14px;        /* ⭐ v2.28.20:对齐 .ab-fold-label 14px(原 17px 太大撑按钮) */
     font-weight: 700;
     color: white;
   }
@@ -4543,8 +4551,8 @@
   .action-area[data-state="p2"] .ab-check-label-check {
     display: none;
   }
-  .action-area[data-state="p2"] .ab-check-timer { display: block; }
-  .action-area[data-state="p2"] .ab-check-seconds { display: block; }
+  .action-area[data-state="p2"] .ab-check-timer { display: none; }     /* ⭐ v2.28.21:倒计时统一在弃牌按钮 */
+  .action-area[data-state="p2"] .ab-check-seconds { display: none; }   /* ⭐ v2.28.21:倒计时统一在弃牌按钮 */
 
   /* P3 过牌-加注弹窗(翻前大盲 / 翻后无人下注):右下显"过牌"+ 倒计时,按钮保持绿色 */
   .action-area[data-state="p3"] .ab-check-amount,
@@ -4554,8 +4562,8 @@
   .action-area[data-state="p3"] .ab-check-label-check {
     display: block;
   }
-  .action-area[data-state="p3"] .ab-check-timer { display: block; }
-  .action-area[data-state="p3"] .ab-check-seconds { display: block; }
+  .action-area[data-state="p3"] .ab-check-timer { display: none; }     /* ⭐ v2.28.21:倒计时统一在弃牌按钮 */
+  .action-area[data-state="p3"] .ab-check-seconds { display: none; }   /* ⭐ v2.28.21:倒计时统一在弃牌按钮 */
 
   /* P4 All-In跟注:显"金额 + 全下"(把"跟注"换成"全下") */
   .action-area[data-state="p4"] .ab-check-amount,
@@ -4580,18 +4588,15 @@
   /* Y1-Y3 弃牌按钮:隐藏倒计时秒数和扇形蒙版 */
   /* ⭐ v2.18.4 弃牌按钮倒计时显隐:
      - Y1-Y3 预选态:无倒计时(没轮到我)
-     - P2 下注 / P3 过牌-加注:倒计时挪到过牌按钮,弃牌按钮不重复显示
-     - 只有 P1 加注 / P4 All-In 跟注:弃牌按钮显示倒计时(因为右下是"跟注+金额",蒙版放跟注上不合适) */
+     - 只有 Y1/Y2/Y3 预选态:倒计时不显示在弃牌按钮(预选态本身就有"已预选"视觉)
+     - ⭐ v2.28.21:统一规则 — 倒计时永远显示在弃牌按钮上(包括 P2 跟注 / P3 过牌)
+       原规则"挪到过牌按钮"已废弃 */
   .action-area[data-state="y1"] .ab-fold-seconds,
   .action-area[data-state="y2"] .ab-fold-seconds,
   .action-area[data-state="y3"] .ab-fold-seconds,
-  .action-area[data-state="p2"] .ab-fold-seconds,
-  .action-area[data-state="p3"] .ab-fold-seconds,
   .action-area[data-state="y1"] .ab-fold-timer,
   .action-area[data-state="y2"] .ab-fold-timer,
-  .action-area[data-state="y3"] .ab-fold-timer,
-  .action-area[data-state="p2"] .ab-fold-timer,
-  .action-area[data-state="p3"] .ab-fold-timer {
+  .action-area[data-state="y3"] .ab-fold-timer {
     display: none;
   }
 

@@ -4626,6 +4626,28 @@
       0 0 20px rgba(77, 255, 77, 0.4) !important;
   }
 
+  /* ⭐ v2.26 子项 4:预选自动 send 触发反馈
+     轮到我时,预选条件成立 → 闪烁绿光 200ms → send
+     视觉:.ab-btn.preselect-flash 类被 JS 短暂添加,触发关键帧动画 */
+  .ab-btn.preselect-flash {
+    animation: preselectFlash 220ms ease-out;
+  }
+  @keyframes preselectFlash {
+    0%   { box-shadow: 0 0 0 2.5px var(--green-main), 0 0 12px rgba(77,255,77,0.7); transform: scale(1); }
+    50%  { box-shadow: 0 0 0 5px var(--green-main),   0 0 24px rgba(77,255,77,1),
+                       0 0 36px rgba(77,255,77,0.6); transform: scale(1.06); }
+    100% { box-shadow: 0 0 0 2.5px var(--green-main), 0 0 12px rgba(77,255,77,0.7); transform: scale(1); }
+  }
+  /* ab-raise 中央按钮要保留 translateX(-50%) 否则会跳位 */
+  .ab-btn.ab-raise.preselect-flash {
+    animation: preselectFlashRaise 220ms ease-out;
+  }
+  @keyframes preselectFlashRaise {
+    0%   { box-shadow: 0 0 0 2.5px var(--green-main); transform: translateX(-50%) scale(1); }
+    50%  { box-shadow: 0 0 0 5px var(--green-main), 0 0 24px rgba(77,255,77,1); transform: translateX(-50%) scale(1.06); }
+    100% { box-shadow: 0 0 0 2.5px var(--green-main); transform: translateX(-50%) scale(1); }
+  }
+
   /* =====================================================
      ⭐ v2.16 临时三态切换器(开发用,WebSocket 接入后删)
      ===================================================== */
@@ -16229,6 +16251,8 @@
     STREET_NEXT:      'street:next',        // 进入下一街 { street }(行动轮结束后)
     POT_COLLECT:      'pot:collect',        // 筹码归底池 {}
     POTS_UPDATE:      'pots:update',        // ⭐ v2.25 边池更新 { pots: [{id, name, amount, eligibleSeats[]}] }
+    PRESELECT_AVAILABLE: 'preselect:available', // ⭐ v2.26 预选窗口开启 { seatId, expectedCallAmount, allowedActions:['fold','check','call','check_fold'] }
+    PRESELECT_CLOSE:  'preselect:close',     // ⭐ v2.26 预选窗口关闭(轮到我前) {}
     SHOWDOWN:         'showdown',           // 摊牌      { players: [{seatId, cards, handType}] }
     PAYOUT:           'payout',             // 派彩      { winners: [{seatId, amount, handType, potId?}] }(potId 指明拿的是哪个池)
     HAND_END:         'hand:end',           // 一手结束   { handNo, mySnap: { chipsAfter, profit } }
@@ -16378,13 +16402,32 @@
 
       // ──────────────────────────────────────────────────────────
       // 翻牌:我弃了就跳过我;否则面对下注决策
+      // ⭐ v2.26 子项 6:翻牌段加预选窗口(s3/s5/s7 行动时玩家可预选)
       // ──────────────────────────────────────────────────────────
       let folded = (myPre.action === 'fold');
       let potFlop = potPre;
       if (!folded) {
+        // ⭐ v2.26:开启预选窗口(没轮到我但可预选)
+        emit(WS_EVENTS.PRESELECT_AVAILABLE, {
+          seatId: 'my',
+          expectedCallAmount: 0,
+          allowedActions: ['fold', 'check'],
+          isBigBlind: false,
+          myChips: myChipsNow
+        }, 50);
         await execAction({ seatId: 's3', action: 'check' });
         await execAction({ seatId: 's5', action: 'check' });
+        // s7 下注 40 → 预选窗口的金额变了,前端会自动失效"过牌预选"
+        emit(WS_EVENTS.PRESELECT_AVAILABLE, {
+          seatId: 'my',
+          expectedCallAmount: 40,
+          allowedActions: ['fold', 'call'],
+          isBigBlind: false,
+          myChips: myChipsNow
+        }, 50);
         await execAction({ seatId: 's7', action: 'bet',  amount: 40 }); potFlop += 40;
+        // ⭐ 关闭预选窗口,准备发 ACTION_REQUEST(预选验证逻辑在 showActionPopupFromRequest)
+        emit(WS_EVENTS.PRESELECT_CLOSE, {}, 50);
         // 轮到我:面临 40 跟注
         const myFlop = await askMyAction({
           options: ['fold', 'call', 'raise', 'allin'],
@@ -16794,6 +16837,62 @@
   window.recomputeAndPushPots = recomputeAndPushPots;
   window.handAccumBets = () => Object.assign({}, handAccumBets);
 
+  // ⭐ v2.26 子项 1:预选状态机数据模型(单一数据源)
+  // ─────────────────────────────────────────────────────────────────────
+  // 业内标准(参考 PokerStars/TGPoker/KKPoker):
+  //   预选(Pre-Select)= 没轮到我时,先按一个意图按钮;轮到我后:
+  //     - 条件成立 → 自动 send,无需再点
+  //     - 条件不成立 → 取消预选 + 弹 P 弹窗让我重选
+  // 数据结构:
+  //   { action, amount, validAtCallAmount, setAt }
+  // 字段说明:
+  //   - action: 'fold' | 'check' | 'call' | 'check_fold'(Y3 合并)
+  //   - amount: 跟注预选时记录金额(后续金额涨则失效)
+  //   - validAtCallAmount: 设预选时的 callAmount,变化即失效
+  //   - setAt: 时间戳(诊断用)
+  // ─────────────────────────────────────────────────────────────────────
+  const preselectStore = (function() {
+    let state = null;          // null 表示无预选
+    const listeners = [];
+
+    function set(action, opts) {
+      opts = opts || {};
+      state = {
+        action: action,
+        amount: opts.amount || 0,
+        validAtCallAmount: opts.callAmount || 0,
+        setAt: Date.now()
+      };
+      notify();
+    }
+
+    function clear() {
+      if (state === null) return;
+      state = null;
+      notify();
+    }
+
+    function get() {
+      return state ? Object.assign({}, state) : null;
+    }
+
+    function has() {
+      return state !== null;
+    }
+
+    function onChange(cb) {
+      if (typeof cb !== 'function') return;
+      listeners.push(cb);
+    }
+
+    function notify() {
+      listeners.forEach(cb => { try { cb(state); } catch (e) { console.warn('[preselect] listener error', e); } });
+    }
+
+    return { set, clear, get, has, onChange };
+  })();
+  window.preselectStore = preselectStore;
+
   // ⭐ v2.25 子项 1:边池数据模型(单一数据源)
   // ─────────────────────────────────────────────────────────────────────
   // 业内标准:All-In 时按"投入金额从小到大"分层,每层一个池,All-In 玩家只能竞争自己投入的池
@@ -17040,6 +17139,84 @@
       return;
     }
 
+    // ⭐ v2.26 子项 4:检查预选 → 条件成立则自动 send,不弹 P 弹窗
+    const preselect = window.preselectStore && window.preselectStore.get();
+    if (preselect) {
+      const callAmt = Number(data.callAmount || 0);
+      const myChips = Number(data.myChips || 0);
+      // 判定预选是否仍然有效(业内标准:金额变化即失效,推荐方案 B1)
+      let stillValid = false;
+      let resolvedAction = preselect.action;
+      let resolvedAmount = 0;
+
+      switch (preselect.action) {
+        case 'fold':
+          // 弃牌预选:任何情况都可执行
+          stillValid = true;
+          break;
+        case 'check':
+          // 过牌预选:必须当前可过牌(callAmount === 0)
+          stillValid = (callAmt === 0);
+          break;
+        case 'call':
+          // 跟注预选:金额必须不变(变了 → 失效)
+          stillValid = (callAmt > 0 && callAmt === preselect.validAtCallAmount);
+          resolvedAmount = callAmt;
+          // 跟注金额 ≥ 我的栈 → 切 All-In 而不是 call
+          if (stillValid && callAmt >= myChips) {
+            resolvedAction = 'allin';
+            resolvedAmount = 0;
+          }
+          break;
+        case 'check_fold':
+          // Y3 合并:无人加注 → check,有人加注 → fold
+          stillValid = true;
+          if (callAmt === 0) {
+            resolvedAction = 'check';
+          } else {
+            resolvedAction = 'fold';
+          }
+          break;
+      }
+
+      if (stillValid) {
+        // 记录上下文(子项 5 清弹窗等需要)
+        currentActionRequest = {
+          handNo:     data.handNo,
+          seatId:     data.seatId || 'my',
+          options:    data.options || [],
+          callAmount: callAmt,
+          minRaise:   Number(data.minRaise || 0),
+          maxRaise:   Number(data.maxRaise || 0),
+          myChips:    myChips,
+          timeoutSec: Number(data.timeoutSec || 15),
+          potSize:    Number(data.potSize || 0),
+          state:      'preselect-auto',
+          requestedAt: Date.now()
+        };
+        // 200ms 闪烁反馈,让玩家看到"预选生效",然后自动 send
+        flashPreselectedButton(preselect.action);
+        if (typeof showToast === 'function') {
+          const label = ({ fold:'弃牌', check:'过牌', call:'跟注', allin:'全下', check_fold:'过/弃' })[resolvedAction] || resolvedAction;
+          showToast('预选生效 → ' + label);
+        }
+        setTimeout(() => {
+          if (window.sendClientAction) {
+            window.sendClientAction(resolvedAction, resolvedAmount);
+          }
+          if (window.preselectStore) window.preselectStore.clear();
+        }, 220);
+        return;
+      } else {
+        // 预选失效 → 清预选 + toast 提示 + 正常弹 P 弹窗
+        if (window.preselectStore) window.preselectStore.clear();
+        if (typeof showToast === 'function') showToast('预选金额已变,请重新决策');
+      }
+    }
+
+    // ⭐ 关闭预选窗口(轮到我了,预选界面让位给 P 弹窗)
+    if (window.clearPreselectWindow) window.clearPreselectWindow();
+
     // 1. 决策 P 态
     const callAmt   = Number(data.callAmount || 0);
     const myChips   = Number(data.myChips || (data.options && data.options.includes('call') ? Infinity : 0));
@@ -17143,6 +17320,112 @@
   }
   window.clearActionRequest = clearActionRequest;
 
+  /**
+   * ⭐ v2.26 子项 2:Y 态触发 — 显示预选弹窗(没轮到我,但可预选)
+   *
+   * 决策逻辑(符合手机德州扑克标准):
+   *   expectedCallAmount === 0 + 大盲位            → Y3(过/弃合并,BB 经典场景)
+   *   expectedCallAmount === 0                     → Y2(过牌预选)
+   *   expectedCallAmount > 0                       → Y1(跟注 X 预选)
+   *
+   * 入参 data:
+   *   { seatId, expectedCallAmount, allowedActions:['fold','check','call','check_fold'],
+   *     isBigBlind?, myChips?, potSize? }
+   */
+  function showPreselectFromContext(data) {
+    const area = document.getElementById('action-area');
+    if (!area) return;
+
+    // 防御:demo 模式不接管
+    const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
+    if (currentMode === 'demo') return;
+
+    // 防御:已在 P 态(轮到我)→ 不显示 Y 态
+    if (currentActionRequest) return;
+
+    const expectedCall = Number(data.expectedCallAmount || 0);
+    const allowed = data.allowedActions || ['fold', 'check', 'call'];
+    const isBigBlind = !!data.isBigBlind;
+
+    // 1. 决策 Y 态
+    let yState = 'y2';
+    if (expectedCall > 0) {
+      yState = 'y1';                    // 有跟注金额 → Y1
+    } else if (isBigBlind && allowed.includes('check_fold')) {
+      yState = 'y3';                    // 大盲位 + 允许合并 → Y3
+    } else {
+      yState = 'y2';                    // 无跟注 → Y2 过牌
+    }
+
+    // 2. 记录预选上下文(供 ACTION_REQUEST 来时验证)
+    currentPreselectContext = {
+      yState: yState,
+      expectedCallAmount: expectedCall,
+      allowedActions: allowed,
+      isBigBlind: isBigBlind,
+      timestamp: Date.now()
+    };
+
+    // 3. 填充按钮金额(Y1 跟注按钮显示预选金额)
+    const checkAmount = document.getElementById('ab-check-amount');
+    if (checkAmount && yState === 'y1') {
+      checkAmount.textContent = formatPotMoney(expectedCall);
+    }
+
+    // 4. 切 action-area 状态
+    area.dataset.state = yState;
+    const pageTable = document.getElementById('page-table');
+    if (pageTable) {
+      ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => {
+        pageTable.classList.remove('state-' + s);
+      });
+      pageTable.classList.add('state-' + yState);
+    }
+
+    console.log('[preselect-show]', yState, currentPreselectContext);
+  }
+  window.showPreselectFromContext = showPreselectFromContext;
+
+  // ⭐ v2.26 子项 2:预选窗口关闭(轮到我前清除 Y 态)
+  let currentPreselectContext = null;
+  window.currentPreselectContext = () => currentPreselectContext;
+
+  function clearPreselectWindow() {
+    currentPreselectContext = null;
+    const area = document.getElementById('action-area');
+    if (!area) return;
+    // 只有当前是 Y 态时才清(P 态不动)
+    if (['y1','y2','y3'].includes(area.dataset.state)) {
+      area.dataset.state = 'none';
+      const pageTable = document.getElementById('page-table');
+      if (pageTable) {
+        ['y1','y2','y3'].forEach(s => pageTable.classList.remove('state-' + s));
+      }
+    }
+  }
+  window.clearPreselectWindow = clearPreselectWindow;
+
+  // ⭐ v2.26 子项 4:预选自动 send 前的 200ms 闪烁反馈
+  // 让玩家看清"我的预选生效了",避免"莫名其妙就 send 了"
+  function flashPreselectedButton(action) {
+    // 根据 action 类型找对应按钮
+    const btnMap = {
+      fold: 'ab-fold-btn',
+      check: 'ab-check-btn',
+      call: 'ab-check-btn',
+      allin: 'ab-check-btn',
+      check_fold: 'ab-check-fold-btn'
+    };
+    const btnId = btnMap[action] || 'ab-check-btn';
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.classList.remove('preselect-flash');
+    void btn.offsetWidth;   // 强制 reflow,让动画能重启
+    btn.classList.add('preselect-flash');
+    setTimeout(() => btn.classList.remove('preselect-flash'), 250);
+  }
+  window.flashPreselectedButton = flashPreselectedButton;
+
   // 简单金额格式化:整数不带小数,小数最多 2 位
   function formatMoney(n) {
     if (typeof n !== 'number' || !isFinite(n)) return '0';
@@ -17164,6 +17447,9 @@
         potsStore.clear();
         // ⭐ v2.25 子项 4:清空整手累计投入跟踪
         resetHandTracking();
+        // ⭐ v2.26 子项 5:新一手开始清空预选
+        if (window.preselectStore) window.preselectStore.clear();
+        if (window.clearPreselectWindow) window.clearPreselectWindow();
         // 渲染所有玩家到座位
         if (data.players) {
           data.players.forEach(p => {
@@ -17285,6 +17571,9 @@
         // 街切换前:清动作气泡 + 停 acting
         setActingSeat(null);
         clearActionTags();
+        // ⭐ v2.26 子项 5:街切换 → 清预选(新街新决策)
+        if (window.preselectStore) window.preselectStore.clear();
+        if (window.clearPreselectWindow) window.clearPreselectWindow();
         break;
       }
 
@@ -17304,6 +17593,18 @@
         break;
       }
 
+      case WS_EVENTS.PRESELECT_AVAILABLE: {
+        // ⭐ v2.26 子项 2:预选窗口开启
+        // 入参: { seatId, expectedCallAmount, allowedActions:['fold','check','call','check_fold'], isBigBlind?, myChips? }
+        showPreselectFromContext(data);
+        break;
+      }
+
+      case WS_EVENTS.PRESELECT_CLOSE: {
+        // ⭐ v2.26 子项 2:预选窗口关闭(轮到我之前 / 街切换 / 摊牌)
+        clearPreselectWindow();
+        break;
+      }
       case WS_EVENTS.SHOWDOWN: {
         // 摊牌:翻所有非弃牌玩家的底牌 + 牌型识别 + 高亮
         // 把后端给的 cards 写到 DEMO_HOLE_CARDS,复用现有 revealAllHands 逻辑
@@ -17379,6 +17680,9 @@
 
       case WS_EVENTS.HAND_END: {
         if (typeof showToast === 'function') showToast('一手结束');
+        // ⭐ v2.26 子项 5:一手结束清预选(避免预选跨手)
+        if (window.preselectStore) window.preselectStore.clear();
+        if (window.clearPreselectWindow) window.clearPreselectWindow();
         // 真实业务:更新我的筹码胶囊 + 准备下一手
         break;
       }
@@ -19691,8 +19995,11 @@
 
   // ⭐ v2.16 预选高亮逻辑:仅在 call/check 态下,点弃牌/跟注/过牌按钮 → 切换 .preselected
   // ⭐ 互斥规则:弃牌 vs 跟注/过牌 只能二选一,点新的自动清旧的
-  // 真实业务:预选作废逻辑下次做(上家加注 → 跟注/过牌预选自动清除)
-  function togglePreselect(btn) {
+  // ⭐ v2.26 子项 3:写入 preselectStore + 200ms 闪烁动画(子项 4 自动 send 用)
+  //
+  // 参数 btn:按钮元素
+  // 参数 actionType:'fold' | 'check' | 'call' | 'check_fold'(给 store 用)
+  function togglePreselect(btn, actionType) {
     if (!actionArea) return;
     const state = actionArea.dataset.state;
     // P 组(轮到我)立即执行不预选,只有 Y 组(没轮到我,预选态)才预选
@@ -19703,6 +20010,18 @@
     // 如果之前没预选,这次点击就高亮它;如果之前已预选,清空就好(实现"再点一次取消")
     if (!wasPreselected) {
       btn.classList.add('preselected');
+      // ⭐ v2.26 子项 3:写入预选状态机
+      if (actionType && window.preselectStore) {
+        const ctx = window.currentPreselectContext && window.currentPreselectContext();
+        const callAmt = ctx ? ctx.expectedCallAmount : 0;
+        window.preselectStore.set(actionType, {
+          amount: actionType === 'call' ? callAmt : 0,
+          callAmount: callAmt
+        });
+      }
+    } else {
+      // 取消预选 → 清状态机
+      if (window.preselectStore) window.preselectStore.clear();
     }
     return true;
   }
@@ -19712,7 +20031,7 @@
   if (abCheckFoldBtn) {
     abCheckFoldBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (togglePreselect(abCheckFoldBtn)) return;
+      if (togglePreselect(abCheckFoldBtn, 'check_fold')) return;
       if (typeof showToast === 'function') showToast('过/弃预选(开发中)');
     });
   }
@@ -19748,7 +20067,8 @@
         sendClientAction('fold');
         return;
       }
-      if (togglePreselect(abFoldBtn)) return;   // 预选态下只切高亮,不弹 toast
+      // ⭐ v2.26 子项 3:Y 态(预选)→ 写入 preselectStore + 高亮
+      if (togglePreselect(abFoldBtn, 'fold')) return;
       if (typeof showToast === 'function') showToast('弃牌(开发中)');
     });
   }
@@ -19805,7 +20125,10 @@
         }
         return;
       }
-      if (togglePreselect(abCheckBtn)) return;
+      // ⭐ v2.26 子项 3:Y 态(预选)→ 按 callAmount 决定 call 或 check
+      const ctx = window.currentPreselectContext && window.currentPreselectContext();
+      const actionType = (ctx && ctx.expectedCallAmount > 0) ? 'call' : 'check';
+      if (togglePreselect(abCheckBtn, actionType)) return;
       if (typeof showToast === 'function') showToast('跟注/过牌(开发中)');
     });
   }

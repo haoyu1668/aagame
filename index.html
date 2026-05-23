@@ -2184,6 +2184,359 @@
     gap: 4px;
     z-index: 4;
   }
+  /* ⭐ v2.19 按阶段动态显隐 5 张牌位
+     默认全部隐藏,按 data-stage 显示 N 张
+     翻开动画:从 scale(0.7) opacity 0 → scale(1) opacity 1,360ms 缓动 */
+  .community-cards .card {
+    opacity: 0;
+    transform: scale(0.7);
+    transition: opacity 360ms ease-out, transform 360ms cubic-bezier(.18,.89,.32,1.28);
+    transform-origin: center center;
+  }
+  /* preflop:0 张全隐(默认状态已经全隐) */
+  /* flop:前 3 张显 */
+  .community-cards[data-stage="flop"] .card[data-slot="1"],
+  .community-cards[data-stage="flop"] .card[data-slot="2"],
+  .community-cards[data-stage="flop"] .card[data-slot="3"] { opacity: 1; transform: scale(1); }
+  /* turn:前 4 张显 */
+  .community-cards[data-stage="turn"] .card[data-slot="1"],
+  .community-cards[data-stage="turn"] .card[data-slot="2"],
+  .community-cards[data-stage="turn"] .card[data-slot="3"],
+  .community-cards[data-stage="turn"] .card[data-slot="4"] { opacity: 1; transform: scale(1); }
+  /* river / showdown:5 张全显 */
+  .community-cards[data-stage="river"] .card,
+  .community-cards[data-stage="showdown"] .card { opacity: 1; transform: scale(1); }
+  /* ⭐ v2.19 5 张时(river/showdown)整体缩小避免和两侧筹码视觉冲突
+     单牌 44→40px,gap 4→3px,总宽 44*5+4*4=236 → 40*5+3*4=212 (-24px) */
+  .community-cards[data-stage="river"] .card,
+  .community-cards[data-stage="showdown"] .card {
+    width: 40px;
+    height: 55px;
+  }
+  .community-cards[data-stage="river"] .card .rank,
+  .community-cards[data-stage="showdown"] .card .rank { font-size: 20px; }
+  .community-cards[data-stage="river"] .card .suit,
+  .community-cards[data-stage="showdown"] .card .suit { font-size: 16px; }
+  .community-cards[data-stage="river"],
+  .community-cards[data-stage="showdown"] { gap: 3px; }
+
+  /* ⭐ v2.19 板块 2:发牌动画
+     ─────────────────────────────────────────
+     1. 牌堆元素:固定在桌面中央偏右(庄家位附近),作为发牌起点
+     2. 飞行牌:临时 DOM 从牌堆飞向目标(座位/公共牌位),用 transform 动画
+     3. 翻面动画:到位后牌背翻成正面(scaleX 0→1)
+     ───────────────────────────────────────── */
+  .card-deck {
+    position: absolute;
+    top: 44%;             /* 桌面中央偏上,庄家发牌位 */
+    left: 56%;            /* 偏右(传统庄家发牌方向) */
+    width: 26px;
+    height: 36px;
+    z-index: 6;
+    pointer-events: none;
+    /* 3 张叠放的牌背视觉 */
+    transform: translate(-50%, -50%);
+  }
+  .card-deck::before,
+  .card-deck::after,
+  .card-deck > .deck-top {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #d63232, #8a1818);
+    border: 1.2px solid white;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .card-deck::before { transform: translate(-3px, -2px); opacity: 0.85; }
+  .card-deck::after  { transform: translate(-1px, -1px); opacity: 0.92; }
+  .card-deck > .deck-top { z-index: 2; }
+  /* 默认隐藏,发牌阶段动态显示 */
+  .card-deck.hidden { display: none; }
+
+  /* 飞行牌容器 - 从牌堆飞向目标 */
+  .flying-card {
+    position: absolute;
+    width: 26px;
+    height: 36px;
+    z-index: 20;
+    pointer-events: none;
+    perspective: 600px;
+    transition: transform 380ms cubic-bezier(.4, .15, .25, 1), opacity 200ms ease-out;
+  }
+  .flying-card .fc-inner {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 300ms ease-out;
+  }
+  .flying-card .fc-back,
+  .flying-card .fc-front {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    border-radius: 3px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  }
+  .flying-card .fc-back {
+    background: linear-gradient(135deg, #d63232, #8a1818);
+    border: 1.2px solid white;
+  }
+  .flying-card .fc-front {
+    background: white;
+    border: 1px solid rgba(0,0,0,0.1);
+    transform: rotateY(180deg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, serif;
+    line-height: 1;
+    overflow: hidden;
+  }
+  .flying-card .fc-front .rank { font-size: 13px; font-weight: 900; }
+  .flying-card .fc-front .suit { font-size: 11px; }
+  .flying-card .fc-front.red   { color: #d33; }
+  .flying-card .fc-front.black { color: #000; }
+  /* 翻面:fc-inner 旋转 180deg */
+  .flying-card.flipped .fc-inner { transform: rotateY(180deg); }
+  /* 飞到底牌位时尺寸自适应(座位牌背是 20×28) */
+  .flying-card.target-hole { width: 20px; height: 28px; }
+  .flying-card.target-hole .fc-front .rank { font-size: 10px; }
+  .flying-card.target-hole .fc-front .suit { font-size: 8px; }
+  /* 飞到公共牌位时尺寸自适应(公共牌 44×60,5张时 40×55) */
+  .flying-card.target-board { width: 44px; height: 60px; }
+  .flying-card.target-board .fc-front .rank { font-size: 22px; }
+  .flying-card.target-board .fc-front .suit { font-size: 18px; }
+
+  /* ⭐ v2.19 板块 3:筹码飞行动画
+     ─────────────────────────────────────────
+     1. 收筹码:每轮结束时所有座位的 .seat-bet 飞向中央底池
+     2. 派彩:底池飞向赢家座位
+     ───────────────────────────────────────── */
+  .flying-chip {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    z-index: 19;
+    pointer-events: none;
+    transition: transform 480ms cubic-bezier(.4, .15, .25, 1), opacity 220ms ease-out;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 50%),
+      conic-gradient(
+        from 45deg,
+        #e84444 0deg 90deg,
+        #2b6fd6 90deg 180deg,
+        #e84444 180deg 270deg,
+        #2b6fd6 270deg 360deg
+      );
+    border: 2px dashed white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  }
+  /* 筹码上的金额小标签(派彩时显示赢得金额) */
+  .flying-chip .fc-amount {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 800;
+    color: #4dff4d;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+    white-space: nowrap;
+  }
+
+  /* 赢家头像短暂金光高亮(派彩动画期间) */
+  .seat.winner-glow .seat-avatar,
+  .my-seat.winner-glow {
+    animation: winnerGlow 1.5s ease-out;
+  }
+  @keyframes winnerGlow {
+    0%   { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+    20%  { box-shadow: 0 0 16px 6px rgba(255, 215, 0, 0.9); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+  }
+
+  /* ⭐ v2.19.1 完整一手演示按钮:绿色高亮 + 运行中脉冲 */
+  .dev-state-btn.highlight-demo {
+    background: linear-gradient(135deg, #4dff4d, #2bcc2b) !important;
+    color: #000 !important;
+    font-weight: 800 !important;
+    border-color: #4dff4d !important;
+    box-shadow: 0 0 8px rgba(77, 255, 77, 0.5);
+  }
+  .dev-state-btn.highlight-demo.running {
+    animation: demoRunning 1.2s ease-in-out infinite;
+  }
+  @keyframes demoRunning {
+    0%, 100% { box-shadow: 0 0 8px rgba(77, 255, 77, 0.5); }
+    50%      { box-shadow: 0 0 14px rgba(77, 255, 77, 1); }
+  }
+
+  /* ⭐ v2.20.3 完整一手演示快捷按钮(独立浮动,可拖动)
+     位置:屏幕底部中央偏左,常驻可见,不用打开切换器就能点 */
+  .dev-quick-demo {
+    position: absolute;
+    bottom: 200px;
+    left: 8px;
+    z-index: 101;
+    display: flex;
+    align-items: stretch;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(77, 255, 77, 0.55);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 12px rgba(77, 255, 77, 0.25);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .dev-quick-demo-grip {
+    background: rgba(77, 255, 77, 0.18);
+    color: #4dff4d;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 0 5px;
+    display: flex;
+    align-items: center;
+    cursor: grab;
+    border-right: 1px solid rgba(77, 255, 77, 0.3);
+    letter-spacing: -1px;
+  }
+  .dev-quick-demo-grip:active { cursor: grabbing; }
+  .dev-quick-demo-btn {
+    background: linear-gradient(135deg, #4dff4d, #2bcc2b);
+    color: #001a00;
+    border: none;
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 11px;
+    padding: 6px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: transform 100ms;
+  }
+  .dev-quick-demo-btn:active { transform: scale(0.95); }
+  .dev-quick-demo-btn .dqd-icon {
+    font-size: 10px;
+    letter-spacing: -1px;
+  }
+  .dev-quick-demo-btn .dqd-label {
+    font-size: 11px;
+  }
+  /* 运行中:按钮脉冲发光 */
+  .dev-quick-demo.running .dev-quick-demo-btn {
+    animation: demoRunning 1.2s ease-in-out infinite;
+  }
+  /* 运行中:把"一手演示"文字换成"中断" */
+  .dev-quick-demo.running .dqd-label::after {
+    content: '中断';
+    display: inline;
+  }
+  .dev-quick-demo.running .dqd-label {
+    font-size: 0;   /* 隐藏原文字,只显伪元素 */
+  }
+  .dev-quick-demo.running .dqd-label::after {
+    font-size: 11px;
+  }
+
+  /* ⭐ v2.20 子项 5:Show / Muck 弹窗
+     位置:固定在牌桌底部,贴近自己手牌方便操作
+     宽度 320px 居中,有半透明遮罩 */
+  .show-muck-modal {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 80;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+  }
+  .show-muck-modal.show { display: flex; }
+  .sm-card {
+    width: 300px;
+    background: linear-gradient(180deg, #2a2d35, #1e2028);
+    border-radius: 14px;
+    padding: 20px 18px 14px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: white;
+    text-align: center;
+  }
+  .sm-title {
+    font-size: 17px;
+    font-weight: 800;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+  }
+  .sm-subtitle {
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 16px;
+  }
+  .sm-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .sm-btn {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-family: inherit;
+    transition: transform 120ms, box-shadow 120ms;
+  }
+  .sm-btn:active { transform: scale(0.96); }
+  .sm-btn-label { font-size: 15px; font-weight: 800; }
+  .sm-btn-hint { font-size: 10px; opacity: 0.75; }
+  .sm-btn.sm-muck {
+    background: linear-gradient(180deg, #4a4d56, #2e3038);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .sm-btn.sm-show {
+    background: linear-gradient(180deg, #4dff4d, #2bcc2b);
+    color: #001a00;
+    box-shadow: 0 0 10px rgba(77,255,77,0.4);
+  }
+  .sm-timer-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .sm-timer-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4dff4d, #2bcc2b);
+    transform-origin: left center;
+    transform: scaleX(1);
+    transition: transform 1s linear;
+  }
+  .sm-timer-text {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+  }
+  /* Muck 状态:把自己手牌变成牌背 */
+  .my-cards.muck-back .card {
+    background: linear-gradient(135deg, #d63232, #8a1818);
+    border: 1.5px solid white;
+    color: transparent;
+  }
+  .my-cards.muck-back .card .rank,
+  .my-cards.muck-back .card .suit { visibility: hidden; }
   .card {
     width: 44px;
     height: 60px;
@@ -2207,278 +2560,6 @@
   }
   .card.red { color: #d33; }
   .card.black { color: #000; }
-
-  /* ⭐ v2.18.7 公共牌动态切换 - 子项 2/4: 翻面动画 + 子项 5: 中牌高亮
-     每张公共牌做 rotateY 翻面: 起始 180°(牌背) → 0°(正面),250ms
-     未翻面的牌显示牌背覆盖层(::before)
-     中牌高亮: 加 .winning 类 → 金色描边 + 发光 */
-  .community-cards .card {
-    position: relative;
-    transform-style: preserve-3d;
-    transition: transform 250ms ease-out, box-shadow 200ms ease-out;
-    /* 默认正面朝外 */
-  }
-  .community-cards .card.flip-back {
-    transform: rotateY(180deg);
-  }
-  .community-cards .card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, #d63232, #8a1818);
-    border: 1.5px solid white;
-    border-radius: 5px;
-    backface-visibility: hidden;
-    transform: rotateY(180deg);
-    background-image:
-      linear-gradient(135deg, #d63232, #8a1818),
-      repeating-linear-gradient(
-        45deg,
-        transparent 0,
-        transparent 3px,
-        rgba(255,255,255,0.08) 3px,
-        rgba(255,255,255,0.08) 6px
-      );
-    background-blend-mode: overlay;
-  }
-  .community-cards .card .rank,
-  .community-cards .card .suit {
-    backface-visibility: hidden;
-  }
-  /* 中牌高亮(参与组成牌型的公共牌) */
-  .community-cards .card.winning {
-    box-shadow:
-      0 0 0 2px #d9a629,
-      0 0 12px 2px rgba(217, 166, 41, 0.7),
-      0 3px 8px rgba(0,0,0,0.5);
-    transform: translateY(-3px);
-  }
-  /* 烧牌:一张牌从牌堆飞出再淡出消失(子项 3) */
-  .burned-card {
-    position: absolute;
-    width: 32px;
-    height: 44px;
-    background: linear-gradient(135deg, #d63232, #8a1818);
-    border: 1.5px solid white;
-    border-radius: 4px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-    z-index: 7;
-    pointer-events: none;
-    transition: transform 300ms ease-out, opacity 200ms ease-in 200ms;
-  }
-  .burned-card.burned {
-    opacity: 0;
-  }
-
-  /* ⭐ v2.18.7 板块 C: 筹码动画
-     - 飞行筹码: 红蓝双色叠放,从座位下注块飞到中央底池
-     - 底池筹码堆: 中央底池上方堆叠,显示当前归拢的筹码量
-     - 派奖筹码: 从底池飞回赢家头像,落位时绿色发光 */
-  .flying-chip {
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, #e84444, #a01818);
-    border: 2px dashed white;
-    z-index: 8;
-    pointer-events: none;
-    transition: transform 350ms cubic-bezier(0.55, 0, 0.45, 1), opacity 200ms ease-in 300ms;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 10px;
-    font-weight: 700;
-  }
-  .flying-chip::before {
-    content: 'C';
-    color: white;
-    font-size: 9px;
-    font-weight: 700;
-  }
-  .flying-chip.blue {
-    background: radial-gradient(circle at 30% 30%, #4488e8, #1850a8);
-  }
-  .flying-chip.gold {
-    /* 派奖筹码:金色 */
-    background: radial-gradient(circle at 30% 30%, #ffd66b, #b88a30);
-    box-shadow: 0 0 8px rgba(255, 200, 60, 0.6), 0 2px 6px rgba(0,0,0,0.5);
-  }
-  .flying-chip.arrived {
-    opacity: 0;
-  }
-
-  /* 顶部4个图标(2左 + 2右) */
-     位置: 介于底池(top:30%)和公共牌(top:51.2%)之间的留白带
-     水平方向左偏 90px,避开中央底池/公共牌居中线
-     视觉: 4 张牌背错位叠放,营造"一沓牌"的厚度感
-     z-index: 3(低于公共牌4,看起来"压在桌面上") */
-  .card-deck {
-    position: absolute;
-    top: 41%;
-    left: 50%;
-    transform: translateX(calc(-50% - 90px));
-    width: 32px;
-    height: 44px;
-    z-index: 3;
-    pointer-events: none;  /* 牌堆不响应点击 */
-  }
-  .card-deck .deck-card {
-    position: absolute;
-    width: 32px;
-    height: 44px;
-    background: linear-gradient(135deg, #d63232, #8a1818);
-    border: 1.5px solid white;
-    border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
-  }
-  /* 4 张牌错位叠放,每张偏移 1-2px */
-  .card-deck .deck-card:nth-child(1) { top: 0;    left: 0;    }
-  .card-deck .deck-card:nth-child(2) { top: -1px; left: 1px;  }
-  .card-deck .deck-card:nth-child(3) { top: -2px; left: 2px;  }
-  .card-deck .deck-card:nth-child(4) { top: -3px; left: 3px;  }
-  /* 最顶部那张加一道斜线纹饰,跟现有座位牌背风格呼应 */
-  .card-deck .deck-card:nth-child(4)::after {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 2px;
-    background: repeating-linear-gradient(
-      45deg,
-      transparent 0,
-      transparent 2px,
-      rgba(255,255,255,0.08) 2px,
-      rgba(255,255,255,0.08) 4px
-    );
-  }
-  /* 发牌中状态:整副牌堆隐藏(子项 3 用) */
-  .card-deck.dealing-done {
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-  /* ⭐ v2.18.7 发牌动画 - 子项 3: 发牌中临时隐藏现有牌背
-     发牌前给座位 .seat-cards-back 加 .dealing 类 → 内部 mini-card 隐藏
-     发牌完成移除 .dealing → mini-card 出现(视觉上"飞行牌变牌背")
-     同时清掉飞行牌完成视觉接力 */
-  .seat-cards-back.dealing .mini-card {
-    opacity: 0;
-  }
-  .my-cards.dealing .card {
-    opacity: 0;
-  }
-
-  /* ⭐ v2.18.7 发牌动画 - 子项 4: 自己手牌 3D 翻面
-     翻面前: 给 .my-cards 加 .flip-pending 类
-       → 每张 .card 显示牌背覆盖层(::before),正面藏在 backface-visibility:hidden 后
-     翻面中: 加 .flipping 类 → rotateY 0° → 180°,250ms ease-out
-     翻面后: 移除 .flip-pending 和 .flipping → 正面常态显示
-     两张牌同时翻面(节奏紧凑) */
-  .my-cards .card {
-    position: relative;
-    transform-style: preserve-3d;
-    transition: transform 250ms ease-out;
-  }
-  .my-cards.flip-pending .card {
-    /* 翻面起始状态: 翻 180°,这时候 ::before(牌背)朝外,正面藏在背后 */
-    transform: rotateY(180deg);
-  }
-  .my-cards.flip-pending.flipping .card {
-    /* 翻面过程: 从 180° 转到 0°,正面出现 */
-    transform: rotateY(0deg);
-  }
-  .my-cards .card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, #d63232, #8a1818);
-    border-radius: 5px;
-    backface-visibility: hidden;
-    /* 牌背朝向自己(rotateY 180° 后才能看到正面) */
-    transform: rotateY(180deg);
-    /* 同样的斜纹纹饰 */
-    background-image:
-      linear-gradient(135deg, #d63232, #8a1818),
-      repeating-linear-gradient(
-        45deg,
-        transparent 0,
-        transparent 3px,
-        rgba(255,255,255,0.08) 3px,
-        rgba(255,255,255,0.08) 6px
-      );
-    background-blend-mode: overlay;
-    border: 1.5px solid white;
-    /* 默认透明,不影响日常显示 */
-    opacity: 0;
-  }
-  /* 翻面阶段才显示牌背覆盖层 */
-  .my-cards.flip-pending .card::before {
-    opacity: 1;
-  }
-  /* 正面文字(rank/suit)也需要 backface-visibility,翻到背面时藏起来 */
-  .my-cards .card .rank,
-  .my-cards .card .suit {
-    backface-visibility: hidden;
-  }
-
-  /* 牌堆里每发一张少一张:用 .deck-cards-left-N 控制可见数量 */
-  .card-deck[data-cards-left="3"] .deck-card:nth-child(1) { opacity: 0; }
-  .card-deck[data-cards-left="2"] .deck-card:nth-child(1),
-  .card-deck[data-cards-left="2"] .deck-card:nth-child(2) { opacity: 0; }
-  .card-deck[data-cards-left="1"] .deck-card:nth-child(1),
-  .card-deck[data-cards-left="1"] .deck-card:nth-child(2),
-  .card-deck[data-cards-left="1"] .deck-card:nth-child(3) { opacity: 0; }
-  .card-deck[data-cards-left="0"] .deck-card { opacity: 0; }
-  .card-deck .deck-card { transition: opacity 0.15s; }
-
-  /* ⭐ v2.18.7 发牌动画 - 子项 2: 飞行牌(原子动画)
-     从牌堆位置飞向指定座位手牌位置
-     起始: 牌堆中心,缩小0.7倍,旋转-180°(背面翻转中)
-     落位: 座位手牌位置,1倍大小,旋转0°(背面朝上落定)
-     时长: 250ms 飞行 + 120ms 弹一下
-     z-index: 8 飞越所有座位/中央元素,低于弹窗(50+)和topbar(10) */
-  .flying-card {
-    position: absolute;
-    width: 32px;
-    height: 44px;
-    background: linear-gradient(135deg, #d63232, #8a1818);
-    border: 1.5px solid white;
-    border-radius: 4px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-    z-index: 8;
-    pointer-events: none;
-    /* 起始位置和状态(由 JS 设置 left/top 为牌堆坐标) */
-    transform: translate(0, 0) rotate(-180deg) scale(0.7);
-    transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
-    will-change: transform;
-  }
-  /* 加 .flying 类:触发飞行(JS 同时设置 transform 目标值) */
-  /* 加 .landed 类:落位后微弹一下 */
-  .flying-card.landed {
-    animation: card-land-bounce 120ms ease-out;
-  }
-  @keyframes card-land-bounce {
-    0%   { /* 当前 transform 由 inline style 决定,继承落位状态 */ }
-    50%  { box-shadow: 0 4px 10px rgba(0,0,0,0.7); }
-    100% { box-shadow: 0 2px 6px rgba(0,0,0,0.6); }
-  }
-  /* 落位后顶张牌纹饰(跟牌堆顶张一致) */
-  .flying-card::after {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 2px;
-    background: repeating-linear-gradient(
-      45deg,
-      transparent 0,
-      transparent 2px,
-      rgba(255,255,255,0.08) 2px,
-      rgba(255,255,255,0.08) 4px
-    );
-  }
 
   /* 顶部4个图标(2左 + 2右) */
   .table-topbar {
@@ -2622,14 +2703,17 @@
     filter: drop-shadow(0 0 6px rgba(255,255,255,0.95)) drop-shadow(0 0 3px #4dff4d);
     /* 位置由 JS 实时计算,默认 12 点 */
   }
+  /* ⭐ v2.20 昵称胶囊:缩小内边距 + 字号包裹字体 + 下移避开头像
+     之前 margin:-8px(往头像里缩) → 被头像遮挡
+     现在 margin:2px(放在头像下方) + 缩小 padding/字号紧贴字体 */
   .seat-name-chip {
-    margin: -8px auto 0;
+    margin: 2px auto 0;
     background: rgba(0,0,0,0.65);
     color: white;
-    font-size: 11px;
-    line-height: 1.4;
-    padding: 2px 8px;
-    border-radius: 4px 4px 0 0;
+    font-size: 10px;
+    line-height: 1.2;
+    padding: 1px 5px;
+    border-radius: 3px 3px 0 0;
     display: block;
     width: fit-content;
     max-width: 70px;
@@ -2637,15 +2721,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* ⭐ v2.20 筹码胶囊:同步缩小内边距 + 字号包裹字体 */
   .seat-chips {
     margin: 0 auto;
     background: rgba(0,0,0,0.5);
     color: var(--green-main);
-    font-size: 13px;
-    line-height: 1.4;
+    font-size: 11px;
+    line-height: 1.2;
     font-weight: 700;
-    padding: 2px 10px;
-    border-radius: 0 0 4px 4px;
+    padding: 1px 6px;
+    border-radius: 0 0 3px 3px;
     display: block;
     width: fit-content;
   }
@@ -2705,6 +2790,17 @@
     gap: 2px;
     z-index: 3;
   }
+  /* ⭐ v2.20 右半边 s2/s3/s4/s5 摊牌时手牌往右移动(在原位置基础上往外侧移)
+     原位置 left:50% 居中盖头像 → 往右偏移让牌露在头像右侧
+     头像 48px,座位容器 80px,牌组宽 ~62px(30+2+30)→ 牌左缘到右缘 50%+30px */
+  .seat.s2 .seat-cards-back:has(.face-up),
+  .seat.s3 .seat-cards-back:has(.face-up),
+  .seat.s4 .seat-cards-back:has(.face-up),
+  .seat.s5 .seat-cards-back:has(.face-up) {
+    left: auto;
+    right: 8px;
+    transform: none;
+  }
   .seat-cards-back .mini-card.face-up {
     width: 30px;
     height: 42px;
@@ -2726,6 +2822,15 @@
   .seat-cards-back .mini-card.face-up .s { font-size: 12px; margin-top: 1px; }
   /* 摊牌时第二张牌并排显示,不再叠放/旋转 */
   .seat-cards-back .mini-card.face-up:nth-child(2) {
+    margin-left: 0;
+    transform: none;
+  }
+  /* ⭐ v2.20 修复:s2-s5 第二张牌牌背态有 rotate(-8deg),特异性高于上面规则,
+     摊牌时仍被旋转。这里用同等特异性强制清掉旋转,跟左半边对齐 */
+  .seat.s2 .seat-cards-back .mini-card.face-up:nth-child(2),
+  .seat.s3 .seat-cards-back .mini-card.face-up:nth-child(2),
+  .seat.s4 .seat-cards-back .mini-card.face-up:nth-child(2),
+  .seat.s5 .seat-cards-back .mini-card.face-up:nth-child(2) {
     margin-left: 0;
     transform: none;
   }
@@ -2856,30 +2961,163 @@
     flex-direction: row;
   }
 
-  /* 庄家D标 */
+  /* ⭐ v2.20 庄家 D 标:经典扑克筹码风格(参考 TGPoker/AAPoker/真实扑克)
+     视觉构成:
+     1. 28×28 白色圆筹码 + 内层金色描边
+     2. 8 个红黑相间小方块沿圆周分布(模拟真筹码的"边缘条纹")
+     3. 中心红色 "D" 字(Georgia 衬线,有手工质感)
+     4. 多层 box-shadow:外阴影 + 内高光 + 外发光
+     5. 微微 3D 倾斜(perspective + rotateX 2deg),增加立体感
+     6. 出现时弹性动画 */
   .dealer-mark {
     position: absolute;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    background: #555;
-    color: white;
+    /* 底层:白色筹码 + 周圈 8 个红黑小方块(用 conic-gradient 模拟)
+       从 0deg 开始,每 45deg 一个小方块,小方块占 8deg,红黑交替 */
+    background:
+      /* 顶层:中心白色圆(径向遮罩,留出周圈条纹) */
+      radial-gradient(circle at center,
+        #ffffff 0%,
+        #ffffff 58%,
+        transparent 60%
+      ),
+      /* 中层:周圈 8 个红黑相间的小方块 */
+      conic-gradient(
+        from 22.5deg,
+        #d63232 0deg 8deg,   transparent 8deg 45deg,
+        #1a1a1a 45deg 53deg, transparent 53deg 90deg,
+        #d63232 90deg 98deg, transparent 98deg 135deg,
+        #1a1a1a 135deg 143deg, transparent 143deg 180deg,
+        #d63232 180deg 188deg, transparent 188deg 225deg,
+        #1a1a1a 225deg 233deg, transparent 233deg 270deg,
+        #d63232 270deg 278deg, transparent 278deg 315deg,
+        #1a1a1a 315deg 323deg, transparent 323deg 360deg
+      ),
+      /* 底层:白色铺满 */
+      #ffffff;
+    /* 边框:外层深色 + 内层金色双描边视觉 */
+    border: 1.5px solid #2a2a2a;
+    box-shadow:
+      /* 外发光:微微金色光晕,突出立体感 */
+      0 0 8px rgba(255, 200, 80, 0.4),
+      /* 主阴影:深沉投影 */
+      0 2px 5px rgba(0, 0, 0, 0.7),
+      /* 内层金色描边(用 inset shadow 模拟) */
+      inset 0 0 0 1px rgba(218, 165, 32, 0.85),
+      /* 内层顶部高光(模拟光从上方打下来) */
+      inset 0 2px 3px rgba(255, 255, 255, 0.9),
+      /* 内层底部暗影(增加 3D 感) */
+      inset 0 -1px 2px rgba(0, 0, 0, 0.15);
+    color: #d63232;
     font-weight: 900;
-    font-size: 13px;
+    font-size: 14px;
+    font-family: Georgia, "Times New Roman", serif;
+    /* 字母轻微立体浮雕 */
+    text-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9),
+      0 -1px 0 rgba(0, 0, 0, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
     z-index: 7;
-    /* 右上角往外移,避开摊牌手牌的覆盖范围 */
+    /* ⭐ v2.20.2 默认位置(s6/s7/s8 左半边座位用):头像右上角往外探出
+       其他座位的位置在下面针对性覆盖 */
     top: -14px;
-    right: -20px;
+    right: -16px;
+    /* 微 3D 倾斜增加立体感 */
+    transform: perspective(60px) rotateX(8deg);
+    transform-origin: center bottom;
+    /* 出现时弹性动画 */
+    animation: dealerPop 420ms cubic-bezier(.18, .89, .32, 1.4);
   }
+  @keyframes dealerPop {
+    0%   { transform: perspective(60px) rotateX(8deg) scale(0); opacity: 0; }
+    60%  { transform: perspective(60px) rotateX(8deg) scale(1.15); opacity: 1; }
+    100% { transform: perspective(60px) rotateX(8deg) scale(1); opacity: 1; }
+  }
+  /* ⭐ v2.20.2 D 标位置规则(按座位区分,统一外探距离 16px)
+     视觉对称原则:D 标永远朝"桌面中央方向"探出,左右对称形成美感
+
+     s1 顶部左 → 头像右下角(下方更近桌面中央)
+     s2 顶部右 → 头像左下角(下方更近桌面中央)
+     s3/s4/s5 右半边 → 头像左上角(左侧更近桌面中央)
+     s6/s7/s8 左半边 → 头像右上角(右侧更近桌面中央,默认规则)
+     my 自己底部 → 头像左上角(保留现有) */
+  .seat.s1 .dealer-mark {
+    top: auto;
+    bottom: -16px;
+    right: -16px;
+    left: auto;
+  }
+  .seat.s2 .dealer-mark {
+    top: auto;
+    bottom: -16px;
+    right: auto;
+    left: -16px;
+  }
+  .seat.s3 .dealer-mark,
+  .seat.s4 .dealer-mark,
+  .seat.s5 .dealer-mark {
+    top: -14px;
+    right: auto;
+    left: -16px;
+  }
+  /* s6/s7/s8 用默认 top:-14 right:-16,无需覆盖 */
   /* 自己座位(s0)的 D 改在头像左上角(避开右上自然视觉焦点) */
   .my-seat .dealer-mark {
-    right: auto;
-    left: -20px;
     top: -14px;
+    right: auto;
+    left: -16px;
+  }
+  /* D 标移动动画用类(切换庄家位时给旧 D 加,触发飞行) */
+  .dealer-mark.moving {
+    transition: transform 600ms cubic-bezier(.4, .15, .25, 1),
+                left 600ms cubic-bezier(.4, .15, .25, 1),
+                right 600ms cubic-bezier(.4, .15, .25, 1),
+                top 600ms cubic-bezier(.4, .15, .25, 1);
+    animation: none;
+  }
+
+  /* ⭐ v2.20 子项 3:盲注/抓头标签(SB / BB / 抓头)
+     位置:头像下方紧贴(在昵称胶囊上方)
+     SB=蓝色,BB=橙色,抓头=金色 */
+  .blind-label {
+    position: absolute;
+    top: 52px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: white;
+    letter-spacing: 0.5px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    z-index: 6;
+    white-space: nowrap;
+    animation: blindLabelPop 380ms cubic-bezier(.18,.89,.32,1.4);
+  }
+  /* SB:蓝色 */
+  .blind-label:not([data-type]):not(.bb-label):not(.st-label),
+  .blind-label[data-type="sb"] {
+    background: linear-gradient(135deg, #4a8df0, #1e5fc8);
+  }
+  /* 按文本自动识别,不依赖 data-type:简化处理 → 用文本内容直接区分 */
+  /* SB 默认蓝色,文本 'BB' 时变橙色,文本 '抓头' 时变金色 */
+  /* 通过 :is() 选择器配合 attr 不行,改用 JS 加 class:见 attachBlindLabel 函数中 textContent 后置类 */
+  .blind-label.label-sb { background: linear-gradient(135deg, #4a8df0, #1e5fc8); }
+  .blind-label.label-bb { background: linear-gradient(135deg, #f5a623, #d97c0a); }
+  .blind-label.label-st { background: linear-gradient(135deg, #ffd84a, #b88a30); color: #3a2400; }
+  @keyframes blindLabelPop {
+    0%   { transform: translateX(-50%) scale(0); opacity: 0; }
+    100% { transform: translateX(-50%) scale(1); opacity: 1; }
+  }
+  /* 自己座位:盲注标签位置不同(头像在底部) */
+  .my-seat .blind-label {
+    top: auto;
+    bottom: 58px;
   }
 
   /* =====================================================
@@ -3076,6 +3314,93 @@
     box-shadow: 0 0 16px rgba(255,220,0,0.8), 0 0 30px rgba(255,180,0,0.4);
   }
 
+  /* ⭐ v2.20 子项 1:摊牌翻牌动画(3D 翻转)
+     给 .mini-card.reveal-flip 加 keyframes,从 rotateY(180deg)→0deg
+     视觉:看到牌背 → 翻一半看不见 → 牌正面出现 */
+  .mini-card.reveal-flip,
+  .my-cards .card.reveal-flip {
+    animation: cardFlipReveal 460ms ease-out;
+    transform-style: preserve-3d;
+  }
+  @keyframes cardFlipReveal {
+    0%   { transform: rotateY(180deg) scale(0.92); }
+    50%  { transform: rotateY(90deg) scale(1.05); }
+    100% { transform: rotateY(0deg) scale(1); }
+  }
+
+  /* ⭐ v2.20 子项 3:摊牌牌型气泡(winTag 升级版)
+     winTag 在原版基础上加 showdown-tag(摊牌专用),区分赢家/输家
+     赢家:金色渐变 + 脉冲发光
+     输家:深灰半透,无发光 */
+  .win-tag.showdown-tag {
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 10px;
+    letter-spacing: 0.5px;
+    z-index: 6;
+  }
+  .win-tag.showdown-tag.winner-tag {
+    background: linear-gradient(135deg, #ffe16a, #d9a629);
+    color: #4a2900;
+    box-shadow: 0 0 10px rgba(255, 215, 70, 0.85), 0 1px 3px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255, 240, 150, 0.9);
+    animation: winnerTagPulse 1.6s ease-in-out infinite;
+  }
+  .win-tag.showdown-tag.loser-tag {
+    background: rgba(0, 0, 0, 0.75);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  @keyframes winnerTagPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255, 215, 70, 0.7), 0 1px 3px rgba(0,0,0,0.5); }
+    50%      { box-shadow: 0 0 16px rgba(255, 215, 70, 1.0), 0 1px 3px rgba(0,0,0,0.5); }
+  }
+  /* winTag 位置:8 座位头像上方,自己座位牌的下方 */
+  .seat.s1 .win-tag.showdown-tag,
+  .seat.s2 .win-tag.showdown-tag {
+    top: -26px;        /* s1/s2 在牌桌顶部,winTag 更靠上 */
+  }
+  .seat.s3 .win-tag.showdown-tag,
+  .seat.s4 .win-tag.showdown-tag,
+  .seat.s5 .win-tag.showdown-tag,
+  .seat.s6 .win-tag.showdown-tag,
+  .seat.s7 .win-tag.showdown-tag,
+  .seat.s8 .win-tag.showdown-tag {
+    top: -24px;
+  }
+  .my-seat .win-tag.showdown-tag {
+    top: auto;
+    bottom: -22px;     /* 自己:在昵称下方 */
+    z-index: 7;
+  }
+
+  /* ⭐ v2.20 子项 4:组牌金色高亮(参与赢家牌型的 5 张牌)
+     公共牌、底牌(座位 mini-card.face-up)、自己手牌(.my-cards .card)都用同样的高亮
+     视觉:金色描边 + 金色外发光 + 轻微上抬 */
+  .card.hand-highlight,
+  .mini-card.hand-highlight {
+    outline: 2px solid #ffd84a;
+    outline-offset: -2px;
+    box-shadow: 0 0 12px rgba(255, 216, 74, 0.9), 0 2px 6px rgba(0,0,0,0.5);
+    transform: translateY(-2px) scale(1.02);
+    transition: transform 280ms cubic-bezier(.18,.89,.32,1.28),
+                box-shadow 280ms ease-out,
+                outline 280ms ease-out;
+    z-index: 5;
+    position: relative;
+  }
+  /* 公共牌高亮时不要影响 data-stage 控制的 transform(覆盖)*/
+  .community-cards .card.hand-highlight {
+    opacity: 1 !important;
+    transform: translateY(-3px) scale(1.05) !important;
+  }
+  /* 自己手牌高亮时再大一点 */
+  .my-cards .card.hand-highlight {
+    transform: translateY(-3px) scale(1.04);
+    box-shadow: 0 0 14px rgba(255, 216, 74, 1), 0 2px 8px rgba(0,0,0,0.6);
+  }
+
   /* 自己的座位(底部) */
   .my-seat {
     position: absolute;
@@ -3096,12 +3421,15 @@
   .my-cards .card .suit { font-size: 20px; }
   .my-seat .seat-name-chip {
     margin-top: 0;
-    padding: 3px 12px;
+    padding: 1px 7px;
+    font-size: 10px;
   }
   .my-seat .seat-chips {
     background: var(--green-main);
     color: black;
     font-weight: 900;
+    padding: 1px 7px;
+    font-size: 11px;
   }
 
   /* ⭐ v2.15 玩家行动按钮区(贴在自己座位上方) */
@@ -3826,6 +4154,26 @@
     /* v2.18.6 拖动支持(JS 改 left/top) */
     user-select: none;
     -webkit-user-select: none;
+    /* ⭐ v2.20.2 限制最大尺寸,避免遮太多屏幕 */
+    max-width: 165px;
+  }
+  /* ⭐ v2.20.2 第二个切换器:默认位置在屏幕右侧,避免和第一个重叠 */
+  .dev-state-switcher.dev-switcher-2nd {
+    left: auto;
+    right: 8px;
+    border-color: rgba(77, 255, 77, 0.5);   /* 用绿色虚线边框区分 */
+  }
+  .dev-state-switcher.dev-switcher-2nd .dev-header {
+    background: rgba(77, 255, 77, 0.08);
+  }
+  .dev-state-switcher.dev-switcher-2nd .dev-header:hover {
+    background: rgba(77, 255, 77, 0.15);
+  }
+  .dev-state-switcher.dev-switcher-2nd .dev-header-label {
+    color: #4dff4d;
+  }
+  .dev-state-switcher.dev-switcher-2nd .dev-header-toggle {
+    color: #4dff4d;
   }
   /* ⭐ v2.18.6 标题栏:点击折叠 + 按住拖动 */
   .dev-header {
@@ -3930,6 +4278,27 @@
   }
   .dev-section.open .dev-section-body {
     display: flex;
+    /* ⭐ v2.20.2 内容多时可滚动,不会被屏幕底部裁切 */
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* ⭐ v2.20.2 子分类小标题(下拉里的分隔标签) */
+  .dev-subgroup-label {
+    font-size: 9px;
+    color: rgba(77, 255, 77, 0.85);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 5px 0 2px;
+    margin-top: 4px;
+    border-top: 1px dashed rgba(77, 255, 77, 0.2);
+    font-weight: 700;
+  }
+  /* 第一个 subgroup-label 不需要顶部边框 */
+  .dev-section-body > .dev-subgroup-label:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
   }
   /* ⭐ v2.18.6 座位测试快捷区 */
   .dev-seat-row {
@@ -5571,10 +5940,11 @@
     animation: buyinFadeIn 0.18s ease-out;
   }
 
-  /* ⭐ v2.18.6 子项 9:顶部余额+补码▼快捷入口(在 s1 和 s2 中间) */
+  /* ⭐ v2.18.6 子项 9:顶部余额+补码▼快捷入口(在 s1 和 s2 中间)
+     ⭐ v2.20 上移 5px(从 top:2px → top:-3px),贴更近顶部边缘 */
   .topbar-rebuy {
     position: absolute;
-    top: 2px;
+    top: -3px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -9995,16 +10365,21 @@
         </div>
       </div>
 
-      <!-- ⭐ v2.18.7 发牌动画 - 子项 1: 牌堆(4 张牌背错位叠放) -->
-      <div class="card-deck" id="card-deck">
-        <div class="deck-card"></div>
-        <div class="deck-card"></div>
-        <div class="deck-card"></div>
-        <div class="deck-card"></div>
-      </div>
+      <!-- ⭐ v2.19 牌堆(发牌动画起点) -->
+      <div class="card-deck hidden" id="card-deck"><div class="deck-top"></div></div>
 
-      <!-- ⭐ v2.18.7 公共牌区: 由 JS 动态渲染(默认翻牌阶段 3 张演示) -->
-      <div class="community-cards" id="community-cards"></div>
+      <!-- ⭐ v2.19 公共牌区:5 个固定卡位,按阶段动态显隐(JS 控制)
+           - preflop: 0 张全隐
+           - flop:    显示前 3 张
+           - turn:    显示前 4 张
+           - river/showdown: 显示 5 张 -->
+      <div class="community-cards" id="community-cards" data-stage="flop">
+        <div class="card red" data-suit="♦" data-slot="1"><span class="rank">J</span><span class="suit">♦</span></div>
+        <div class="card black" data-suit="♣" data-slot="2"><span class="rank">7</span><span class="suit">♣</span></div>
+        <div class="card red" data-suit="♥" data-slot="3"><span class="rank">K</span><span class="suit">♥</span></div>
+        <div class="card black" data-suit="♠" data-slot="4"><span class="rank">A</span><span class="suit">♠</span></div>
+        <div class="card red" data-suit="♦" data-slot="5"><span class="rank">5</span><span class="suit">♦</span></div>
+      </div>
 
       <!-- 自己(底部) - 乱凌 K♥ 10♦ ⭐ 翻牌阶段演示,还没摊牌,无牌型标签 -->
       <div class="my-seat">
@@ -10025,212 +10400,181 @@
         <div class="seat-chips">1.4K</div>
       </div>
 
-      <!-- ⭐ v2.18.4 DEV 切换器:9 个静态弹窗 + 动作型按钮(WebSocket 接入后删)
-           ⭐ v2.18.6 标题栏可点击折叠 + 按住拖动 -->
-      <div class="dev-state-switcher" id="dev-state-switcher">
-        <!-- 标题栏:左 DEV 标签 / 中 当前态 / 右 折叠箭头 -->
-        <div class="dev-header" id="dev-header">
-          <span class="dev-header-label">DEV</span>
+      <!-- ⭐ v2.20.2 拆成 2 个独立可拖动的切换器
+           切换器 1(DEV-1):行动相关 4 段(轮到我/预选/滑杆/动作)
+           切换器 2(DEV-2):测试工具 3 段(阶段/座位7/座位9)
+           各自独立折叠 + 独立保存位置 -->
+
+      <!-- 切换器 1:行动相关 -->
+      <div class="dev-state-switcher" id="dev-switcher-1">
+        <div class="dev-header" id="dev-header-1">
+          <span class="dev-header-label">DEV-1</span>
           <span class="dev-header-current" id="dev-header-current">P1</span>
-          <span class="dev-header-toggle" id="dev-header-toggle">▼</span>
+          <span class="dev-header-toggle dev-header-toggle-1">▼</span>
         </div>
-        <div class="dev-body" id="dev-body">
-        <!-- ⭐ v2.18.6 5 段折叠下拉(手风琴模式,同时只展开一段) -->
-        <!-- 段 1:轮到我 4 态 -->
-        <div class="dev-section open" data-dev-section="turn">
-          <div class="dev-section-header">
-            <span>轮到我</span>
-            <span class="dev-section-arrow">▼</span>
-          </div>
-          <div class="dev-section-body">
-            <button class="dev-state-btn active" data-dev-state="p1">P1 加注</button>
-            <button class="dev-state-btn" data-dev-state="p2">P2 下注</button>
-            <button class="dev-state-btn" data-dev-state="p3">P3 过牌-加注</button>
-            <button class="dev-state-btn" data-dev-state="p4">P4 All-In跟</button>
-          </div>
-        </div>
-        <!-- 段 2:预选 -->
-        <div class="dev-section" data-dev-section="pre">
-          <div class="dev-section-header">
-            <span>预选</span>
-            <span class="dev-section-arrow">▼</span>
-          </div>
-          <div class="dev-section-body">
-            <button class="dev-state-btn" data-dev-state="y1">Y1 跟注预选</button>
-            <button class="dev-state-btn" data-dev-state="y2">Y2 过牌预选</button>
-            <button class="dev-state-btn" data-dev-state="y3">Y3 过/弃预选</button>
-          </div>
-        </div>
-        <!-- 段 3:滑杆 -->
-        <div class="dev-section" data-dev-section="slider">
-          <div class="dev-section-header">
-            <span>滑杆</span>
-            <span class="dev-section-arrow">▼</span>
-          </div>
-          <div class="dev-section-body">
-            <button class="dev-state-btn" data-dev-state="s1">S1 加注滑杆</button>
-            <button class="dev-state-btn" data-dev-state="s2">S2 下注滑杆</button>
-          </div>
-        </div>
-        <!-- 段 4:动作 -->
-        <div class="dev-section" data-dev-section="action">
-          <div class="dev-section-header">
-            <span>动作</span>
-            <span class="dev-section-arrow">▼</span>
-          </div>
-          <div class="dev-section-body">
-            <button class="dev-state-btn" id="dev-sim-raise">模拟上家加注</button>
-            <button class="dev-state-btn" id="dev-acting-other">模拟他人行动</button>
-            <button class="dev-state-btn" id="dev-sim-rebuy">模拟手动补码</button>
-            <button class="dev-state-btn" id="dev-sim-lowbal">模拟余额不足</button>
-          </div>
-        </div>
-        <!-- 段 5:座位测试 7人桌 -->
-        <div class="dev-section" data-dev-section="seat7">
-          <div class="dev-section-header">
-            <span>座位测试 7人桌</span>
-            <span class="dev-section-arrow">▼</span>
-          </div>
-          <div class="dev-section-body">
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-dev-seats="1/7">1/7</button>
-              <button class="dev-seat-btn" data-dev-seats="2/7">2/7</button>
-              <button class="dev-seat-btn" data-dev-seats="3/7">3/7</button>
-              <button class="dev-seat-btn" data-dev-seats="4/7">4/7</button>
+        <div class="dev-body">
+          <!-- 段 1:轮到我 4 态 -->
+          <div class="dev-section open" data-dev-section="turn">
+            <div class="dev-section-header">
+              <span>轮到我</span>
+              <span class="dev-section-arrow">▼</span>
             </div>
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-dev-seats="5/7">5/7</button>
-              <button class="dev-seat-btn" data-dev-seats="6/7">6/7</button>
-              <button class="dev-seat-btn" data-dev-seats="7/7">7/7</button>
+            <div class="dev-section-body">
+              <button class="dev-state-btn active" data-dev-state="p1">P1 加注</button>
+              <button class="dev-state-btn" data-dev-state="p2">P2 下注</button>
+              <button class="dev-state-btn" data-dev-state="p3">P3 过牌-加注</button>
+              <button class="dev-state-btn" data-dev-state="p4">P4 All-In跟</button>
+            </div>
+          </div>
+          <!-- 段 2:预选 -->
+          <div class="dev-section" data-dev-section="pre">
+            <div class="dev-section-header">
+              <span>预选</span>
+              <span class="dev-section-arrow">▼</span>
+            </div>
+            <div class="dev-section-body">
+              <button class="dev-state-btn" data-dev-state="y1">Y1 跟注预选</button>
+              <button class="dev-state-btn" data-dev-state="y2">Y2 过牌预选</button>
+              <button class="dev-state-btn" data-dev-state="y3">Y3 过/弃预选</button>
+            </div>
+          </div>
+          <!-- 段 3:滑杆 -->
+          <div class="dev-section" data-dev-section="slider">
+            <div class="dev-section-header">
+              <span>滑杆</span>
+              <span class="dev-section-arrow">▼</span>
+            </div>
+            <div class="dev-section-body">
+              <button class="dev-state-btn" data-dev-state="s1">S1 加注滑杆</button>
+              <button class="dev-state-btn" data-dev-state="s2">S2 下注滑杆</button>
+            </div>
+          </div>
+          <!-- 段 4:动作 -->
+          <div class="dev-section" data-dev-section="action">
+            <div class="dev-section-header">
+              <span>动作</span>
+              <span class="dev-section-arrow">▼</span>
+            </div>
+            <div class="dev-section-body">
+              <button class="dev-state-btn" id="dev-sim-raise">模拟上家加注</button>
+              <button class="dev-state-btn" id="dev-acting-other">模拟他人行动</button>
+              <button class="dev-state-btn" id="dev-sim-rebuy">模拟手动补码</button>
+              <button class="dev-state-btn" id="dev-sim-lowbal">模拟余额不足</button>
             </div>
           </div>
         </div>
-        <!-- 段 6:座位测试 9人桌 -->
-        <div class="dev-section" data-dev-section="seat9">
-          <div class="dev-section-header">
-            <span>座位测试 9人桌</span>
-            <span class="dev-section-arrow">▼</span>
+      </div>
+
+      <!-- 切换器 2:测试工具 -->
+      <div class="dev-state-switcher dev-switcher-2nd" id="dev-switcher-2">
+        <div class="dev-header" id="dev-header-2">
+          <span class="dev-header-label">DEV-2</span>
+          <span class="dev-header-current">工具</span>
+          <span class="dev-header-toggle dev-header-toggle-2">▼</span>
+        </div>
+        <div class="dev-body">
+          <!-- 段 1:阶段 -->
+          <div class="dev-section open" data-dev-section="stage">
+            <div class="dev-section-header">
+              <span>阶段</span>
+              <span class="dev-section-arrow">▼</span>
+            </div>
+            <div class="dev-section-body">
+              <button class="dev-state-btn" data-dev-stage="preflop">翻前 (0张)</button>
+              <button class="dev-state-btn" data-dev-stage="flop">翻牌 (3张)</button>
+              <button class="dev-state-btn" data-dev-stage="turn">转牌 (4张)</button>
+              <button class="dev-state-btn" data-dev-stage="river">河牌 (5张)</button>
+              <button class="dev-state-btn" data-dev-stage="showdown">摊牌</button>
+              <button class="dev-state-btn" id="dev-deal-hole">▶ 发底牌动画</button>
+              <button class="dev-state-btn" id="dev-deal-flop">▶ 发翻牌动画</button>
+              <button class="dev-state-btn" id="dev-deal-turn">▶ 发转牌动画</button>
+              <button class="dev-state-btn" id="dev-deal-river">▶ 发河牌动画</button>
+              <button class="dev-state-btn" id="dev-bet-to-pot">▶ 下注归底池</button>
+              <button class="dev-state-btn" id="dev-pot-to-winner">▶ 底池飞赢家</button>
+              <button class="dev-state-btn" id="dev-showdown">▶ 摊牌(翻底牌+牌型)</button>
+              <button class="dev-state-btn" id="dev-new-hand">▶ 新一手(全重置)</button>
+              <button class="dev-state-btn" id="dev-show-muck">▶ Show/Muck 弹窗</button>
+              <button class="dev-state-btn" id="dev-toggle-dealer">▶ 切换庄家D标</button>
+              <button class="dev-state-btn" id="dev-post-blinds">▶ 下盲注 SB/BB</button>
+              <button class="dev-state-btn" id="dev-post-straddle">▶ 抓头(Straddle)</button>
+              <button class="dev-state-btn highlight-demo" id="dev-full-hand">▶▶ 完整一手演示</button>
+            </div>
           </div>
-          <div class="dev-section-body">
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-dev-seats="0/9">0/9</button>
-              <button class="dev-seat-btn" data-dev-seats="1/9">1/9</button>
-              <button class="dev-seat-btn" data-dev-seats="2/9">2/9</button>
-              <button class="dev-seat-btn" data-dev-seats="3/9">3/9</button>
+          <!-- 段 2:座位测试 7人桌 -->
+          <div class="dev-section" data-dev-section="seat7">
+            <div class="dev-section-header">
+              <span>座位测试 7人桌</span>
+              <span class="dev-section-arrow">▼</span>
             </div>
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-dev-seats="4/9">4/9</button>
-              <button class="dev-seat-btn" data-dev-seats="5/9">5/9</button>
-              <button class="dev-seat-btn" data-dev-seats="6/9">6/9</button>
-              <button class="dev-seat-btn" data-dev-seats="7/9">7/9</button>
+            <div class="dev-section-body">
+              <div class="dev-seat-row">
+                <button class="dev-seat-btn" data-dev-seats="1/7">1/7</button>
+                <button class="dev-seat-btn" data-dev-seats="2/7">2/7</button>
+                <button class="dev-seat-btn" data-dev-seats="3/7">3/7</button>
+                <button class="dev-seat-btn" data-dev-seats="4/7">4/7</button>
+              </div>
+              <div class="dev-seat-row">
+                <button class="dev-seat-btn" data-dev-seats="5/7">5/7</button>
+                <button class="dev-seat-btn" data-dev-seats="6/7">6/7</button>
+                <button class="dev-seat-btn" data-dev-seats="7/7">7/7</button>
+              </div>
             </div>
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-dev-seats="8/9">8/9</button>
-              <button class="dev-seat-btn" data-dev-seats="9/9">9/9</button>
+          </div>
+          <!-- 段 3:座位测试 9人桌 -->
+          <div class="dev-section" data-dev-section="seat9">
+            <div class="dev-section-header">
+              <span>座位测试 9人桌</span>
+              <span class="dev-section-arrow">▼</span>
+            </div>
+            <div class="dev-section-body">
+              <div class="dev-seat-row">
+                <button class="dev-seat-btn" data-dev-seats="0/9">0/9</button>
+                <button class="dev-seat-btn" data-dev-seats="1/9">1/9</button>
+                <button class="dev-seat-btn" data-dev-seats="2/9">2/9</button>
+                <button class="dev-seat-btn" data-dev-seats="3/9">3/9</button>
+              </div>
+              <div class="dev-seat-row">
+                <button class="dev-seat-btn" data-dev-seats="4/9">4/9</button>
+                <button class="dev-seat-btn" data-dev-seats="5/9">5/9</button>
+                <button class="dev-seat-btn" data-dev-seats="6/9">6/9</button>
+                <button class="dev-seat-btn" data-dev-seats="7/9">7/9</button>
+              </div>
+              <div class="dev-seat-row">
+                <button class="dev-seat-btn" data-dev-seats="8/9">8/9</button>
+                <button class="dev-seat-btn" data-dev-seats="9/9">9/9</button>
+              </div>
             </div>
           </div>
         </div>
-        <!-- ⭐ v2.18.7 段 7:发牌动画(子项 6 DEV 按钮) -->
-        <div class="dev-section" data-dev-section="deal">
-          <div class="dev-section-header">
-            <span>发牌动画</span>
-            <span class="dev-section-arrow">▼</span>
+      </div>
+
+      <!-- ⭐ v2.20.3 完整一手演示快捷按钮(独立浮动,不在切换器内)
+           始终可见,一键播放完整流程,可拖动调整位置 -->
+      <div class="dev-quick-demo" id="dev-quick-demo">
+        <div class="dev-quick-demo-grip" id="dev-quick-demo-grip">⋮⋮</div>
+        <button class="dev-quick-demo-btn" id="dev-quick-demo-btn">
+          <span class="dqd-icon">▶▶</span>
+          <span class="dqd-label">一手演示</span>
+        </button>
+      </div>
+      <div class="show-muck-modal" id="show-muck-modal">
+        <div class="sm-card">
+          <div class="sm-title">展示底牌?</div>
+          <div class="sm-subtitle">其他玩家可以看到你的手牌</div>
+          <div class="sm-buttons">
+            <button class="sm-btn sm-muck" id="sm-muck-btn">
+              <span class="sm-btn-label">盖牌</span>
+              <span class="sm-btn-hint">不展示</span>
+            </button>
+            <button class="sm-btn sm-show" id="sm-show-btn">
+              <span class="sm-btn-label">展示</span>
+              <span class="sm-btn-hint">公开</span>
+            </button>
           </div>
-          <div class="dev-section-body">
-            <!-- 单座位发牌 9 个 -->
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-deal-to="s1">→s1</button>
-              <button class="dev-seat-btn" data-deal-to="s2">→s2</button>
-              <button class="dev-seat-btn" data-deal-to="s3">→s3</button>
-              <button class="dev-seat-btn" data-deal-to="s4">→s4</button>
-            </div>
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-deal-to="s5">→s5</button>
-              <button class="dev-seat-btn" data-deal-to="s6">→s6</button>
-              <button class="dev-seat-btn" data-deal-to="s7">→s7</button>
-              <button class="dev-seat-btn" data-deal-to="s8">→s8</button>
-            </div>
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-deal-to="s9">→s9</button>
-              <button class="dev-seat-btn" data-deal-to="my-seat">→自己</button>
-            </div>
-            <!-- 组合动作 -->
-            <button class="dev-state-btn" id="dev-deal-all-once">全员各 1 张</button>
-            <button class="dev-state-btn" id="dev-deal-full">完整 2 圈(标准发牌)</button>
-            <!-- 速度档位 -->
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn dev-deal-speed-btn" data-deal-speed="slow">慢</button>
-              <button class="dev-seat-btn dev-deal-speed-btn" data-deal-speed="normal">标准</button>
-              <button class="dev-seat-btn dev-deal-speed-btn" data-deal-speed="fast">快</button>
-            </div>
-            <button class="dev-state-btn" id="dev-deal-clear">清掉飞行牌</button>
-            <button class="dev-state-btn" id="dev-deal-reset">重置牌堆</button>
+          <div class="sm-timer-bar">
+            <div class="sm-timer-fill" id="sm-timer-fill"></div>
           </div>
-        </div>
-        <!-- ⭐ v2.18.7 段 8:公共牌切换(板块 A 子项 6 DEV 按钮) -->
-        <div class="dev-section" data-dev-section="board">
-          <div class="dev-section-header">
-            <span>公共牌切换</span>
-            <span class="dev-section-arrow">▼</span>
-          </div>
-          <div class="dev-section-body">
-            <!-- 街况快速切换(无动画) -->
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-set-street="preflop">翻前0</button>
-              <button class="dev-seat-btn" data-set-street="flop">翻牌3</button>
-              <button class="dev-seat-btn" data-set-street="turn">转牌4</button>
-              <button class="dev-seat-btn" data-set-street="river">河牌5</button>
-            </div>
-            <!-- 带动画的发牌 -->
-            <button class="dev-state-btn" id="dev-deal-flop">发翻牌(动画)</button>
-            <button class="dev-state-btn" id="dev-deal-turn">发转牌(动画)</button>
-            <button class="dev-state-btn" id="dev-deal-river">发河牌(动画)</button>
-            <!-- 中牌高亮测试 -->
-            <button class="dev-state-btn" id="dev-highlight-winning">高亮中牌(示例:1,3,5)</button>
-            <button class="dev-state-btn" id="dev-clear-winning">清掉高亮</button>
-          </div>
-        </div>
-        <!-- ⭐ v2.18.7 段 9:完整手牌演示(板块 B 状态机串联) -->
-        <div class="dev-section" data-dev-section="handflow">
-          <div class="dev-section-header">
-            <span>完整手牌演示</span>
-            <span class="dev-section-arrow">▼</span>
-          </div>
-          <div class="dev-section-body">
-            <button class="dev-state-btn" id="dev-flow-full">▶ 一键完整一手</button>
-            <button class="dev-state-btn" id="dev-flow-reset">重置到翻前</button>
-          </div>
-        </div>
-        <!-- ⭐ v2.18.7 段 10:筹码动画(板块 C) -->
-        <div class="dev-section" data-dev-section="chips">
-          <div class="dev-section-header">
-            <span>筹码动画</span>
-            <span class="dev-section-arrow">▼</span>
-          </div>
-          <div class="dev-section-body">
-            <!-- 单座位下注飞行 -->
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-chip-from="s1">s1→池</button>
-              <button class="dev-seat-btn" data-chip-from="s2">s2→池</button>
-              <button class="dev-seat-btn" data-chip-from="s3">s3→池</button>
-              <button class="dev-seat-btn" data-chip-from="s4">s4→池</button>
-            </div>
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-chip-from="s5">s5→池</button>
-              <button class="dev-seat-btn" data-chip-from="s6">s6→池</button>
-              <button class="dev-seat-btn" data-chip-from="s7">s7→池</button>
-              <button class="dev-seat-btn" data-chip-from="s8">s8→池</button>
-            </div>
-            <div class="dev-seat-row">
-              <button class="dev-seat-btn" data-chip-from="s9">s9→池</button>
-              <button class="dev-seat-btn" data-chip-from="my-seat">我→池</button>
-            </div>
-            <!-- 收筹码(全员→池)/ 派奖(池→赢家) -->
-            <button class="dev-state-btn" id="dev-chip-collect-all">收筹码(全员→池)</button>
-            <button class="dev-state-btn" id="dev-chip-award-s3">派奖(池→s3)</button>
-            <button class="dev-state-btn" id="dev-chip-award-my">派奖(池→我)</button>
-          </div>
-        </div>
+          <div class="sm-timer-text"><span id="sm-timer-sec">8</span>s 后自动盖牌</div>
         </div>
       </div>
 
@@ -14158,43 +14502,49 @@
 
   // ⭐ v2.16 临时切换器:点击 → 改 action-area 的 data-state
   // 真实业务删掉这段 + 删 HTML 切换器,改用 WebSocket 推送的 turn:start 事件切换
-  const devSwitcher = document.getElementById('dev-state-switcher');
-  const raiseBtnForBet = document.getElementById('ab-raise-btn');   // ⭐ v2.18.1 加注/下注按钮
+  // ⭐ v2.20.2 改成 2 个独立切换器(共用同一套拖动/折叠/分段逻辑)
+  // devSwitcher 仍指向"切换器 1",保留兼容性(后续按钮事件绑定都用 devSwitcher)
+  const devSwitcher = document.getElementById('dev-switcher-1');
+  const devSwitcher2 = document.getElementById('dev-switcher-2');
+  const raiseBtnForBet = document.getElementById('ab-raise-btn');
 
-  // ⭐ v2.18.6 DEV 切换器:折叠+拖动+当前态同步
-  // 真实业务删掉这整段(切换器本身就是临时的)
-  const devHeader = document.getElementById('dev-header');
+  const devHeader = document.getElementById('dev-header-1');
   const devHeaderCurrent = document.getElementById('dev-header-current');
-  if (devSwitcher && devHeader) {
-    // ---- 折叠状态(localStorage 持久化)----
-    const STORAGE_KEY_COLLAPSED = 'aagame_dev_collapsed';
-    const STORAGE_KEY_POS = 'aagame_dev_pos';
+
+  // ⭐ v2.20.2 工厂函数:把"拖动+折叠+分段手风琴"逻辑封装,复用给两个切换器
+  function initDevSwitcher(switcherEl, headerEl, storageKeySuffix) {
+    if (!switcherEl || !headerEl) return;
+    const STORAGE_KEY_COLLAPSED = 'aagame_dev_collapsed_' + storageKeySuffix;
+    const STORAGE_KEY_POS = 'aagame_dev_pos_' + storageKeySuffix;
+    const STORAGE_KEY_SECTION = 'aagame_dev_section_' + storageKeySuffix;
+
+    // ---- 恢复折叠状态 ----
     const savedCollapsed = localStorage.getItem(STORAGE_KEY_COLLAPSED);
-    if (savedCollapsed === '1') devSwitcher.classList.add('collapsed');
-    // 恢复位置
+    if (savedCollapsed === '1') switcherEl.classList.add('collapsed');
+
+    // ---- 恢复位置 ----
     try {
       const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_POS) || 'null');
       if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
-        devSwitcher.style.left = savedPos.left + 'px';
-        devSwitcher.style.top = savedPos.top + 'px';
+        switcherEl.style.left = savedPos.left + 'px';
+        switcherEl.style.top = savedPos.top + 'px';
+        switcherEl.style.right = 'auto';
       }
     } catch (e) {}
 
-    // ---- 拖动 vs 点击区分(移动超过 5px 算拖动)----
+    // ---- 拖动 ----
     let dragState = null;
     const DRAG_THRESHOLD = 5;
 
     function onDragStart(e) {
-      // 触摸或鼠标事件统一取坐标
       const pt = e.touches && e.touches[0] ? e.touches[0] : e;
-      const rect = devSwitcher.getBoundingClientRect();
-      const parentRect = devSwitcher.offsetParent
-        ? devSwitcher.offsetParent.getBoundingClientRect()
+      const rect = switcherEl.getBoundingClientRect();
+      const parentRect = switcherEl.offsetParent
+        ? switcherEl.offsetParent.getBoundingClientRect()
         : { left: 0, top: 0 };
       dragState = {
         startX: pt.clientX,
         startY: pt.clientY,
-        // 相对父容器的初始位置
         origLeft: rect.left - parentRect.left,
         origTop: rect.top - parentRect.top,
         moved: false
@@ -14216,94 +14566,67 @@
       }
       if (dragState.moved) {
         if (e.cancelable) e.preventDefault();
-        // 算新位置,限制在父容器内
-        const parent = devSwitcher.offsetParent || document.body;
+        const parent = switcherEl.offsetParent || document.body;
         const pw = parent.clientWidth;
         const ph = parent.clientHeight;
-        const w = devSwitcher.offsetWidth;
-        const h = devSwitcher.offsetHeight;
+        const w = switcherEl.offsetWidth;
+        const h = switcherEl.offsetHeight;
         let newLeft = dragState.origLeft + dx;
         let newTop = dragState.origTop + dy;
         newLeft = Math.max(0, Math.min(pw - w, newLeft));
         newTop = Math.max(0, Math.min(ph - h, newTop));
-        devSwitcher.style.left = newLeft + 'px';
-        devSwitcher.style.top = newTop + 'px';
+        switcherEl.style.left = newLeft + 'px';
+        switcherEl.style.top = newTop + 'px';
+        switcherEl.style.right = 'auto';   // 拖动后不再用 right 定位
       }
     }
     function onDragEnd(e) {
       if (!dragState) return;
       const wasMoved = dragState.moved;
-      // 移除监听
       document.removeEventListener('mousemove', onDragMove);
       document.removeEventListener('mouseup', onDragEnd);
       document.removeEventListener('touchmove', onDragMove);
       document.removeEventListener('touchend', onDragEnd);
       document.removeEventListener('touchcancel', onDragEnd);
-      // 如果发生了拖动:保存位置 + 设标记给 click 看
       if (wasMoved) {
-        const left = parseFloat(devSwitcher.style.left) || 0;
-        const top = parseFloat(devSwitcher.style.top) || 0;
+        const left = parseFloat(switcherEl.style.left) || 0;
+        const top = parseFloat(switcherEl.style.top) || 0;
         try {
           localStorage.setItem(STORAGE_KEY_POS, JSON.stringify({ left, top }));
-        } catch (e) {}
-        devHeader._justDragged = true;   // ⭐ 标记给 click 监听看,跳过这次 click
+        } catch (e2) {}
+        headerEl._justDragged = true;
       }
-      // 注意:折叠态切换由 click 监听单独处理(避免 mousedown+click 双触发)
       dragState = null;
     }
-    // ⭐ v2.18.6 修复:折叠态切换改由 click 单独处理
-    // 之前在 onDragEnd 里 toggle,会跟浏览器后续触发的 click 事件互相干扰
-    devHeader.addEventListener('click', (e) => {
-      // 如果刚刚拖动过(dragState 还在 = move 事件触发的),不切换折叠
-      // dragState 在 onDragEnd 里设为 null,但 click 在 mouseup 后才触发,所以这里检查 wasMoved 不够
-      // 用一个临时标记:onDragEnd 里如果 wasMoved=true,记录一个标记给 click 看
-      if (devHeader._justDragged) {
-        devHeader._justDragged = false;
+
+    headerEl.addEventListener('click', (e) => {
+      if (headerEl._justDragged) {
+        headerEl._justDragged = false;
         e.stopPropagation();
         return;
       }
       e.stopPropagation();
-      devSwitcher.classList.toggle('collapsed');
-      const collapsed = devSwitcher.classList.contains('collapsed');
-      try {
-        localStorage.setItem(STORAGE_KEY_COLLAPSED, collapsed ? '1' : '0');
-      } catch (e2) {}
+      switcherEl.classList.toggle('collapsed');
+      const collapsed = switcherEl.classList.contains('collapsed');
+      try { localStorage.setItem(STORAGE_KEY_COLLAPSED, collapsed ? '1' : '0'); } catch (e2) {}
     });
-    devHeader.addEventListener('mousedown', onDragStart);
-    devHeader.addEventListener('touchstart', onDragStart, { passive: true });
+    headerEl.addEventListener('mousedown', onDragStart);
+    headerEl.addEventListener('touchstart', onDragStart, { passive: true });
 
-    // ---- 当前态同步显示(改 actionArea data-state 时联动)----
-    function syncCurrentLabel() {
-      if (!devHeaderCurrent || !actionArea) return;
-      const state = (actionArea.dataset.state || '').toUpperCase();
-      devHeaderCurrent.textContent = state || '—';
-    }
-    syncCurrentLabel();
-    // 监听 data-state 变化
-    if (actionArea) {
-      const stateObserver = new MutationObserver(syncCurrentLabel);
-      stateObserver.observe(actionArea, { attributes: true, attributeFilter: ['data-state'] });
-    }
-
-    // ⭐ v2.18.6 分段折叠(手风琴模式:同时只展开一段)
-    const STORAGE_KEY_SECTION = 'aagame_dev_section';
+    // ---- 分段手风琴(同时只展开一段) ----
     const savedSection = localStorage.getItem(STORAGE_KEY_SECTION);
     if (savedSection) {
-      // 恢复上次展开的段
-      devSwitcher.querySelectorAll('.dev-section').forEach(s => {
+      switcherEl.querySelectorAll('.dev-section').forEach(s => {
         s.classList.toggle('open', s.dataset.devSection === savedSection);
       });
     }
-    // 段标题点击切换
-    devSwitcher.querySelectorAll('.dev-section-header').forEach(header => {
+    switcherEl.querySelectorAll('.dev-section-header').forEach(header => {
       header.addEventListener('click', (e) => {
         e.stopPropagation();
         const section = header.closest('.dev-section');
         if (!section) return;
         const isOpen = section.classList.contains('open');
-        // 关掉其他段
-        devSwitcher.querySelectorAll('.dev-section').forEach(s => s.classList.remove('open'));
-        // 点击的段:如果原本是关的就开,原本是开的就保持关(全收起)
+        switcherEl.querySelectorAll('.dev-section').forEach(s => s.classList.remove('open'));
         if (!isOpen) {
           section.classList.add('open');
           try { localStorage.setItem(STORAGE_KEY_SECTION, section.dataset.devSection); } catch (e2) {}
@@ -14314,13 +14637,139 @@
     });
   }
 
+  // 初始化 2 个独立切换器
+  initDevSwitcher(devSwitcher, devHeader, '1');
+  initDevSwitcher(devSwitcher2, document.getElementById('dev-header-2'), '2');
+
+  // ---- 当前态同步显示(只用切换器 1 显示当前 P/Y/S 状态) ----
+  if (devSwitcher && devHeader && devHeaderCurrent) {
+    function syncCurrentLabel() {
+      if (!devHeaderCurrent || !actionArea) return;
+      const state = (actionArea.dataset.state || '').toUpperCase();
+      devHeaderCurrent.textContent = state || '—';
+    }
+    syncCurrentLabel();
+    if (actionArea) {
+      const stateObserver = new MutationObserver(syncCurrentLabel);
+      stateObserver.observe(actionArea, { attributes: true, attributeFilter: ['data-state'] });
+    }
+  }
+
+  // ⭐ v2.20.3 浮动快捷按钮:可拖动 + 点击运行/中断完整一手演示
+  // 始终可见,不用打开切换器就能一键运行完整流程
+  (function initQuickDemoBtn() {
+    const quickDemo = document.getElementById('dev-quick-demo');
+    const grip = document.getElementById('dev-quick-demo-grip');
+    const btn = document.getElementById('dev-quick-demo-btn');
+    if (!quickDemo || !grip || !btn) return;
+
+    // 恢复位置
+    const STORAGE_KEY_POS = 'aagame_quick_demo_pos';
+    try {
+      const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_POS) || 'null');
+      if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
+        quickDemo.style.left = savedPos.left + 'px';
+        quickDemo.style.top = savedPos.top + 'px';
+        quickDemo.style.bottom = 'auto';
+      }
+    } catch (e) {}
+
+    // 拖动(只在 grip 上响应)
+    let dragState = null;
+    const DRAG_THRESHOLD = 5;
+
+    function onStart(e) {
+      const pt = e.touches && e.touches[0] ? e.touches[0] : e;
+      const rect = quickDemo.getBoundingClientRect();
+      const parentRect = quickDemo.offsetParent
+        ? quickDemo.offsetParent.getBoundingClientRect()
+        : { left: 0, top: 0 };
+      dragState = {
+        startX: pt.clientX,
+        startY: pt.clientY,
+        origLeft: rect.left - parentRect.left,
+        origTop: rect.top - parentRect.top,
+        moved: false
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+      document.addEventListener('touchcancel', onEnd);
+    }
+    function onMove(e) {
+      if (!dragState) return;
+      const pt = e.touches && e.touches[0] ? e.touches[0]
+              : (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0] : e);
+      const dx = pt.clientX - dragState.startX;
+      const dy = pt.clientY - dragState.startY;
+      if (!dragState.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) dragState.moved = true;
+      if (dragState.moved) {
+        if (e.cancelable) e.preventDefault();
+        const parent = quickDemo.offsetParent || document.body;
+        const pw = parent.clientWidth;
+        const ph = parent.clientHeight;
+        const w = quickDemo.offsetWidth;
+        const h = quickDemo.offsetHeight;
+        let newLeft = Math.max(0, Math.min(pw - w, dragState.origLeft + dx));
+        let newTop = Math.max(0, Math.min(ph - h, dragState.origTop + dy));
+        quickDemo.style.left = newLeft + 'px';
+        quickDemo.style.top = newTop + 'px';
+        quickDemo.style.bottom = 'auto';
+      }
+    }
+    function onEnd() {
+      if (!dragState) return;
+      const wasMoved = dragState.moved;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', onEnd);
+      if (wasMoved) {
+        const left = parseFloat(quickDemo.style.left) || 0;
+        const top = parseFloat(quickDemo.style.top) || 0;
+        try { localStorage.setItem(STORAGE_KEY_POS, JSON.stringify({ left, top })); } catch (e2) {}
+      }
+      dragState = null;
+    }
+    grip.addEventListener('mousedown', onStart);
+    grip.addEventListener('touchstart', onStart, { passive: true });
+
+    // 点击按钮:转发到主按钮(复用所有完整一手演示逻辑)
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const mainBtn = document.getElementById('dev-full-hand');
+      if (mainBtn) mainBtn.click();
+    });
+
+    // 监听 dev-full-hand 主按钮的 running 状态,同步浮动按钮的视觉
+    const mainBtn = document.getElementById('dev-full-hand');
+    if (mainBtn) {
+      const observer = new MutationObserver(() => {
+        quickDemo.classList.toggle('running', mainBtn.classList.contains('running'));
+      });
+      observer.observe(mainBtn, { attributes: true, attributeFilter: ['class'] });
+    }
+  })();
+
+  // ⭐ v2.20.2 跨两个切换器查找按钮的辅助函数
+  // 解决:devSwitcher 只指向切换器1,切换器2 里的按钮查不到
+  function devQueryAll(selector) {
+    const results = [];
+    if (devSwitcher) devSwitcher.querySelectorAll(selector).forEach(el => results.push(el));
+    if (devSwitcher2) devSwitcher2.querySelectorAll(selector).forEach(el => results.push(el));
+    return results;
+  }
+  window.devQueryAll = devQueryAll;
+
   if (devSwitcher && actionArea) {
-    devSwitcher.querySelectorAll('.dev-state-btn[data-dev-state]').forEach(btn => {
+    devQueryAll('.dev-state-btn[data-dev-state]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const newState = btn.dataset.devState;
         // 切换 active 类
-        devSwitcher.querySelectorAll('.dev-state-btn[data-dev-state]').forEach(b => b.classList.remove('active'));
+        devQueryAll('.dev-state-btn[data-dev-state]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         // ⭐ v2.18.4 10 态切换:
         //   P1 加注 / P2 下注 / P3 过牌-加注 / P4 All-In跟注 (轮到我,有倒计时)
@@ -14383,443 +14832,626 @@
     });
   }
 
-  // =====================================================================
-  // ⭐ v2.18.7 发牌动画 - 子项 6: DEV 按钮绑定
-  // ---------------------------------------------------------------------
-  // 段 7 "发牌动画" 段所有按钮的事件绑定
-  // 包含: 单座位发牌 / 全员各 1 张 / 完整 2 圈 / 清飞行牌 / 重置牌堆
-  // ⭐ 改用 document 级事件委托(更稳,不依赖按钮存在的时机)
-  // =====================================================================
-
-  document.addEventListener('click', (e) => {
-    const target = e.target.closest('[data-deal-to]');
-    if (!target) return;
-    e.stopPropagation();
-    const seatId = target.dataset.dealTo;
-    console.log('[DEV 发牌] 点击:', seatId, ', dealOneCard 可用:', typeof window.dealOneCard);
-    if (typeof window.dealOneCard === 'function') {
-      window.dealOneCard(seatId);
-    } else {
-      console.error('[DEV 发牌] window.dealOneCard 未定义!');
-    }
-    target.classList.remove('flash');
-    void target.offsetWidth;
-    target.classList.add('flash');
-    setTimeout(() => target.classList.remove('flash'), 600);
+  // ⭐ v2.19 阶段切换按钮(DEV 用)
+  // 真实业务:WebSocket 推 game:flop/turn/river/showdown → 自动调用 setStage
+  devQueryAll('.dev-state-btn[data-dev-stage]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const stage = btn.dataset.devStage;
+      // active 切换:同段内互斥
+      devQueryAll('.dev-state-btn[data-dev-stage]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setStage(stage);
+      if (typeof showToast === 'function') showToast('阶段:' + btn.textContent.trim());
+    });
   });
 
-  // 全员各 1 张
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-deal-all-once')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-deal-all-once');
-    console.log('[DEV 发牌] 全员各 1 张, dealOneCard 可用:', typeof window.dealOneCard);
-    if (typeof window.dealOneCard !== 'function') {
-      console.error('[DEV 发牌] window.dealOneCard 未定义!');
-      return;
-    }
-    const allSeats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
-      const seat = document.querySelector(`.seat.${id}`);
-      return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
+  // ⭐ v2.19 发底牌动画(板块 2)
+  const devDealHole = document.getElementById('dev-deal-hole');
+  if (devDealHole) {
+    devDealHole.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof dealHoleCardsAnimation === 'function') dealHoleCardsAnimation();
+      devDealHole.classList.remove('flash'); void devDealHole.offsetWidth;
+      devDealHole.classList.add('flash');
+      setTimeout(() => devDealHole.classList.remove('flash'), 600);
     });
-    const order = [...allSeats, 'my-seat'];
-    order.forEach((seatId, idx) => {
-      setTimeout(() => window.dealOneCard(seatId), idx * 80);
+  }
+  // ⭐ v2.19 翻牌/转牌/河牌发牌动画
+  const devDealFlop = document.getElementById('dev-deal-flop');
+  if (devDealFlop) {
+    devDealFlop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof dealBoardAnimation === 'function') dealBoardAnimation('flop');
+      devDealFlop.classList.remove('flash'); void devDealFlop.offsetWidth;
+      devDealFlop.classList.add('flash');
+      setTimeout(() => devDealFlop.classList.remove('flash'), 600);
     });
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-
-  // 完整 2 圈
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-deal-full')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-deal-full');
-    console.log('[DEV 发牌] 完整 2 圈, dealHoleCards 可用:', typeof window.dealHoleCards);
-    if (typeof window.dealHoleCards === 'function') {
-      window.dealHoleCards();
-    } else if (typeof window.dealOneCard === 'function') {
-      // 兜底
-      const allSeats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
-        const seat = document.querySelector(`.seat.${id}`);
-        return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
+  }
+  const devDealTurn = document.getElementById('dev-deal-turn');
+  if (devDealTurn) {
+    devDealTurn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof dealBoardAnimation === 'function') dealBoardAnimation('turn');
+      devDealTurn.classList.remove('flash'); void devDealTurn.offsetWidth;
+      devDealTurn.classList.add('flash');
+      setTimeout(() => devDealTurn.classList.remove('flash'), 600);
+    });
+  }
+  const devDealRiver = document.getElementById('dev-deal-river');
+  if (devDealRiver) {
+    devDealRiver.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof dealBoardAnimation === 'function') dealBoardAnimation('river');
+      devDealRiver.classList.remove('flash'); void devDealRiver.offsetWidth;
+      devDealRiver.classList.add('flash');
+      setTimeout(() => devDealRiver.classList.remove('flash'), 600);
+    });
+  }
+  // ⭐ v2.19 板块 3:筹码下注归底池
+  const devBetToPot = document.getElementById('dev-bet-to-pot');
+  if (devBetToPot) {
+    devBetToPot.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof betChipsToPotAnimation === 'function') betChipsToPotAnimation();
+      devBetToPot.classList.remove('flash'); void devBetToPot.offsetWidth;
+      devBetToPot.classList.add('flash');
+      setTimeout(() => devBetToPot.classList.remove('flash'), 600);
+    });
+  }
+  // ⭐ v2.19 板块 3:底池飞向赢家
+  const devPotToWinner = document.getElementById('dev-pot-to-winner');
+  if (devPotToWinner) {
+    devPotToWinner.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 随机挑一个非弃牌座位当赢家
+      const seats = ['s1','s2','s3','s4','s5','s6','s7','s8','my'].filter(id => {
+        const el = id === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + id);
+        return el && !el.classList.contains('folded') && !el.classList.contains('empty') && !el.classList.contains('full');
       });
-      const order = [...allSeats, 'my-seat'];
-      order.forEach((seatId, idx) => setTimeout(() => window.dealOneCard(seatId), idx * 80));
-      const round2Start = order.length * 80 + 200;
-      order.forEach((seatId, idx) => setTimeout(() => window.dealOneCard(seatId), round2Start + idx * 80));
-    } else {
-      console.error('[DEV 发牌] 发牌函数都未定义!');
-    }
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-
-  // 清飞行牌
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-deal-clear')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-deal-clear');
-    if (typeof window.clearFlyingCards === 'function') window.clearFlyingCards();
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-
-  // 重置牌堆
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-deal-reset')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-deal-reset');
-    if (typeof window.clearFlyingCards === 'function') window.clearFlyingCards();
-    const deck = document.getElementById('card-deck');
-    if (deck) {
-      deck.classList.remove('dealing-done');
-      deck.removeAttribute('data-cards-left');
-    }
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-
-  // 速度档位
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.dev-deal-speed-btn');
-    if (!btn) return;
-    e.stopPropagation();
-    const speed = btn.dataset.dealSpeed;
-    if (typeof window.setDealSpeed === 'function') window.setDealSpeed(speed);
-  });
-  // 初始化速度档位高亮
-  setTimeout(() => {
-    const cur = window.DEAL_SPEED || 'normal';
-    document.querySelectorAll('.dev-deal-speed-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.dealSpeed === cur);
+      if (seats.length === 0) return;
+      const winner = seats[Math.floor(Math.random() * seats.length)];
+      if (typeof potToWinnerAnimation === 'function') potToWinnerAnimation(winner);
+      devPotToWinner.classList.remove('flash'); void devPotToWinner.offsetWidth;
+      devPotToWinner.classList.add('flash');
+      setTimeout(() => devPotToWinner.classList.remove('flash'), 600);
     });
-  }, 100);
-
-  // =====================================================================
-  // ⭐ v2.18.7 板块 A: 公共牌切换 DEV 按钮(子项 6)- 改委托
-  // =====================================================================
-
-  // 街况快速切换
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-set-street]');
-    if (!btn) return;
-    e.stopPropagation();
-    if (typeof window.setStreet === 'function') window.setStreet(btn.dataset.setStreet);
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-
-  // 翻牌动画
-  document.addEventListener('click', async (e) => {
-    if (!e.target.closest('#dev-deal-flop')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-deal-flop');
-    if (typeof window.dealFlop === 'function') await window.dealFlop();
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-  document.addEventListener('click', async (e) => {
-    if (!e.target.closest('#dev-deal-turn')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-deal-turn');
-    if (typeof window.dealTurn === 'function') await window.dealTurn();
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-  document.addEventListener('click', async (e) => {
-    if (!e.target.closest('#dev-deal-river')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-deal-river');
-    if (typeof window.dealRiver === 'function') await window.dealRiver();
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-  // 中牌高亮
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-highlight-winning')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-highlight-winning');
-    if (typeof window.highlightWinningCards === 'function') {
-      window.highlightWinningCards([0, 2, 4]);
-    }
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-clear-winning')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-clear-winning');
-    if (typeof window.clearWinningCards === 'function') window.clearWinningCards();
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-
-  // =====================================================================
-  // ⭐ v2.18.7 板块 C: 筹码动画 DEV 按钮 - 改委托
-  // =====================================================================
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-chip-from]');
-    if (!btn) return;
-    e.stopPropagation();
-    if (typeof window.flyChipToPot === 'function') window.flyChipToPot(btn.dataset.chipFrom);
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-chip-collect-all')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-chip-collect-all');
-    if (typeof window.collectChipsToPot === 'function') window.collectChipsToPot();
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-chip-award-s3')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-chip-award-s3');
-    if (typeof window.awardChipsToWinner === 'function') window.awardChipsToWinner('s3');
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-chip-award-my')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-chip-award-my');
-    if (typeof window.awardChipsToWinner === 'function') window.awardChipsToWinner('my-seat');
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-
-  // =====================================================================
-  // ⭐ v2.18.7 板块 B: 完整手牌演示 DEV 按钮 - 改委托
-  // =====================================================================
-  document.addEventListener('click', async (e) => {
-    if (!e.target.closest('#dev-flow-full')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-flow-full');
-    if (typeof window.runFullHand === 'function') await window.runFullHand();
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#dev-flow-reset')) return;
-    e.stopPropagation();
-    const btn = e.target.closest('#dev-flow-reset');
-    if (typeof window.resetToPreflop === 'function') window.resetToPreflop();
-    btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash');
-    setTimeout(() => btn.classList.remove('flash'), 600);
-  });
-
-  // ⭐ v2.18.6 座位人数测试快捷区(DEV 用,真实业务删)
-
-  // =====================================================================
-  // ⭐ v2.18.7 板块 C: 筹码动画
-  // ---------------------------------------------------------------------
-  // 接口:
-  //   window.flyChipToPot(seatId)        // 单座位下注筹码 → 中央底池
-  //   window.collectChipsToPot()         // 全员下注筹码归拢 → 底池(每个 80ms 间隔)
-  //   window.awardChipsToWinner(seatId)  // 底池筹码 → 赢家(金色,带发光)
-  // =====================================================================
-
-  // 飞行筹码原子动画:从起点飞到终点
-  function flyChipBase(startX, startY, endX, endY, opts = {}) {
-    return new Promise(resolve => {
-      const tableArea = document.querySelector('#page-table');
-      if (!tableArea) { resolve(); return; }
-      const chip = document.createElement('div');
-      chip.className = 'flying-chip' + (opts.blue ? ' blue' : '') + (opts.gold ? ' gold' : '');
-      chip.style.left = startX + 'px';
-      chip.style.top = startY + 'px';
-      chip.style.transform = 'translate(0,0)';
-      tableArea.appendChild(chip);
-      void chip.offsetWidth;
-      chip.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
-      setTimeout(() => chip.classList.add('arrived'), 350);
-      setTimeout(() => { chip.remove(); resolve(); }, 600);
+  }
+  // ⭐ v2.20 子项 6:摊牌测试按钮(单独触发完整摊牌流程)
+  const devShowdown = document.getElementById('dev-showdown');
+  if (devShowdown) {
+    devShowdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 先确保公共牌是 5 张(showdown 必须有 5 张才有意义)
+      setStage('showdown');
+      // 同步阶段段 active 高亮
+      devQueryAll('.dev-state-btn[data-dev-stage]').forEach(b => b.classList.remove('active'));
+      const showdownBtn = devSwitcher.querySelector('.dev-state-btn[data-dev-stage="showdown"]');
+      if (showdownBtn) showdownBtn.classList.add('active');
+      devShowdown.classList.remove('flash'); void devShowdown.offsetWidth;
+      devShowdown.classList.add('flash');
+      setTimeout(() => devShowdown.classList.remove('flash'), 600);
     });
   }
 
-  // 计算元素中心相对 page-table 的坐标(用于筹码飞行起止点)
-  function getElementCenterInTable(el) {
-    const tableArea = document.querySelector('#page-table');
-    if (!tableArea || !el) return null;
-    const tableRect = tableArea.getBoundingClientRect();
-    const elRect = el.getBoundingClientRect();
-    return {
-      x: elRect.left - tableRect.left + elRect.width / 2 - 12,  // 12 = 筹码 24 一半
-      y: elRect.top  - tableRect.top  + elRect.height / 2 - 12
-    };
+  // ⭐ v2.19 新一手:重置全部状态
+  // ⭐ v2.19.1 强化:清掉飞行元素、座位下注、my-cards 隐藏状态
+  function fullResetTable() {
+    // 1. 公共牌回 preflop(全隐)
+    setStage('preflop');
+    // 2. 清空所有动作气泡 + winTag
+    clearActionTags();
+    document.querySelectorAll('.win-tag').forEach(el => el.remove());
+    // 3. 清弃牌灰显
+    document.querySelectorAll('.seat.folded').forEach(el => el.classList.remove('folded'));
+    // 4. 清 acting + winner-glow
+    setActingSeat(null);
+    document.querySelectorAll('.winner-glow').forEach(el => el.classList.remove('winner-glow'));
+    // 5. 清飞行牌 + 飞行筹码残留
+    document.querySelectorAll('.flying-card, .flying-chip').forEach(el => el.remove());
+    // ⭐ v2.20 子项 6:清摊牌残留(高亮 + showdown-tag + reveal-flip)
+    if (typeof clearShowdownHighlights === 'function') clearShowdownHighlights();
+    // 把摊牌时翻开的座位底牌重置回牌背(2 个空 mini-card)
+    document.querySelectorAll('.seat .seat-cards-back').forEach(back => {
+      back.innerHTML = '<div class="mini-card"></div><div class="mini-card"></div>';
+      back.style.opacity = '';
+    });
+    // ⭐ v2.20 清 D 标
+    if (typeof setDealer === 'function') setDealer(null);
+    // ⭐ v2.20 清盲注/抓头标签
+    if (typeof clearBlindLabels === 'function') clearBlindLabels();
+    // 6. 隐藏牌堆
+    showDeck(false);
+    // 7. 恢复座位手牌显示(发牌动画把它们 opacity:0 了)
+    document.querySelectorAll('.seat-cards-back').forEach(el => {
+      el.style.opacity = '';
+    });
+    const mySeatCards = document.querySelector('.my-seat .my-cards');
+    if (mySeatCards) mySeatCards.style.opacity = '';
+    // 8. 清座位下注金额(留下结构但归零)
+    document.querySelectorAll('.seat .seat-bet-amount').forEach(el => {
+      el.textContent = '0';
+    });
+    document.querySelectorAll('.seat .seat-bet').forEach(el => {
+      el.style.opacity = '';
+    });
+    // 9. 同步阶段段 active 高亮回到 preflop
+    devQueryAll('.dev-state-btn[data-dev-stage]').forEach(b => b.classList.remove('active'));
+    const preflopBtn = devSwitcher.querySelector('.dev-state-btn[data-dev-stage="preflop"]');
+    if (preflopBtn) preflopBtn.classList.add('active');
   }
+  window.fullResetTable = fullResetTable;
 
-  // 单座位下注筹码飞向底池
-  function flyChipToPot(seatId) {
-    // 起点:座位下注块(.seat-bet),没有就用座位头像
-    let startEl;
-    if (seatId === 'my-seat') {
-      startEl = document.querySelector('.my-seat .seat-bet') || document.querySelector('.my-seat .seat-avatar');
-    } else {
-      startEl = document.querySelector(`.seat.${seatId} .seat-bet`) || document.querySelector(`.seat.${seatId} .seat-avatar`);
-    }
-    // 终点:底池(table-center 的 pot-chips)
-    const potEl = document.querySelector('.pot-chips') || document.querySelector('.table-center');
-    if (!startEl || !potEl) return Promise.resolve();
-    const start = getElementCenterInTable(startEl);
-    const end = getElementCenterInTable(potEl);
-    if (!start || !end) return Promise.resolve();
-    // 红蓝两片错开 60ms,营造"叠筹码"感
-    flyChipBase(start.x, start.y, end.x, end.y);
-    setTimeout(() => flyChipBase(start.x + 4, start.y + 2, end.x, end.y, { blue: true }), 60);
-    return new Promise(res => setTimeout(res, 420));
-  }
-  window.flyChipToPot = flyChipToPot;
-
-  // 全员下注筹码归拢到底池
-  function collectChipsToPot() {
-    return new Promise(async (resolve) => {
-      const seats = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'].filter(id => {
-        const seat = document.querySelector(`.seat.${id}`);
-        return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
-      });
-      seats.push('my-seat');
-      // 只对有下注的座位飞(简化:只要有 .seat-bet 就飞)
-      let lastDelay = 0;
-      seats.forEach((seatId, idx) => {
-        const hasBet = (seatId === 'my-seat')
-          ? document.querySelector('.my-seat .seat-bet')
-          : document.querySelector(`.seat.${seatId} .seat-bet`);
-        if (!hasBet) return;
-        lastDelay = idx * 80;
-        setTimeout(() => flyChipToPot(seatId), lastDelay);
-      });
-      setTimeout(resolve, lastDelay + 500);
+  const devNewHand = document.getElementById('dev-new-hand');
+  if (devNewHand) {
+    devNewHand.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fullResetTable();
+      devNewHand.classList.remove('flash'); void devNewHand.offsetWidth;
+      devNewHand.classList.add('flash');
+      setTimeout(() => devNewHand.classList.remove('flash'), 600);
+      if (typeof showToast === 'function') showToast('新一手:全部重置');
     });
   }
-  window.collectChipsToPot = collectChipsToPot;
 
-  // 派奖:底池筹码飞向赢家
-  function awardChipsToWinner(seatId) {
-    return new Promise(async (resolve) => {
-      const potEl = document.querySelector('.pot-chips') || document.querySelector('.table-center');
-      let endEl;
-      if (seatId === 'my-seat') {
-        endEl = document.querySelector('.my-seat .seat-avatar') || document.querySelector('.my-seat');
+  // ⭐ v2.20 子项 5:Show/Muck DEV 测试按钮
+  const devShowMuck = document.getElementById('dev-show-muck');
+  if (devShowMuck) {
+    devShowMuck.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openShowMuckModal();
+      devShowMuck.classList.remove('flash'); void devShowMuck.offsetWidth;
+      devShowMuck.classList.add('flash');
+      setTimeout(() => devShowMuck.classList.remove('flash'), 600);
+    });
+  }
+
+  // ⭐ v2.20 庄家 D 标切换(DEV 测试用)
+  // 顺时针循环:s1 → s2 → s3 → s4 → s5 → my → s6 → s7 → s8 → s1
+  let currentDealerSeatId = null;
+  const DEALER_ORDER = ['s1','s2','s3','s4','s5','my','s6','s7','s8'];
+
+  function setDealer(seatId, animate) {
+    try {
+      // ⭐ v2.20.1 连续切换保护:清掉所有已存在的 D 标(包括飞行中的)
+      const allMarks = document.querySelectorAll('.dealer-mark');
+      const existingMark = allMarks.length > 0 ? allMarks[allMarks.length - 1] : null;
+      // 如果有多个 D 标(连续切换造成的残留),先全部清掉只保留最后一个用于飞行
+      if (allMarks.length > 1) {
+        for (let i = 0; i < allMarks.length - 1; i++) allMarks[i].remove();
+      }
+      if (!seatId) {
+        // 清掉
+        document.querySelectorAll('.dealer-mark').forEach(el => el.remove());
+        currentDealerSeatId = null;
+        return;
+      }
+      const targetSeat = seatId === 'my'
+        ? document.querySelector('.my-seat')
+        : document.querySelector('.seat.' + seatId);
+      if (!targetSeat) return;
+      if (targetSeat.classList.contains('empty') || targetSeat.classList.contains('full')) return;
+
+      // 没有旧 D 标 OR 不要动画 → 直接放新的(走默认 dealerPop 动画)
+      if (!existingMark || !animate) {
+        if (existingMark) existingMark.remove();
+        const dMark = document.createElement('div');
+        dMark.className = 'dealer-mark';
+        dMark.textContent = 'D';
+        targetSeat.insertBefore(dMark, targetSeat.firstChild);
+        currentDealerSeatId = seatId;
+        return;
+      }
+
+      // 有旧 D 标 + 要动画 → 飞行
+      const page = document.getElementById('page-table');
+      if (!page) return;
+      const oldCenter = getRelativeCenter(existingMark);
+      const targetRect = targetSeat.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      // ⭐ v2.20.2 按座位位置计算 D 标终点中心
+      // 距离统一 16px,朝向桌面中央
+      let newCenter;
+      if (seatId === 's1') {
+        // 头像右下角:右缘外 + 底部下方
+        newCenter = { x: targetRect.right - pageRect.left, y: targetRect.bottom - pageRect.top };
+      } else if (seatId === 's2') {
+        // 头像左下角:左缘外 + 底部下方
+        newCenter = { x: targetRect.left - pageRect.left, y: targetRect.bottom - pageRect.top };
+      } else if (seatId === 's3' || seatId === 's4' || seatId === 's5') {
+        // 头像左上角:左缘外 + 上方
+        newCenter = { x: targetRect.left - pageRect.left, y: targetRect.top - pageRect.top };
+      } else if (seatId === 'my') {
+        // 自己:头像左上角
+        newCenter = { x: targetRect.left - pageRect.left, y: targetRect.top - pageRect.top };
       } else {
-        endEl = document.querySelector(`.seat.${seatId} .seat-avatar`) || document.querySelector(`.seat.${seatId}`);
+        // s6/s7/s8:头像右上角
+        newCenter = { x: targetRect.right - pageRect.left, y: targetRect.top - pageRect.top };
       }
-      if (!potEl || !endEl) { resolve(); return; }
-      const start = getElementCenterInTable(potEl);
-      const end = getElementCenterInTable(endEl);
-      if (!start || !end) { resolve(); return; }
-      // 4 颗金色筹码连飞(节奏 80ms)
-      for (let i = 0; i < 4; i++) {
-        setTimeout(() => {
-          flyChipBase(start.x + (i % 2) * 4, start.y + (i % 2) * 2, end.x, end.y, { gold: true });
-        }, i * 80);
+
+      // 抽出来飞行
+      existingMark.style.position = 'absolute';
+      existingMark.style.left = oldCenter.x + 'px';
+      existingMark.style.top = oldCenter.y + 'px';
+      existingMark.style.right = 'auto';
+      existingMark.style.transform = 'translate(-50%, -50%) perspective(60px) rotateX(8deg)';
+      existingMark.style.animation = 'none';
+      page.appendChild(existingMark);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try {
+            existingMark.style.transition = 'left 580ms cubic-bezier(.4,.15,.25,1), top 580ms cubic-bezier(.4,.15,.25,1), transform 580ms cubic-bezier(.4,.15,.25,1)';
+            existingMark.style.left = newCenter.x + 'px';
+            existingMark.style.top = newCenter.y + 'px';
+            existingMark.style.transform = 'translate(-50%, -50%) perspective(60px) rotateX(8deg) scale(1.15)';
+          } catch (e) { /* 静默忽略 */ }
+        });
+      });
+
+      setTimeout(() => {
+        try {
+          if (existingMark && existingMark.parentNode) existingMark.remove();
+          // 用 querySelector 再次找目标(防止座位 DOM 被重建)
+          const finalTarget = seatId === 'my'
+            ? document.querySelector('.my-seat')
+            : document.querySelector('.seat.' + seatId);
+          if (!finalTarget) return;
+          // 清掉可能存在的其他 D 标
+          document.querySelectorAll('.dealer-mark').forEach(el => el.remove());
+          const dMark = document.createElement('div');
+          dMark.className = 'dealer-mark';
+          dMark.textContent = 'D';
+          finalTarget.insertBefore(dMark, finalTarget.firstChild);
+          currentDealerSeatId = seatId;
+        } catch (e) { /* 静默忽略 */ }
+      }, 580);
+    } catch (e) {
+      // 兜底:直接放新 D 标,不带动画
+      try {
+        document.querySelectorAll('.dealer-mark').forEach(el => el.remove());
+        const targetSeat = seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + seatId);
+        if (targetSeat) {
+          const dMark = document.createElement('div');
+          dMark.className = 'dealer-mark';
+          dMark.textContent = 'D';
+          targetSeat.insertBefore(dMark, targetSeat.firstChild);
+          currentDealerSeatId = seatId;
+        }
+      } catch (e2) { /* 兜底也失败,放弃 */ }
+    }
+  }
+  window.setDealer = setDealer;
+
+  // ⭐ v2.20 子项 3+4:小盲/大盲自动下注 + 抓头(Straddle)
+  // ───────────────────────────────────────────────────────────────
+  // 德州扑克标准流程:
+  //   D 庄家位定下 → SB(小盲,庄家左侧第一个)→ BB(大盲,庄家左侧第二个)→ 抓头(可选)→ 发底牌
+  // 盲注金额(默认):
+  //   SB = 0.5 BB(向上取整),BB = 1 BB,Straddle = 2 BB(可选)
+  // ───────────────────────────────────────────────────────────────
+
+  // 当前盲注配置(后端推送 game:newhand { sb, bb } 时覆盖)
+  let currentBlinds = { sb: 10, bb: 20, straddle: 40 };
+
+  // 顺时针拿下一个有效座位(非空、非弃牌、非满员)
+  function nextActiveSeat(fromSeatId) {
+    const idx = DEALER_ORDER.indexOf(fromSeatId);
+    if (idx === -1) return null;
+    for (let i = 1; i <= DEALER_ORDER.length; i++) {
+      const cand = DEALER_ORDER[(idx + i) % DEALER_ORDER.length];
+      const el = cand === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + cand);
+      if (el && !el.classList.contains('empty') && !el.classList.contains('full') && !el.classList.contains('folded') && el.style.display !== 'none') {
+        return cand;
       }
-      setTimeout(resolve, 4 * 80 + 500);
+    }
+    return null;
+  }
+
+  // 给一个座位设下注金额(创建/更新 .seat-bet)
+  function setSeatBet(seatId, amount) {
+    const seatEl = seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + seatId);
+    if (!seatEl) return;
+    let betEl = seatEl.querySelector('.seat-bet');
+    if (!betEl) {
+      betEl = document.createElement('div');
+      betEl.className = 'seat-bet';
+      betEl.innerHTML = '<div class="seat-chip-icon">C</div><div class="seat-bet-amount">0</div>';
+      seatEl.appendChild(betEl);
+    }
+    const amountEl = betEl.querySelector('.seat-bet-amount');
+    if (amountEl) amountEl.textContent = amount;
+    betEl.style.opacity = '1';
+  }
+  window.setSeatBet = setSeatBet;
+
+  // 在座位头像下方挂"SB"/"BB"/"Straddle"标签(临时,飞底池后消失)
+  function attachBlindLabel(seatId, labelText) {
+    const seatEl = seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + seatId);
+    if (!seatEl) return;
+    // 清旧标签
+    seatEl.querySelectorAll('.blind-label').forEach(el => el.remove());
+    const tag = document.createElement('div');
+    tag.className = 'blind-label';
+    // 按 labelText 加 class 控制颜色(用首字符识别避免中文比较)
+    const first = (labelText || '').charAt(0);
+    if (first === 'S' && labelText === 'SB') tag.classList.add('label-sb');
+    else if (first === 'B' && labelText === 'BB') tag.classList.add('label-bb');
+    else tag.classList.add('label-st');   // 其他(抓头/Straddle 等)= 金色
+    tag.textContent = labelText;
+    seatEl.appendChild(tag);
+  }
+  function clearBlindLabels() {
+    document.querySelectorAll('.blind-label').forEach(el => el.remove());
+  }
+
+  // 下盲注:从当前 currentDealerSeatId 推出 SB / BB 位
+  // 注:1 个有效玩家时不下盲(单人桌)
+  function postBlinds() {
+    if (!currentDealerSeatId) return null;
+    const sbSeat = nextActiveSeat(currentDealerSeatId);
+    if (!sbSeat) return null;
+    const bbSeat = nextActiveSeat(sbSeat);
+    if (!bbSeat) {
+      // 只 2 人桌(SB=庄家本人,BB=另一人,heads-up 规则)
+      setSeatBet(currentDealerSeatId, currentBlinds.sb);
+      attachBlindLabel(currentDealerSeatId, 'SB');
+      setSeatBet(sbSeat, currentBlinds.bb);
+      attachBlindLabel(sbSeat, 'BB');
+      return { sbSeat: currentDealerSeatId, bbSeat: sbSeat };
+    }
+    // 标准 3+ 人桌
+    setSeatBet(sbSeat, currentBlinds.sb);
+    attachBlindLabel(sbSeat, 'SB');
+    setSeatBet(bbSeat, currentBlinds.bb);
+    attachBlindLabel(bbSeat, 'BB');
+    return { sbSeat, bbSeat };
+  }
+  window.postBlinds = postBlinds;
+
+  // 抓头:大盲左侧第一个玩家可选下抓头(2 BB)
+  // 真实业务:推 game:straddle-prompt 给该玩家,8 秒选择,这里直接随机概率触发
+  function postStraddle(bbSeat) {
+    if (!bbSeat) return null;
+    const stSeat = nextActiveSeat(bbSeat);
+    if (!stSeat) return null;
+    setSeatBet(stSeat, currentBlinds.straddle);
+    attachBlindLabel(stSeat, '抓头');
+    return stSeat;
+  }
+  window.postStraddle = postStraddle;
+
+  // ⭐ v2.20.1 修复:补回 devToggleDealer 声明(之前 str_replace 丢失了)
+  const devToggleDealer = document.getElementById('dev-toggle-dealer');
+  if (devToggleDealer) {
+    devToggleDealer.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 找下一个有效座位(非空、非弃牌)
+      let idx = currentDealerSeatId ? DEALER_ORDER.indexOf(currentDealerSeatId) : -1;
+      let next = null;
+      for (let i = 1; i <= DEALER_ORDER.length; i++) {
+        const candidate = DEALER_ORDER[(idx + i) % DEALER_ORDER.length];
+        const el = candidate === 'my'
+          ? document.querySelector('.my-seat')
+          : document.querySelector('.seat.' + candidate);
+        if (el && !el.classList.contains('empty') && !el.classList.contains('full') && el.style.display !== 'none') {
+          next = candidate;
+          break;
+        }
+      }
+      if (next) {
+        // 有旧 D → 飞行动画;没旧 D → 直接弹出
+        setDealer(next, !!currentDealerSeatId);
+        if (typeof showToast === 'function') showToast('庄家位 → ' + (next === 'my' ? '我' : next));
+      }
+      devToggleDealer.classList.remove('flash'); void devToggleDealer.offsetWidth;
+      devToggleDealer.classList.add('flash');
+      setTimeout(() => devToggleDealer.classList.remove('flash'), 600);
     });
   }
-  window.awardChipsToWinner = awardChipsToWinner;
 
-  // =====================================================================
-  // ⭐ v2.18.7 板块 B: 状态机 JS 全链路渲染(一键完整一手)
-  // ---------------------------------------------------------------------
-  // 接口: window.runFullHand()
-  //   流程:
-  //   1. 重置(回到翻前) → 牌堆满 / 公共牌 0 张 / 飞行牌清空
-  //   2. 发底牌(dealHoleCards) → 等翻面完成
-  //   3. dealFlop → 等 600ms(模拟翻前行动轮)
-  //   4. dealTurn → 等 600ms(模拟翻牌行动轮)
-  //   5. dealRiver → 等 600ms(模拟转牌行动轮)
-  //   6. 高亮中牌(示例 [1,3]) + 派奖到 s3 + 收筹码到 s3
-  //
-  // 真实业务:WebSocket 推送 street:flop/turn/river/showdown 事件触发对应步骤
-  // 现阶段:DEV 按钮一键演示串联效果
-  // =====================================================================
-
-  async function runFullHand() {
-    // 1. 重置
-    document.querySelectorAll('.flying-card').forEach(el => el.remove());
-    document.querySelectorAll('.flying-chip').forEach(el => el.remove());
-    document.querySelectorAll('.burned-card').forEach(el => el.remove());
-    if (typeof window.clearWinningCards === 'function') window.clearWinningCards();
-    window.currentStreet = 'preflop';
-    if (typeof window.renderBoard === 'function') window.renderBoard();
-    const deck = document.getElementById('card-deck');
-    if (deck) {
-      deck.classList.remove('dealing-done');
-      deck.removeAttribute('data-cards-left');
-    }
-    await new Promise(r => setTimeout(r, 300));
-
-    // 2. 发底牌(标准 2 圈)
-    if (typeof window.dealHoleCards === 'function') {
-      await window.dealHoleCards();
-    }
-    await new Promise(r => setTimeout(r, 400));
-
-    // 3. Flop
-    if (typeof window.dealFlop === 'function') await window.dealFlop();
-    await new Promise(r => setTimeout(r, 600));
-
-    // 4. Turn
-    if (typeof window.dealTurn === 'function') await window.dealTurn();
-    await new Promise(r => setTimeout(r, 600));
-
-    // 5. River
-    if (typeof window.dealRiver === 'function') await window.dealRiver();
-    await new Promise(r => setTimeout(r, 600));
-
-    // 6. 中牌高亮 + 派奖
-    if (typeof window.highlightWinningCards === 'function') {
-      window.highlightWinningCards([1, 3]);  // 示例
-    }
-    await new Promise(r => setTimeout(r, 400));
-    if (typeof window.collectChipsToPot === 'function') {
-      await window.collectChipsToPot();
-    }
-    await new Promise(r => setTimeout(r, 200));
-    if (typeof window.awardChipsToWinner === 'function') {
-      await window.awardChipsToWinner('s3');  // 示例:s3 赢
-    }
-  }
-  window.runFullHand = runFullHand;
-
-  // 重置到翻前
-  function resetToPreflop() {
-    document.querySelectorAll('.flying-card').forEach(el => el.remove());
-    document.querySelectorAll('.flying-chip').forEach(el => el.remove());
-    document.querySelectorAll('.burned-card').forEach(el => el.remove());
-    if (typeof window.clearWinningCards === 'function') window.clearWinningCards();
-    window.currentStreet = 'preflop';
-    if (typeof window.renderBoard === 'function') window.renderBoard();
-    const deck = document.getElementById('card-deck');
-    if (deck) {
-      deck.classList.remove('dealing-done');
-      deck.removeAttribute('data-cards-left');
-    }
-    // 恢复 seat-cards-back 和 my-cards 显示
-    document.querySelectorAll('.seat-cards-back.dealing').forEach(el => el.classList.remove('dealing'));
-    document.querySelectorAll('.my-cards.dealing').forEach(el => el.classList.remove('dealing'));
-    document.querySelectorAll('.my-cards.flip-pending').forEach(el => {
-      el.classList.remove('flip-pending');
-      el.classList.remove('flipping');
+  // ⭐ v2.20 子项 3:盲注测试按钮
+  const devPostBlinds = document.getElementById('dev-post-blinds');
+  if (devPostBlinds) {
+    devPostBlinds.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 没庄家先随便指一个(s1)
+      if (!currentDealerSeatId) setDealer('s1');
+      const result = postBlinds();
+      if (result && typeof showToast === 'function') {
+        showToast('SB → ' + (result.sbSeat === 'my' ? '我' : result.sbSeat) + ', BB → ' + (result.bbSeat === 'my' ? '我' : result.bbSeat));
+      }
+      devPostBlinds.classList.remove('flash'); void devPostBlinds.offsetWidth;
+      devPostBlinds.classList.add('flash');
+      setTimeout(() => devPostBlinds.classList.remove('flash'), 600);
     });
   }
-  window.resetToPreflop = resetToPreflop;
+
+  // ⭐ v2.20 子项 5:抓头测试按钮
+  const devPostStraddle = document.getElementById('dev-post-straddle');
+  if (devPostStraddle) {
+    devPostStraddle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 找当前 BB 位(座位下有 'BB' 标签的)
+      let bbSeat = null;
+      const bbLabels = document.querySelectorAll('.blind-label.label-bb');
+      bbLabels.forEach(el => {
+        const parent = el.closest('.seat, .my-seat');
+        if (!parent) return;
+        if (parent.classList.contains('my-seat')) bbSeat = 'my';
+        else {
+          ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(id => {
+            if (parent.classList.contains(id)) bbSeat = id;
+          });
+        }
+      });
+      if (!bbSeat) {
+        if (typeof showToast === 'function') showToast('先下盲注才能抓头');
+        return;
+      }
+      const stSeat = postStraddle(bbSeat);
+      if (stSeat && typeof showToast === 'function') {
+        showToast('抓头 → ' + (stSeat === 'my' ? '我' : stSeat) + ' (' + currentBlinds.straddle + ')');
+      }
+      devPostStraddle.classList.remove('flash'); void devPostStraddle.offsetWidth;
+      devPostStraddle.classList.add('flash');
+      setTimeout(() => devPostStraddle.classList.remove('flash'), 600);
+    });
+  }
+
+  // ⭐ v2.19.1 完整一手牌演示(自动播放从发牌到派彩全流程)
+  // 流程:重置 → 发底牌 → 翻牌+收筹 → 转牌+收筹 → 河牌+收筹 → 摊牌 → 派彩
+  let demoHandRunning = false;
+  function playFullHandDemo() {
+    if (demoHandRunning) return;
+    demoHandRunning = true;
+    const demoBtn = document.getElementById('dev-full-hand');
+    if (demoBtn) demoBtn.classList.add('running');
+
+    // 时间表(基于动画时长 + 停顿,让用户看清每一步)
+    // ⭐ v2.20 新增开局段:庄家D标 → 盲注 → 抓头 → 发底牌
+    // 0     : 重置 + toast
+    // 300   : 庄家D标飞到 s1
+    // 1000  : 下盲注 SB/BB
+    // 1700  : 抓头(50% 概率)
+    // 2300  : 盲注/抓头筹码飞向中央底池
+    // 3200  : 发底牌
+    // ... 后续动作同前,整体后移 ~2900ms
+
+    const steps = [
+      { t: 0,     fn: () => { fullResetTable(); if (typeof showToast === 'function') showToast('▶ 新一手开始'); } },
+      // ⭐ v2.20 开局段
+      { t: 300,   fn: () => { setDealer('s1', !!currentDealerSeatId); if (typeof showToast === 'function') showToast('庄家位 → s1'); } },
+      { t: 1000,  fn: () => {
+          const r = postBlinds();
+          if (r && typeof showToast === 'function') showToast('盲注:SB ' + currentBlinds.sb + ' / BB ' + currentBlinds.bb);
+        }
+      },
+      { t: 1700,  fn: () => {
+          // 50% 概率抓头(增加演示丰富性)
+          if (Math.random() < 0.5) {
+            // 找 BB 位
+            let bbSeat = null;
+            document.querySelectorAll('.blind-label.label-bb').forEach(el => {
+              const parent = el.closest('.seat, .my-seat');
+              if (!parent) return;
+              if (parent.classList.contains('my-seat')) bbSeat = 'my';
+              else ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(id => {
+                if (parent.classList.contains(id)) bbSeat = id;
+              });
+            });
+            if (bbSeat) {
+              const st = postStraddle(bbSeat);
+              if (st && typeof showToast === 'function') showToast('抓头 → ' + (st === 'my' ? '我' : st));
+            }
+          } else {
+            if (typeof showToast === 'function') showToast('无人抓头');
+          }
+        }
+      },
+      { t: 2300,  fn: () => { betChipsToPotAnimation(); clearBlindLabels(); if (typeof showToast === 'function') showToast('盲注归底池'); } },
+      // ⭐ 原发底牌起点 300ms,现后移到 3200ms
+      { t: 3200,  fn: () => { if (typeof showToast === 'function') showToast('发底牌...'); dealHoleCardsAnimation(); } },
+      { t: 5100,  fn: () => { setSeatBets(20); if (typeof showToast === 'function') showToast('翻前行动'); } },
+      { t: 5900,  fn: () => { betChipsToPotAnimation(); if (typeof showToast === 'function') showToast('收筹码到底池'); } },
+      { t: 7100,  fn: () => { if (typeof showToast === 'function') showToast('发翻牌'); dealBoardAnimation('flop'); } },
+      { t: 9100,  fn: () => { setSeatBets(40); if (typeof showToast === 'function') showToast('翻牌后行动'); } },
+      { t: 9900,  fn: () => { betChipsToPotAnimation(); } },
+      { t: 10900, fn: () => { if (typeof showToast === 'function') showToast('发转牌'); dealBoardAnimation('turn'); } },
+      { t: 12500, fn: () => { setSeatBets(80); if (typeof showToast === 'function') showToast('转牌后行动'); } },
+      { t: 13300, fn: () => { betChipsToPotAnimation(); } },
+      { t: 14300, fn: () => { if (typeof showToast === 'function') showToast('发河牌'); dealBoardAnimation('river'); } },
+      { t: 15900, fn: () => { setSeatBets(120); if (typeof showToast === 'function') showToast('河牌后行动'); } },
+      { t: 16700, fn: () => { betChipsToPotAnimation(); } },
+      { t: 17700, fn: () => { if (typeof showToast === 'function') showToast('摊牌!翻底牌'); setStage('showdown'); } },
+      // ⭐ v2.20 摊牌动画(revealAllHands)需要 9 玩家×220ms ≈ 2 秒 + 400ms 缓冲 → 总 2400ms
+      // 之后再停 800ms 让人看清牌型 + 高亮,再派彩
+      { t: 20700, fn: () => {
+          // 派彩给牌型最强的玩家(用 findWinners 真正算出来的赢家)
+          const board = getCurrentBoard();
+          const players = getShowdownPlayers();
+          if (players.length === 0) return;
+          const { winners } = findWinners(players, board);
+          const winner = winners[0] ? winners[0].seatId : 'my';
+          if (typeof showToast === 'function') {
+            const winName = winner === 'my' ? '我' : winner;
+            const winType = winners[0] ? winners[0].eval.type : '';
+            showToast('派彩 → ' + winName + '(' + winType + ')');
+          }
+          potToWinnerAnimation(winner);
+        }
+      },
+      { t: 22900, fn: () => {
+          if (typeof showToast === 'function') showToast('一手牌结束');
+          demoHandRunning = false;
+          if (demoBtn) demoBtn.classList.remove('running');
+        }
+      }
+    ];
+
+    const timerIds = [];
+    steps.forEach(s => {
+      const id = setTimeout(s.fn, s.t);
+      timerIds.push(id);
+    });
+    // 暴露中断方法
+    window._demoHandTimers = timerIds;
+  }
+
+  // 辅助:批量设置非空座位的下注金额(演示用)
+  function setSeatBets(baseAmount) {
+    const seats = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'];
+    seats.forEach(id => {
+      const el = document.querySelector('.seat.' + id);
+      if (!el || el.classList.contains('empty') || el.classList.contains('full') || el.classList.contains('folded') || el.style.display === 'none') return;
+      // 找或建 seat-bet
+      let betEl = el.querySelector('.seat-bet');
+      if (!betEl) {
+        betEl = document.createElement('div');
+        betEl.className = 'seat-bet';
+        betEl.innerHTML = '<div class="seat-chip-icon">C</div><div class="seat-bet-amount">0</div>';
+        el.appendChild(betEl);
+      }
+      const amountEl = betEl.querySelector('.seat-bet-amount');
+      if (amountEl) amountEl.textContent = baseAmount;
+      betEl.style.opacity = '1';
+    });
+    // 自己
+    const myBetAmount = document.querySelector('.my-seat .seat-bet-amount');
+    if (myBetAmount) myBetAmount.textContent = baseAmount;
+    const myBet = document.querySelector('.my-seat .seat-bet');
+    if (myBet) myBet.style.opacity = '1';
+  }
+  window.setSeatBets = setSeatBets;
+
+  const devFullHand = document.getElementById('dev-full-hand');
+  if (devFullHand) {
+    devFullHand.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (demoHandRunning) {
+        // 第二次点击 → 强制结束
+        (window._demoHandTimers || []).forEach(id => clearTimeout(id));
+        window._demoHandTimers = [];
+        demoHandRunning = false;
+        devFullHand.classList.remove('running');
+        if (typeof showToast === 'function') showToast('演示已中断');
+        return;
+      }
+      playFullHandDemo();
+    });
+  }
 
   // ⭐ v2.18.6 座位人数测试快捷区(DEV 用,真实业务删)
   // 点击 X/Y 按钮 → 修改 currentTableRoom 的 seats/maxSeats → 重新渲染座位
   // 用途:测试空座位 UI、不同人数的桌子布局、大厅与牌桌数据一致性
-  devSwitcher.querySelectorAll('.dev-seat-btn[data-dev-seats]').forEach(btn => {
+  devQueryAll('.dev-seat-btn[data-dev-seats]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const [seatsStr, maxStr] = btn.dataset.devSeats.split('/');
       const seats = parseInt(seatsStr, 10);
       const maxSeats = parseInt(maxStr, 10);
       // 切换 active 类
-      devSwitcher.querySelectorAll('.dev-seat-btn').forEach(b => b.classList.remove('active'));
+      devQueryAll('.dev-seat-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       // 修改当前桌房间数据并重渲染
       if (!currentTableRoom) currentTableRoom = {};
@@ -14905,500 +15537,912 @@
   // 暴露到 window 供 DEV 测试
   window.setActingSeat = setActingSeat;
 
-  // =====================================================================
-  // ⭐ v2.18.7 发牌动画 - 子项 5: 发牌速度档位
-  // ---------------------------------------------------------------------
-  // 三档速度: slow / normal / fast,影响飞行时长和发牌间隔
-  // 全局变量 window.DEAL_SPEED 存当前档位,localStorage 持久化
-  // dealOneCard 和 dealHoleCards 自动读这个变量算时长
-  // =====================================================================
-  const DEAL_SPEED_PROFILES = {
-    slow:   { flyDuration: 350, landBounce: 168, interval: 140 },
-    normal: { flyDuration: 250, landBounce: 120, interval: 100 },
-    fast:   { flyDuration: 150, landBounce: 72,  interval: 60  }
+  // ⭐ v2.20 子项 2:牌型识别引擎(7 选 5)
+  // ───────────────────────────────────────────────────────────────
+  // 输入:2 张手牌 + 5 张公共牌(可少于,提前阶段也能算"目前牌型")
+  // 输出:{ type: '葫芦', strength: 6, cards: [5张组牌], rankValue: [数值数组] }
+  // 9 种牌型按强度排序:
+  //   9 皇家同花顺 > 8 同花顺 > 7 四条 > 6 葫芦 > 5 同花 > 4 顺子 > 3 三条 > 2 两对 > 1 一对 > 0 高牌
+  // 真实业务:后端推送 hand:showdown { players: [{seatId, hand, type, cards}] }
+  //          前端直接用,这套算法只做演示和无后端时的兜底
+  // ───────────────────────────────────────────────────────────────
+
+  // 牌面值映射(A 既算 1 也算 14,顺子时特殊处理)
+  const RANK_VALUES = {
+    '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
+    '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14
   };
-  // 从 localStorage 读初始档位(默认 normal)
-  window.DEAL_SPEED = localStorage.getItem('aagame_deal_speed') || 'normal';
-  if (!DEAL_SPEED_PROFILES[window.DEAL_SPEED]) window.DEAL_SPEED = 'normal';
-  function getDealSpeedProfile() {
-    return DEAL_SPEED_PROFILES[window.DEAL_SPEED] || DEAL_SPEED_PROFILES.normal;
-  }
-  window.setDealSpeed = function(speed) {
-    if (!DEAL_SPEED_PROFILES[speed]) {
-      console.warn('[setDealSpeed] 未知档位:', speed);
-      return;
-    }
-    window.DEAL_SPEED = speed;
-    localStorage.setItem('aagame_deal_speed', speed);
-    // 同步 DEV 按钮选中态
-    document.querySelectorAll('.dev-deal-speed-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.dealSpeed === speed);
-    });
-    if (typeof showToast === 'function') showToast(`发牌速度: ${speed}`);
-  };
-
-  // =====================================================================
-  // ⭐ v2.18.7 发牌动画 - 子项 2: 单张牌飞行原子动画
-  // ---------------------------------------------------------------------
-  // 接口: window.dealOneCard(seatId)
-  //   seatId: 's1' ~ 's9' 或 'my-seat'
-  //   返回 Promise,飞行+落位动画全部结束 resolve
-  //
-  // 实现思路:
-  //   1. 在牌桌容器(.table-area)内创建一个 .flying-card 元素
-  //   2. 用 getBoundingClientRect() 算出牌堆中心 → 座位手牌位置的相对位移
-  //      (适配 transform: scale 自适应缩放)
-  //   3. 飞行牌起始 left/top 用牌堆中心位置(绝对定位)
-  //   4. 触发 transform 跑到目标位置(transition 自动跑 250ms)
-  //   5. 250ms 后加 .landed 弹一下,370ms 后整体 resolve
-  //
-  // 备注:
-  //   - 落位后牌"留在"目标位置(不消失),供后续子项 3 序列发牌串接
-  //   - 子项 3 完成后会做"清理"(发牌完毕 → 飞行牌全部移除,替换成 seat-cards-back)
-  //   - 当前子项 2 阶段先保留落位牌,方便用 DEV 测试看效果
-  // =====================================================================
-
-  function dealOneCard(seatId) {
-    return new Promise((resolve) => {
-      // ⭐ 子项 5: 读取当前速度档位
-      const speed = getDealSpeedProfile();
-      const flyDuration = speed.flyDuration;
-      const landBounce = speed.landBounce;
-
-      const tableArea = document.querySelector('#page-table');
-      const deckEl = document.getElementById('card-deck');
-      if (!tableArea || !deckEl) {
-        console.warn('[dealOneCard] table-area 或 card-deck 不存在');
-        resolve();
-        return;
-      }
-
-      // 找目标座位的"落牌点":
-      // - my-seat: 用 .my-cards 区作目标
-      // - 其他座位: 用 .seat-cards-back(已锁的牌位置)
-      let targetEl;
-      if (seatId === 'my-seat') {
-        targetEl = document.querySelector('.my-seat .my-cards');
-      } else {
-        // 优先用 seat-cards-back,如果没有(座位空着没发牌),用座位头像位置
-        targetEl = document.querySelector(`.seat.${seatId} .seat-cards-back`)
-                || document.querySelector(`.seat.${seatId} .seat-avatar`);
-      }
-      if (!targetEl) {
-        console.warn(`[dealOneCard] 找不到座位 ${seatId} 的目标位置`);
-        resolve();
-        return;
-      }
-
-      // 用 getBoundingClientRect 算位移(直接用 rect 差值)
-      // page-table 是 position:relative 容器,绝对定位的子元素 left/top 就是相对它
-      const deckRect = deckEl.getBoundingClientRect();
-      const tableRect = tableArea.getBoundingClientRect();
-      const targetRect = targetEl.getBoundingClientRect();
-
-      // 起始位置:牌堆中心,相对 page-table 左上角
-      const startX = deckRect.left - tableRect.left + deckRect.width / 2 - 16;  // 16 = 飞行牌宽 32 的一半
-      const startY = deckRect.top  - tableRect.top  + deckRect.height / 2 - 22; // 22 = 飞行牌高 44 的一半
-      const endX   = targetRect.left - tableRect.left + targetRect.width / 2 - 16;
-      const endY   = targetRect.top  - tableRect.top  + targetRect.height / 2 - 22;
-
-      const dx = endX - startX;
-      const dy = endY - startY;
-
-      // 创建飞行牌
-      const card = document.createElement('div');
-      card.className = 'flying-card';
-      card.style.left = startX + 'px';
-      card.style.top  = startY + 'px';
-      // ⭐ 子项 5: 用速度档位的 flyDuration 动态设置 transition
-      card.style.transition = `transform ${flyDuration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-      // 初始 transform 已经在 CSS 里设了 translate(0,0) rotate(-180deg) scale(0.7)
-      tableArea.appendChild(card);
-
-      // 强制 reflow,然后触发 transition
-      void card.offsetWidth;
-      card.style.transform = `translate(${dx}px, ${dy}px) rotate(0deg) scale(1)`;
-
-      // flyDuration 后落位 → 加 landed 弹一下
-      setTimeout(() => {
-        card.classList.add('landed');
-      }, flyDuration);
-
-      // flyDuration + landBounce 后总动画结束 → resolve
-      setTimeout(() => {
-        resolve(card);  // 把飞行牌元素也返回,方便子项 3 后续清理
-      }, flyDuration + landBounce);
-    });
-  }
-  window.dealOneCard = dealOneCard;
-
-  // DEV 辅助:一键清掉所有飞行牌(子项 2 阶段测试用,子项 3 会接管清理)
-  window.clearFlyingCards = function() {
-    document.querySelectorAll('.flying-card').forEach(el => el.remove());
-  };
-
-  // =====================================================================
-  // ⭐ v2.18.7 发牌动画 - 子项 3: 底牌发牌序列(标准德州 2 圈)
-  // ---------------------------------------------------------------------
-  // 接口: window.dealHoleCards(options?)
-  //   options.dealerSeat: D 位座位 ID(默认 's5')
-  //   options.interval: 每张牌间隔 ms(默认 100)
-  //   返回 Promise,所有牌发完 resolve
-  //
-  // 标准规则:
-  //   1. 从 D 位的下一个玩家(SB)开始,逆时针绕一圈每人 1 张
-  //   2. 同样起点同样方向再绕一圈,每人发第 2 张
-  //   3. 间隔 100ms,不等上一张落位(流畅感)
-  //   4. 牌堆视觉同步减少(4→3→2→1→0,简化为 data-cards-left)
-  //
-  // 生命周期:
-  //   - 发牌前: 所有座位的 .seat-cards-back 加 .dealing 类隐藏现有牌背
-  //            所有 .my-cards 加 .dealing 隐藏自己手牌
-  //            清掉所有残留飞行牌
-  //   - 发牌中: 飞行牌一张张飞出
-  //   - 发牌后: 移除 .dealing 类(牌背出现) + 清飞行牌(接力)
-  //            牌堆加 .dealing-done 类淡出
-  //
-  // 视角顺序简化:
-  //   目前阶段按 s1→s2→s3→s4→s5→s6→s7→s8→s9→my-seat 当作"逆时针"
-  //   真实业务: 行动板块做 D 位坐标映射时会精细化
-  // =====================================================================
-
-  // 9 人桌的"绕桌顺序"(简化版,真实业务从 D 位推算)
-  const SEAT_ORDER_9 = ['s1','s2','s3','s4','s5','s6','s7','s8','s9','my-seat'];
-
-  function dealHoleCards(options = {}) {
-    return new Promise(async (resolve) => {
-      const dealerSeat = options.dealerSeat || 's5';
-      // ⭐ 子项 5: interval 默认从速度档位读
-      const interval = options.interval || getDealSpeedProfile().interval;
-      // 算总时长时用的单张动画时长(飞行+弹一下)
-      const singleCardDuration = getDealSpeedProfile().flyDuration + getDealSpeedProfile().landBounce;
-
-      // 1. 找当前有人的座位(过滤 empty/full)
-      const activeSeats = SEAT_ORDER_9.filter(id => {
-        if (id === 'my-seat') {
-          const my = document.querySelector('.my-seat');
-          return my && my.style.display !== 'none';
-        }
-        const seat = document.querySelector(`.seat.${id}`);
-        return seat && !seat.classList.contains('empty') && !seat.classList.contains('full');
-      });
-      if (activeSeats.length === 0) {
-        console.warn('[dealHoleCards] 没有可发牌的座位');
-        resolve();
-        return;
-      }
-
-      // 2. 算起始位置: D 位的"下一个"玩家(SB)
-      // 简化逻辑: 在 activeSeats 数组中找 D 位的下一个
-      let startIdx = 0;
-      const dealerIdx = activeSeats.indexOf(dealerSeat);
-      if (dealerIdx >= 0) {
-        startIdx = (dealerIdx + 1) % activeSeats.length;
-      }
-      // 重排为"从 startIdx 开始"的顺序
-      const dealOrder = [];
-      for (let i = 0; i < activeSeats.length; i++) {
-        dealOrder.push(activeSeats[(startIdx + i) % activeSeats.length]);
-      }
-
-      // 3. 发牌前清理:
-      // 3.1 清掉所有现有飞行牌
-      document.querySelectorAll('.flying-card').forEach(el => el.remove());
-      // 3.2 给所有座位 seat-cards-back 加 .dealing 隐藏牌背
-      document.querySelectorAll('.seat-cards-back').forEach(el => el.classList.add('dealing'));
-      // 3.3 给 my-cards 加 .dealing 隐藏自己的手牌
-      document.querySelectorAll('.my-cards').forEach(el => el.classList.add('dealing'));
-      // 3.4 牌堆重置为满
-      const deck = document.getElementById('card-deck');
-      if (deck) {
-        deck.classList.remove('dealing-done');
-        deck.removeAttribute('data-cards-left');
-      }
-
-      // 4. 标准 2 圈发牌
-      const totalCards = dealOrder.length * 2;
-      let dealtCount = 0;
-      const flyingCards = [];  // 收集所有飞行牌元素,发完统一清
-
-      // 牌堆视觉:发完一定数量后递减(简化:每 1/4 减 1)
-      function updateDeckVisual() {
-        if (!deck) return;
-        const ratio = dealtCount / totalCards;
-        let left = 4;
-        if (ratio > 0.25) left = 3;
-        if (ratio > 0.5)  left = 2;
-        if (ratio > 0.75) left = 1;
-        if (ratio >= 1)   left = 0;
-        deck.setAttribute('data-cards-left', left);
-      }
-
-      // 第一圈
-      for (let i = 0; i < dealOrder.length; i++) {
-        const seatId = dealOrder[i];
-        setTimeout(async () => {
-          const cardEl = await dealOneCard(seatId);
-          if (cardEl) flyingCards.push(cardEl);
-          dealtCount++;
-          updateDeckVisual();
-        }, i * interval);
-      }
-
-      // 第二圈(第一圈完全发完后再开始)
-      const round2Start = dealOrder.length * interval + 50;
-      for (let i = 0; i < dealOrder.length; i++) {
-        const seatId = dealOrder[i];
-        setTimeout(async () => {
-          const cardEl = await dealOneCard(seatId);
-          if (cardEl) flyingCards.push(cardEl);
-          dealtCount++;
-          updateDeckVisual();
-        }, round2Start + i * interval);
-      }
-
-      // 5. 全部发完后清理+显示牌背
-      // 总时长 = round2Start + 最后一张牌触发时间 + 单张完整动画(飞行+弹)
-      const totalDuration = round2Start + (dealOrder.length - 1) * interval + singleCardDuration + 50;
-      setTimeout(() => {
-        // 5.1 移除 .dealing 让牌背显示
-        document.querySelectorAll('.seat-cards-back.dealing').forEach(el => el.classList.remove('dealing'));
-        // 自己的 my-cards 不直接移除 .dealing,改成走"翻面"流程(子项 4)
-        // 5.2 清掉所有飞行牌(视觉接力)
-        flyingCards.forEach(el => { if (el && el.parentNode) el.remove(); });
-        // 兜底: 清残留
-        document.querySelectorAll('.flying-card').forEach(el => el.remove());
-        // 5.3 牌堆淡出
-        if (deck) deck.classList.add('dealing-done');
-
-        // 5.4 ⭐ 子项 4: 自己的牌做翻面动画
-        // 第二圈最后一张如果是自己,等飞行牌落位再翻面(否则用户看到牌还在飞)
-        // 简化: 统一在所有发牌结束后 150ms 翻面
-        const myCards = document.querySelector('.my-cards');
-        if (myCards) {
-          // 5.4.1 准备翻面: 移除 .dealing(允许显示),加 .flip-pending(显示牌背)
-          myCards.classList.remove('dealing');
-          myCards.classList.add('flip-pending');
-          // 5.4.2 下一帧加 .flipping 触发翻面动画(rotateY 180° → 0°)
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              myCards.classList.add('flipping');
-            });
-          });
-          // 5.4.3 翻面结束(250ms)清掉两个类,恢复常态显示正面
-          setTimeout(() => {
-            myCards.classList.remove('flip-pending');
-            myCards.classList.remove('flipping');
-          }, 250 + 50);
-        }
-
-        resolve();
-      }, totalDuration);
-    });
-  }
-  window.dealHoleCards = dealHoleCards;
-
-  // =====================================================================
-  // ⭐ v2.18.7 公共牌动态切换 - 子项 1: 街况状态机 + 渲染
-  // ---------------------------------------------------------------------
-  // 接口:
-  //   window.setStreet(street)  // 'preflop' | 'flop' | 'turn' | 'river' | 'showdown'
-  //   window.setBoardCards(cards)  // 设置公共牌数据,如 [{r:'J', s:'♦', red:true}, ...]
-  //   window.renderBoard()  // 按当前 street + boardData 渲染
-  //   window.dealFlop() / dealTurn() / dealRiver()  // 子项 2/4: 翻牌带动画
-  //   window.highlightWinningCards(indices)  // 子项 5: 高亮中牌
-  //
-  // 街况对应公共牌数量:
-  //   preflop  → 0 张
-  //   flop     → 3 张
-  //   turn     → 4 张
-  //   river    → 5 张
-  //   showdown → 5 张(同 river,只是逻辑流程不同)
-  // =====================================================================
-
-  // 默认演示牌(子项 1 阶段保留原有 5 张作为初始数据)
-  const DEFAULT_BOARD = [
-    { r: 'J',  s: '♦', red: true  },
-    { r: '7',  s: '♣', red: false },
-    { r: 'K',  s: '♥', red: true  },
-    { r: 'A',  s: '♠', red: false },
-    { r: '5',  s: '♦', red: true  }
+  const HAND_TYPE_NAMES = [
+    '高牌', '一对', '两对', '三条', '顺子', '同花', '葫芦', '四条', '同花顺', '皇家同花顺'
   ];
 
-  // 当前街况和公共牌数据(全局状态)
-  window.currentStreet = 'flop';  // 默认翻牌阶段(保持原 UI 演示效果)
-  window.boardCards = [...DEFAULT_BOARD];
+  // 解析单张牌 "K♥" → { rank: 'K', suit: '♥', value: 13, red: true }
+  function parseCard(cardStr) {
+    if (!cardStr) return null;
+    // 提取 rank(2-9, 10, J, Q, K, A) 和 suit(♠♥♦♣)
+    const suitMatch = cardStr.match(/[♠♥♦♣]/);
+    if (!suitMatch) return null;
+    const suit = suitMatch[0];
+    const rank = cardStr.replace(suit, '').trim();
+    return {
+      rank,
+      suit,
+      value: RANK_VALUES[rank] || 0,
+      red: suit === '♥' || suit === '♦'
+    };
+  }
 
-  // 街况 → 可见牌数
-  const STREET_TO_COUNT = {
-    preflop: 0,
-    flop: 3,
-    turn: 4,
-    river: 5,
-    showdown: 5
+  // 从 N 张牌中选 K 张的所有组合(N≤7, K=5)
+  function combinations(arr, k) {
+    const result = [];
+    const helper = (start, combo) => {
+      if (combo.length === k) {
+        result.push([...combo]);
+        return;
+      }
+      for (let i = start; i < arr.length; i++) {
+        combo.push(arr[i]);
+        helper(i + 1, combo);
+        combo.pop();
+      }
+    };
+    helper(0, []);
+    return result;
+  }
+
+  // 评估 5 张牌的牌型,返回 { strength, type, cards, kickers }
+  function evaluate5(cards) {
+    if (cards.length !== 5) return null;
+    // 按 value 降序排
+    const sorted = [...cards].sort((a, b) => b.value - a.value);
+    const values = sorted.map(c => c.value);
+    const suits = sorted.map(c => c.suit);
+
+    // 统计各 rank 出现次数
+    const counts = {};
+    values.forEach(v => counts[v] = (counts[v] || 0) + 1);
+    // 按"出现次数 → 值"双重排序:四条/三条/对子排前
+    const groups = Object.entries(counts)
+      .map(([v, c]) => ({ value: +v, count: c }))
+      .sort((a, b) => b.count - a.count || b.value - a.value);
+    const countsArr = groups.map(g => g.count);
+
+    // 同花?
+    const isFlush = suits.every(s => s === suits[0]);
+    // 顺子?(注意 A-2-3-4-5 也是顺子,即 [14,5,4,3,2] → 改成 [5,4,3,2,1])
+    let straightHigh = 0;
+    const uniqueValues = [...new Set(values)];
+    if (uniqueValues.length === 5) {
+      // 普通顺子
+      if (values[0] - values[4] === 4) {
+        straightHigh = values[0];
+      }
+      // A-2-3-4-5(轮子)
+      else if (values[0] === 14 && values[1] === 5 && values[4] === 2) {
+        straightHigh = 5;
+      }
+    }
+    const isStraight = straightHigh > 0;
+
+    // 皇家同花顺(同花顺最高位是 A)
+    if (isFlush && isStraight && straightHigh === 14) {
+      return { strength: 9, type: HAND_TYPE_NAMES[9], cards: sorted, tiebreak: [14] };
+    }
+    // 同花顺
+    if (isFlush && isStraight) {
+      return { strength: 8, type: HAND_TYPE_NAMES[8], cards: sorted, tiebreak: [straightHigh] };
+    }
+    // 四条
+    if (countsArr[0] === 4) {
+      return { strength: 7, type: HAND_TYPE_NAMES[7], cards: sorted, tiebreak: [groups[0].value, groups[1].value] };
+    }
+    // 葫芦
+    if (countsArr[0] === 3 && countsArr[1] === 2) {
+      return { strength: 6, type: HAND_TYPE_NAMES[6], cards: sorted, tiebreak: [groups[0].value, groups[1].value] };
+    }
+    // 同花
+    if (isFlush) {
+      return { strength: 5, type: HAND_TYPE_NAMES[5], cards: sorted, tiebreak: values };
+    }
+    // 顺子
+    if (isStraight) {
+      return { strength: 4, type: HAND_TYPE_NAMES[4], cards: sorted, tiebreak: [straightHigh] };
+    }
+    // 三条
+    if (countsArr[0] === 3) {
+      return { strength: 3, type: HAND_TYPE_NAMES[3], cards: sorted, tiebreak: [groups[0].value, groups[1].value, groups[2].value] };
+    }
+    // 两对
+    if (countsArr[0] === 2 && countsArr[1] === 2) {
+      return { strength: 2, type: HAND_TYPE_NAMES[2], cards: sorted, tiebreak: [groups[0].value, groups[1].value, groups[2].value] };
+    }
+    // 一对
+    if (countsArr[0] === 2) {
+      return { strength: 1, type: HAND_TYPE_NAMES[1], cards: sorted, tiebreak: [groups[0].value, groups[1].value, groups[2].value, groups[3].value] };
+    }
+    // 高牌
+    return { strength: 0, type: HAND_TYPE_NAMES[0], cards: sorted, tiebreak: values };
+  }
+
+  // 从 7 张牌(2 手 + 5 公)中选 5 张组成最强牌型
+  // 入参:cardsArr = ['K♥', '10♦', 'J♦', '7♣', 'K♣', 'A♠', '5♦'] (字符串数组,长度 2~7)
+  // 出参:同 evaluate5,但 cards 标记了哪些是"组成牌型的"
+  function evaluateBestHand(cardsArr) {
+    const parsed = cardsArr.map(parseCard).filter(c => c !== null);
+    if (parsed.length < 5) {
+      // 不足 5 张,直接评估现有的(早期阶段用,如翻前只有 2 张)
+      return {
+        strength: -1,
+        type: '不足5张',
+        cards: parsed,
+        tiebreak: parsed.map(c => c.value).sort((a, b) => b - a)
+      };
+    }
+    const combos = combinations(parsed, 5);
+    let best = null;
+    combos.forEach(combo => {
+      const result = evaluate5(combo);
+      if (!best ||
+          result.strength > best.strength ||
+          (result.strength === best.strength && compareTiebreak(result.tiebreak, best.tiebreak) > 0)) {
+        best = result;
+      }
+    });
+    return best;
+  }
+
+  // 比较两个 tiebreak 数组(用于同强度牌型比大小)
+  function compareTiebreak(a, b) {
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      if (a[i] !== b[i]) return a[i] - b[i];
+    }
+    return 0;
+  }
+
+  // 比较 2 个玩家的最佳牌型,返回胜者列表(允许平局)
+  // players = [{seatId, hand: [...]}], 公共牌全局拿 currentBoard 或传入
+  function findWinners(players, board) {
+    const evals = players.map(p => ({
+      seatId: p.seatId,
+      eval: evaluateBestHand([...p.hand, ...board])
+    }));
+    // 找最大 strength
+    let maxStrength = -2;
+    evals.forEach(e => { if (e.eval.strength > maxStrength) maxStrength = e.eval.strength; });
+    const topStrength = evals.filter(e => e.eval.strength === maxStrength);
+    // 同强度再比 tiebreak
+    let winners = [topStrength[0]];
+    for (let i = 1; i < topStrength.length; i++) {
+      const cmp = compareTiebreak(topStrength[i].eval.tiebreak, winners[0].eval.tiebreak);
+      if (cmp > 0) winners = [topStrength[i]];
+      else if (cmp === 0) winners.push(topStrength[i]);
+    }
+    return { winners, allEvals: evals };
+  }
+
+  window.evaluateBestHand = evaluateBestHand;
+  window.findWinners = findWinners;
+  window.parseCard = parseCard;
+
+  // ⭐ v2.19 公共牌阶段状态机 + 5 张固定牌位(默认演示牌)
+  // 真实业务:WebSocket 推 game:flop / game:turn / game:river / game:showdown 事件,
+  //           data.cards 给当前阶段所有公共牌,前端 setStage(name, cards) 切换
+  // 阶段流转:preflop → flop → turn → river → showdown → (新一手) preflop
+  const STAGE_CARDS = {
+    preflop: 0, flop: 3, turn: 4, river: 5, showdown: 5
+  };
+  // 默认演示牌(后端接入后由 game:* 事件携带)
+  const DEMO_BOARD = [
+    { rank: 'J', suit: '♦', color: 'red' },
+    { rank: '7', suit: '♣', color: 'black' },
+    { rank: 'K', suit: '♥', color: 'red' },
+    { rank: 'A', suit: '♠', color: 'black' },
+    { rank: '5', suit: '♦', color: 'red' }
+  ];
+  let currentStage = 'flop';   // 跟 HTML 默认 data-stage 一致
+
+  function setStage(stage, board) {
+    if (!STAGE_CARDS.hasOwnProperty(stage)) return;
+    const cardsEl = document.getElementById('community-cards');
+    if (!cardsEl) return;
+    currentStage = stage;
+    // 用传入 board 或 demo 数据,渲染前 N 张
+    const useBoard = (board && board.length) ? board : DEMO_BOARD;
+    const slots = cardsEl.querySelectorAll('.card');
+    slots.forEach((el, i) => {
+      // ⭐ v2.19.1 修复:清掉 dealBoardAnimation 残留的行内 style
+      // 否则 preflop 时 CSS opacity:0 被行内 opacity:1 压制,牌不消失
+      el.style.opacity = '';
+      el.style.transform = '';
+      const c = useBoard[i];
+      if (!c) return;
+      el.classList.remove('red', 'black');
+      el.classList.add(c.color);
+      el.setAttribute('data-suit', c.suit);
+      el.querySelector('.rank').textContent = c.rank;
+      el.querySelector('.suit').textContent = c.suit;
+    });
+    cardsEl.setAttribute('data-stage', stage);
+    // 翻牌阶段切换时清空所有座位动作气泡(状态机要求)
+    clearActionTags();
+    // 同步刷新自己手牌可见性(preflop 之前自己手牌默认仍可见,这里不动)
+    // ⭐ v2.20 子项 6:摊牌阶段自动触发 revealAllHands
+    if (stage === 'showdown' && typeof revealAllHands === 'function') {
+      // 延迟 300ms 让 5 张公共牌先完全显示
+      setTimeout(() => revealAllHands(), 300);
+    }
+    // 非摊牌阶段:清掉摊牌高亮和 winTag(切回早期阶段时)
+    if (stage !== 'showdown' && typeof clearShowdownHighlights === 'function') {
+      clearShowdownHighlights();
+    }
+  }
+
+  // 清空所有座位动作气泡(同一手内每轮结束时调用)
+  function clearActionTags() {
+    document.querySelectorAll('.seat-action-tag, .my-seat .seat-action-tag').forEach(el => {
+      el.remove();
+    });
+  }
+
+  window.setStage = setStage;
+  window.clearActionTags = clearActionTags;
+
+  // ⭐ v2.20 子项 1+3+4:摊牌阶段(翻底牌 + 牌型气泡 + 金色高亮)
+  // ───────────────────────────────────────────────────────────────
+  // 流程:setStage('showdown') 触发 → revealAllHands()
+  //   1. 给每个非弃牌座位分配演示底牌
+  //   2. 算每个玩家的最佳牌型(用 evaluateBestHand)
+  //   3. 翻开底牌(3D 翻转,顺时针顺序,从我左侧开始)
+  //   4. 显示牌型气泡(赢家金色 / 输家灰色)
+  //   5. 高亮组成赢家牌型的 5 张牌(底牌 + 公共牌)
+  // 真实业务:WebSocket 推 game:showdown { winners: [...], players: [{seatId, hand, eval}] }
+  //          前端直接用,跳过 evaluateBestHand
+  // ───────────────────────────────────────────────────────────────
+
+  // 演示用:为每个座位分配固定的底牌,保证每次摊牌结果一致(便于测试)
+  // 真实业务:从 WebSocket 推送数据拿
+  const DEMO_HOLE_CARDS = {
+    s1: ['A♠', 'A♣'],   // 翻牌后看会很强(隐藏的对 A)
+    s2: ['10♠', '9♠'],  // 可能成同花/顺子
+    s3: ['Q♣', 'J♣'],   // 葫芦潜力(板 J、K 时)
+    s4: ['8♦', '8♥'],   // 中等对子
+    s5: ['7♠', '6♠'],   // 顺子听牌
+    s6: ['K♦', '2♣'],   // K 弱踢
+    s7: ['5♣', '5♦'],   // 小对子
+    s8: ['3♥', '3♦'],   // 小对子
+    my: ['K♥', '10♦']    // 我的底牌(跟 HTML 默认一致)
   };
 
-  // 渲染公共牌(根据 currentStreet 决定显示几张,根据 boardCards 决定牌面)
-  function renderBoard(options = {}) {
-    const container = document.getElementById('community-cards');
-    if (!container) return;
-    const count = STREET_TO_COUNT[window.currentStreet] || 0;
-    const flipBack = options.flipBack || false;  // 是否所有牌以"牌背"状态出现(等翻面)
-    container.innerHTML = '';
-    for (let i = 0; i < count; i++) {
-      const c = window.boardCards[i];
-      if (!c) continue;
-      const cardEl = document.createElement('div');
-      cardEl.className = `card ${c.red ? 'red' : 'black'}`;
-      if (flipBack) cardEl.classList.add('flip-back');
-      cardEl.setAttribute('data-suit', c.s);
-      cardEl.setAttribute('data-board-idx', i);
-      cardEl.innerHTML = `<span class="rank">${c.r}</span><span class="suit">${c.s}</span>`;
-      container.appendChild(cardEl);
+  // 取当前公共牌(从 DOM 读,反映当前阶段)
+  function getCurrentBoard() {
+    const cardsEl = document.getElementById('community-cards');
+    if (!cardsEl) return [];
+    const stage = cardsEl.getAttribute('data-stage');
+    const cardCount = { preflop: 0, flop: 3, turn: 4, river: 5, showdown: 5 }[stage] || 0;
+    const board = [];
+    for (let i = 1; i <= cardCount; i++) {
+      const slot = cardsEl.querySelector(`.card[data-slot="${i}"]`);
+      if (!slot) continue;
+      const rank = slot.querySelector('.rank').textContent;
+      const suit = slot.querySelector('.suit').textContent;
+      board.push(rank + suit);
     }
+    return board;
   }
-  window.renderBoard = renderBoard;
 
-  // 切换街况(无动画版本,直接渲染对应数量)
-  function setStreet(street) {
-    if (!(street in STREET_TO_COUNT)) {
-      console.warn('[setStreet] 未知街况:', street);
+  // 取所有应该摊牌的玩家(非弃牌、非空、非满员)
+  function getShowdownPlayers() {
+    const players = [];
+    ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(id => {
+      const el = document.querySelector('.seat.' + id);
+      if (!el || el.classList.contains('empty') || el.classList.contains('full') || el.classList.contains('folded') || el.style.display === 'none') return;
+      players.push({ seatId: id, hand: DEMO_HOLE_CARDS[id] || ['?♠','?♠'], el });
+    });
+    // 自己
+    const mySeat = document.querySelector('.my-seat');
+    if (mySeat && !mySeat.classList.contains('folded') && mySeat.style.display !== 'none') {
+      players.push({ seatId: 'my', hand: DEMO_HOLE_CARDS.my, el: mySeat });
+    }
+    return players;
+  }
+
+  // 翻开单个座位的底牌(3D 翻转动画)
+  function revealSeatCards(seatId, holeCards) {
+    if (seatId === 'my') {
+      // 自己的牌已经是正面,只加 .reveal-flip 让它脉冲一下表示"被检视"
+      const myCards = document.querySelector('.my-seat .my-cards');
+      if (myCards) myCards.classList.add('reveal-flip');
       return;
     }
-    window.currentStreet = street;
-    renderBoard();
+    const seatEl = document.querySelector('.seat.' + seatId);
+    if (!seatEl) return;
+    const back = seatEl.querySelector('.seat-cards-back');
+    if (!back) return;
+    // 重新渲染 mini-card 为 face-up,加翻转 class
+    const c1 = parseCard(holeCards[0]);
+    const c2 = parseCard(holeCards[1]);
+    back.innerHTML = `
+      <div class="mini-card face-up reveal-flip ${c1 && c1.red ? 'red' : ''}">
+        <span class="r">${c1 ? c1.rank : ''}</span>
+        <span class="s">${c1 ? c1.suit : ''}</span>
+      </div>
+      <div class="mini-card face-up reveal-flip ${c2 && c2.red ? 'red' : ''}">
+        <span class="r">${c2 ? c2.rank : ''}</span>
+        <span class="s">${c2 ? c2.suit : ''}</span>
+      </div>
+    `;
+    back.style.opacity = '1';
   }
-  window.setStreet = setStreet;
 
-  // 设置公共牌数据(可选,默认用 DEFAULT_BOARD)
-  function setBoardCards(cards) {
-    window.boardCards = cards && cards.length ? [...cards] : [...DEFAULT_BOARD];
-    renderBoard();
+  // 在座位上挂 winTag(显示牌型 + 是否赢家)
+  function attachWinTag(seatEl, typeName, isWinner) {
+    if (!seatEl) return;
+    // 先清旧的 winTag 和 action-tag
+    const oldWin = seatEl.querySelector('.win-tag');
+    if (oldWin) oldWin.remove();
+    const oldAct = seatEl.querySelector('.seat-action-tag');
+    if (oldAct) oldAct.remove();
+    // 加新的 winTag
+    const tag = document.createElement('div');
+    tag.className = 'win-tag showdown-tag' + (isWinner ? ' winner-tag' : ' loser-tag');
+    tag.textContent = typeName;
+    seatEl.appendChild(tag);
   }
-  window.setBoardCards = setBoardCards;
 
-  // 子项 3: 烧牌动画(从牌堆飞出一张,在公共牌区上方淡出)
-  // 每翻一街前调用一次
-  function burnCard() {
-    return new Promise(resolve => {
-      const tableArea = document.querySelector('#page-table');
-      const deckEl = document.getElementById('card-deck');
-      const boardEl = document.getElementById('community-cards');
-      if (!tableArea || !deckEl || !boardEl) { resolve(); return; }
-
-      const deckRect = deckEl.getBoundingClientRect();
-      const tableRect = tableArea.getBoundingClientRect();
-      const boardRect = boardEl.getBoundingClientRect();
-
-      // 起点:牌堆中心
-      const startX = deckRect.left - tableRect.left + deckRect.width / 2 - 16;
-      const startY = deckRect.top  - tableRect.top  + deckRect.height / 2 - 22;
-      // 终点:公共牌区左侧旁边(模拟"烧到一边")
-      const endX = boardRect.left - tableRect.left - 40;
-      const endY = boardRect.top  - tableRect.top  - 8;
-
-      const burned = document.createElement('div');
-      burned.className = 'burned-card';
-      burned.style.left = startX + 'px';
-      burned.style.top = startY + 'px';
-      burned.style.transform = 'translate(0,0)';
-      tableArea.appendChild(burned);
-
-      void burned.offsetWidth;
-      burned.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
-
-      setTimeout(() => burned.classList.add('burned'), 200);
-      setTimeout(() => { burned.remove(); resolve(); }, 600);
-    });
-  }
-  window.burnCard = burnCard;
-
-  // 子项 2: 翻牌(Flop)- 3 张同时翻面
-  // 流程: 烧牌 → 公共牌区出现 3 张牌背 → 同时 rotateY 翻面
-  async function dealFlop() {
-    window.currentStreet = 'flop';
-    await burnCard();
-    renderBoard({ flipBack: true });  // 先牌背状态出现
-    // 下一帧统一移除 .flip-back 触发翻面动画
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.querySelectorAll('#community-cards .card.flip-back').forEach(el => {
-          el.classList.remove('flip-back');
-        });
+  // 高亮组成赢家牌型的 5 张牌(底牌 + 公共牌)
+  function highlightWinningCards(winnerEval, winnerSeatId) {
+    if (!winnerEval || !winnerEval.cards) return;
+    // 把组成牌型的 5 张牌按"花色+面值"做成 set 便于查找
+    const winSet = new Set(winnerEval.cards.map(c => c.rank + c.suit));
+    // 1. 公共牌区:5 张里看哪几张在 winSet,加 .highlight
+    const cardsEl = document.getElementById('community-cards');
+    if (cardsEl) {
+      cardsEl.querySelectorAll('.card').forEach(el => {
+        const rank = el.querySelector('.rank').textContent;
+        const suit = el.querySelector('.suit').textContent;
+        if (winSet.has(rank + suit)) {
+          el.classList.add('hand-highlight');
+        }
       });
-    });
-    // 等翻面完成(250ms)
-    return new Promise(res => setTimeout(res, 300));
-  }
-  window.dealFlop = dealFlop;
-
-  // 子项 4: 转牌(Turn)- 在原 3 张基础上 +1 张翻面
-  async function dealTurn() {
-    window.currentStreet = 'turn';
-    await burnCard();
-    // 追加第 4 张以牌背状态出现
-    const container = document.getElementById('community-cards');
-    if (!container) return;
-    const c = window.boardCards[3];
-    if (!c) return;
-    const cardEl = document.createElement('div');
-    cardEl.className = `card ${c.red ? 'red' : 'black'} flip-back`;
-    cardEl.setAttribute('data-suit', c.s);
-    cardEl.setAttribute('data-board-idx', 3);
-    cardEl.innerHTML = `<span class="rank">${c.r}</span><span class="suit">${c.s}</span>`;
-    container.appendChild(cardEl);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        cardEl.classList.remove('flip-back');
-      });
-    });
-    return new Promise(res => setTimeout(res, 300));
-  }
-  window.dealTurn = dealTurn;
-
-  // 子项 4: 河牌(River)- 在原 4 张基础上 +1 张翻面
-  async function dealRiver() {
-    window.currentStreet = 'river';
-    await burnCard();
-    const container = document.getElementById('community-cards');
-    if (!container) return;
-    const c = window.boardCards[4];
-    if (!c) return;
-    const cardEl = document.createElement('div');
-    cardEl.className = `card ${c.red ? 'red' : 'black'} flip-back`;
-    cardEl.setAttribute('data-suit', c.s);
-    cardEl.setAttribute('data-board-idx', 4);
-    cardEl.innerHTML = `<span class="rank">${c.r}</span><span class="suit">${c.s}</span>`;
-    container.appendChild(cardEl);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        cardEl.classList.remove('flip-back');
-      });
-    });
-    return new Promise(res => setTimeout(res, 300));
-  }
-  window.dealRiver = dealRiver;
-
-  // 子项 5: 高亮中牌(组成牌型的公共牌金色描边)
-  // indices: 数组,如 [0, 2, 4] 表示第 1/3/5 张公共牌参与中牌
-  function highlightWinningCards(indices) {
-    document.querySelectorAll('#community-cards .card.winning').forEach(el => el.classList.remove('winning'));
-    if (!indices || !indices.length) return;
-    indices.forEach(idx => {
-      const cardEl = document.querySelector(`#community-cards .card[data-board-idx="${idx}"]`);
-      if (cardEl) cardEl.classList.add('winning');
-    });
-  }
-  window.highlightWinningCards = highlightWinningCards;
-  window.clearWinningCards = () => highlightWinningCards([]);
-
-  // 初始化:渲染默认公共牌(flop 阶段 3 张,跟原 UI 一致)
-  // 在 DOMContentLoaded 或立即执行(因为 script 在 body 末尾)
-  setTimeout(() => {
-    if (document.getElementById('community-cards')) {
-      renderBoard();
     }
-  }, 0);
+    // 2. 赢家底牌:高亮参与的
+    if (winnerSeatId === 'my') {
+      document.querySelectorAll('.my-seat .my-cards .card').forEach(el => {
+        const rank = el.querySelector('.rank').textContent;
+        const suit = el.querySelector('.suit').textContent;
+        if (winSet.has(rank + suit)) el.classList.add('hand-highlight');
+      });
+    } else {
+      const seatEl = document.querySelector('.seat.' + winnerSeatId);
+      if (seatEl) {
+        seatEl.querySelectorAll('.seat-cards-back .mini-card.face-up').forEach(el => {
+          const r = el.querySelector('.r');
+          const s = el.querySelector('.s');
+          if (!r || !s) return;
+          if (winSet.has(r.textContent + s.textContent)) {
+            el.classList.add('hand-highlight');
+          }
+        });
+      }
+    }
+  }
+
+  // 清掉所有摊牌高亮
+  function clearShowdownHighlights() {
+    document.querySelectorAll('.hand-highlight').forEach(el => el.classList.remove('hand-highlight'));
+    document.querySelectorAll('.showdown-tag').forEach(el => el.remove());
+    document.querySelectorAll('.reveal-flip').forEach(el => el.classList.remove('reveal-flip'));
+  }
+
+  // 摊牌主流程
+  function revealAllHands() {
+    clearShowdownHighlights();
+    // 1. 拿当前公共牌 + 所有摊牌玩家
+    const board = getCurrentBoard();
+    const players = getShowdownPlayers();
+    if (players.length === 0) return;
+    if (board.length < 5) {
+      // 不到 5 张公共牌也能摊牌(有人 All-in 提前摊),但牌型按现有计算
+      // 这里演示用,不到 5 张就不算最佳牌型,只翻底牌
+    }
+
+    // 2. 算每人最佳牌型 + 找赢家
+    const result = findWinners(players, board);
+    const winnerIds = new Set(result.winners.map(w => w.seatId));
+
+    // 3. 翻牌顺序:从我的左侧第一个开始顺时针(竞品标准)
+    // 9 个固定座位的"顺时针"顺序:s6 → s7 → s8 → s1 → s2 → s3 → s4 → s5 → my
+    const clockwiseOrder = ['s6','s7','s8','s1','s2','s3','s4','s5','my'];
+    const sortedPlayers = clockwiseOrder
+      .map(id => players.find(p => p.seatId === id))
+      .filter(p => p);
+
+    // 4. 逐个翻牌(每张间隔 180ms,弱→强排序更好但简化按位置顺时针)
+    const interval = 220;
+    sortedPlayers.forEach((p, i) => {
+      setTimeout(() => {
+        revealSeatCards(p.seatId, p.hand);
+      }, i * interval);
+    });
+
+    // 5. 所有牌翻完后 → 显示牌型气泡 + 高亮赢家牌
+    const totalRevealTime = sortedPlayers.length * interval + 400;
+    setTimeout(() => {
+      // 牌型气泡
+      result.allEvals.forEach(e => {
+        if (e.eval.strength < 0) return;  // 不足 5 张就不显
+        const seatEl = e.seatId === 'my'
+          ? document.querySelector('.my-seat')
+          : document.querySelector('.seat.' + e.seatId);
+        attachWinTag(seatEl, e.eval.type, winnerIds.has(e.seatId));
+      });
+      // 高亮赢家牌型(只高亮第一个赢家的牌,平局时高亮所有赢家共有的牌)
+      result.winners.forEach(w => {
+        highlightWinningCards(w.eval, w.seatId);
+      });
+    }, totalRevealTime);
+
+    // 6. 返回结果供后续派彩用
+    return result;
+  }
+
+  window.revealAllHands = revealAllHands;
+  window.clearShowdownHighlights = clearShowdownHighlights;
+
+  // ⭐ v2.20 子项 5:Show / Muck 选项弹窗
+  // ───────────────────────────────────────────────────────────────
+  // 触发场景:自己跟到河牌但输牌,可选择展示底牌 or 盖牌
+  // 主流竞品:TGPoker 默认 8 秒倒计时,超时自动 Muck(盖牌)
+  // ───────────────────────────────────────────────────────────────
+  let showMuckTimer = null;
+  let showMuckTimerSecs = 8;
+
+  function openShowMuckModal() {
+    const modal = document.getElementById('show-muck-modal');
+    if (!modal) return;
+    modal.classList.add('show');
+    showMuckTimerSecs = 8;
+    updateShowMuckTimer();
+    // 启动倒计时
+    clearInterval(showMuckTimer);
+    showMuckTimer = setInterval(() => {
+      showMuckTimerSecs--;
+      updateShowMuckTimer();
+      if (showMuckTimerSecs <= 0) {
+        // 超时默认 Muck
+        chooseShowMuck('muck');
+      }
+    }, 1000);
+  }
+
+  function updateShowMuckTimer() {
+    const secEl = document.getElementById('sm-timer-sec');
+    if (secEl) secEl.textContent = showMuckTimerSecs;
+    // 倒计时蒙版进度
+    const fill = document.getElementById('sm-timer-fill');
+    if (fill) fill.style.transform = `scaleX(${showMuckTimerSecs / 8})`;
+  }
+
+  function closeShowMuckModal() {
+    const modal = document.getElementById('show-muck-modal');
+    if (modal) modal.classList.remove('show');
+    clearInterval(showMuckTimer);
+    showMuckTimer = null;
+  }
+
+  function chooseShowMuck(choice) {
+    closeShowMuckModal();
+    if (choice === 'show') {
+      // 展示底牌:确保自己手牌高亮可见(加 reveal-flip 重播一次翻牌动画)
+      const myCards = document.querySelectorAll('.my-seat .my-cards .card');
+      myCards.forEach(c => {
+        c.classList.remove('reveal-flip');
+        void c.offsetWidth;
+        c.classList.add('reveal-flip');
+      });
+      if (typeof showToast === 'function') showToast('已展示底牌');
+    } else {
+      // 盖牌:把自己 my-cards 变成牌背(用 .muck-back 类压制)
+      const myCards = document.querySelector('.my-seat .my-cards');
+      if (myCards) myCards.classList.add('muck-back');
+      if (typeof showToast === 'function') showToast('已盖牌(Muck)');
+    }
+  }
+  window.openShowMuckModal = openShowMuckModal;
+  window.closeShowMuckModal = closeShowMuckModal;
+
+  // 绑定弹窗按钮
+  const smShowBtn = document.getElementById('sm-show-btn');
+  const smMuckBtn = document.getElementById('sm-muck-btn');
+  if (smShowBtn) smShowBtn.addEventListener('click', () => chooseShowMuck('show'));
+  if (smMuckBtn) smMuckBtn.addEventListener('click', () => chooseShowMuck('muck'));
+
+  // ⭐ v2.19 板块 2:发牌动画
+  // ───────────────────────────────────────────────────────────────
+  // 核心思路:
+  // 1. 牌堆位于桌面中央偏右(card-deck),发牌时显示
+  // 2. 为每张要发的牌创建临时 DOM(flying-card),从牌堆出发
+  // 3. 用 getBoundingClientRect 计算起点和终点的相对位置
+  // 4. 通过 transform 动画 380ms 飞到目标 → 短暂停留 → 翻面 → 消失
+  // 5. 真实业务:WebSocket 推 deal:hole / deal:flop / deal:turn / deal:river
+  // ───────────────────────────────────────────────────────────────
+
+  // 获取某 DOM 相对牌桌容器的中心坐标
+  function getRelativeCenter(el) {
+    const page = document.getElementById('page-table');
+    if (!page || !el) return { x: 0, y: 0 };
+    const pageRect = page.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    return {
+      x: elRect.left - pageRect.left + elRect.width / 2,
+      y: elRect.top - pageRect.top + elRect.height / 2
+    };
+  }
+
+  // 创建一张飞行牌
+  // type: 'hole' | 'board';  card: {rank, suit, color}  startX/Y: 起点;  endX/Y: 终点
+  // doFlip: 到位后是否翻面(底牌不翻别人的,翻自己的;公共牌翻);  onArrive: 到位回调
+  function createFlyingCard(type, card, startX, startY, endX, endY, doFlip, onArrive) {
+    const page = document.getElementById('page-table');
+    if (!page) return;
+    const fc = document.createElement('div');
+    fc.className = 'flying-card target-' + type;
+    fc.innerHTML = `
+      <div class="fc-inner">
+        <div class="fc-back"></div>
+        <div class="fc-front ${card ? card.color : 'black'}">
+          <span class="rank">${card ? card.rank : ''}</span>
+          <span class="suit">${card ? card.suit : ''}</span>
+        </div>
+      </div>
+    `;
+    // 起点定位(translate 居中)
+    fc.style.left = startX + 'px';
+    fc.style.top = startY + 'px';
+    fc.style.transform = 'translate(-50%, -50%) scale(0.85)';
+    fc.style.opacity = '0.95';
+    page.appendChild(fc);
+
+    // 下一帧触发飞行
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const dx = endX - startX;
+        const dy = endY - startY;
+        fc.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`;
+      });
+    });
+
+    // 380ms 后到位 → 翻面(若需要)
+    setTimeout(() => {
+      if (doFlip) {
+        fc.classList.add('flipped');
+      }
+      if (typeof onArrive === 'function') onArrive(fc);
+    }, 380);
+
+    return fc;
+  }
+
+  // 显示/隐藏牌堆
+  function showDeck(show) {
+    const deck = document.getElementById('card-deck');
+    if (deck) deck.classList.toggle('hidden', !show);
+  }
+
+  // 取所有非空、非满员、非旁观的座位(发牌目标)
+  function getDealableSeats() {
+    const arr = [];
+    // 庄家位先于发牌,真实业务从小盲位开始,这里按 s1-s8 顺序简化
+    ['s1','s2','s3','s4','s5','s6','s7','s8'].forEach(id => {
+      const el = document.querySelector('.seat.' + id);
+      if (el && !el.classList.contains('empty') && !el.classList.contains('full') && el.style.display !== 'none') {
+        arr.push({ id, el });
+      }
+    });
+    // 自己始终在(默认非空)
+    const mySeat = document.querySelector('.my-seat');
+    if (mySeat && mySeat.style.display !== 'none') {
+      arr.push({ id: 'my', el: mySeat });
+    }
+    return arr;
+  }
+
+  // 取座位的牌背元素位置
+  function getSeatCardSlot(seatId, slotIdx) {
+    if (seatId === 'my') {
+      // 自己用 .my-cards 的 card
+      const cards = document.querySelectorAll('.my-cards .card');
+      return cards[slotIdx] || null;
+    }
+    const back = document.querySelector('.seat.' + seatId + ' .seat-cards-back');
+    if (!back) return null;
+    const minis = back.querySelectorAll('.mini-card');
+    return minis[slotIdx] || back;
+  }
+
+  // 发底牌动画:每人 2 张,逐张分发(每张间隔 80ms,共 2N×80ms + 380ms 飞行)
+  // 模式:第一轮先给每人 1 张,第二轮再 1 张(德州标准发牌顺序)
+  function dealHoleCardsAnimation() {
+    // 1. 切到 preflop:清空公共牌
+    setStage('preflop');
+    // 2. 显示牌堆
+    showDeck(true);
+    // 3. 隐藏所有座位的牌背(发牌过程中不可见,飞到位后显示)
+    document.querySelectorAll('.seat-cards-back').forEach(el => {
+      el.style.opacity = '0';
+    });
+    const mySeatCards = document.querySelector('.my-seat .my-cards');
+    if (mySeatCards) mySeatCards.style.opacity = '0';
+
+    const deck = document.getElementById('card-deck');
+    const seats = getDealableSeats();
+    if (!deck || seats.length === 0) return;
+
+    const deckPos = getRelativeCenter(deck);
+    const interval = 80;
+    let delay = 0;
+
+    // 2 轮发牌(每人 1 张 × 2 轮)
+    for (let round = 0; round < 2; round++) {
+      seats.forEach((seat, i) => {
+        setTimeout(() => {
+          const targetEl = getSeatCardSlot(seat.id, round);
+          if (!targetEl) return;
+          const tgtPos = getRelativeCenter(targetEl);
+          // 自己的牌发到位后翻面显示(已存在 .my-cards 不动,这里只做视觉动画)
+          // 其他玩家牌背保持
+          createFlyingCard('hole', null, deckPos.x, deckPos.y, tgtPos.x, tgtPos.y, false, (fc) => {
+            // 到位 → 短暂停留 80ms → 显示真实卡片 + 消失飞行牌
+            setTimeout(() => {
+              fc.style.opacity = '0';
+              setTimeout(() => fc.remove(), 200);
+              // 显示该座位的对应牌(累加 opacity:1 的过程)
+              if (seat.id === 'my' && round === 1) {
+                if (mySeatCards) mySeatCards.style.opacity = '1';
+              } else if (seat.id !== 'my' && round === 1) {
+                const back = document.querySelector('.seat.' + seat.id + ' .seat-cards-back');
+                if (back) back.style.opacity = '1';
+              }
+            }, 60);
+          });
+        }, delay);
+        delay += interval;
+      });
+      delay += 120; // 两轮之间稍歇
+    }
+
+    // 全部完成后隐藏牌堆
+    const totalTime = delay + 500;
+    setTimeout(() => {
+      showDeck(false);
+    }, totalTime);
+  }
+  window.dealHoleCardsAnimation = dealHoleCardsAnimation;
+
+  // 发公共牌动画:翻牌3张 / 转牌1张 / 河牌1张
+  // 烧 1 张(快速飞个牌背到旁边消失) + 飞牌到目标位置 + 翻面
+  function dealBoardAnimation(stage) {
+    const deck = document.getElementById('card-deck');
+    if (!deck) return;
+    showDeck(true);
+    const deckPos = getRelativeCenter(deck);
+
+    // 烧 1 张:从牌堆飞到牌堆右侧 + 旋转消失
+    const burn = createFlyingCard('board', null, deckPos.x, deckPos.y, deckPos.x + 40, deckPos.y - 8, false, (fc) => {
+      setTimeout(() => {
+        fc.style.transition = 'opacity 200ms, transform 300ms';
+        fc.style.opacity = '0';
+        fc.style.transform += ' rotate(25deg)';
+        setTimeout(() => fc.remove(), 320);
+      }, 80);
+    });
+    if (burn) {
+      // 烧牌缩小
+      burn.style.opacity = '0.6';
+    }
+
+    // 等烧牌完成后,按阶段发对应张数
+    const stageInfo = {
+      flop:  { startSlot: 0, count: 3, finalStage: 'flop' },
+      turn:  { startSlot: 3, count: 1, finalStage: 'turn' },
+      river: { startSlot: 4, count: 1, finalStage: 'river' }
+    };
+    const info = stageInfo[stage];
+    if (!info) {
+      setTimeout(() => showDeck(false), 800);
+      return;
+    }
+
+    // 先隐藏公共牌区(动画期间用飞行牌代替)
+    const cardsEl = document.getElementById('community-cards');
+    const targetSlots = [];
+    if (cardsEl) {
+      for (let i = 0; i < info.count; i++) {
+        const slot = cardsEl.querySelector(`.card[data-slot="${info.startSlot + i + 1}"]`);
+        if (slot) targetSlots.push(slot);
+      }
+    }
+
+    // 烧完后 600ms 开始发
+    let burnDoneDelay = 600;
+    const interval = 160; // 每张牌发出的间隔
+
+    targetSlots.forEach((slot, i) => {
+      setTimeout(() => {
+        const tgtPos = getRelativeCenter(slot);
+        // 取该 slot 当前牌值
+        const card = {
+          rank: slot.querySelector('.rank').textContent,
+          suit: slot.querySelector('.suit').textContent,
+          color: slot.classList.contains('red') ? 'red' : 'black'
+        };
+        createFlyingCard('board', card, deckPos.x, deckPos.y, tgtPos.x, tgtPos.y, true, (fc) => {
+          // 翻面 300ms 后,显示真正的公共牌位 + 移除飞行牌
+          setTimeout(() => {
+            fc.remove();
+            // 触发真正公共牌阶段切换
+            // 最后一张时统一 setStage,中间张暂时手动让 slot 显示
+            slot.style.opacity = '1';
+            slot.style.transform = 'scale(1)';
+            // 最后一张:统一 setStage 同步官方阶段(会清动作气泡)
+            if (i === targetSlots.length - 1) {
+              setStage(info.finalStage);
+              showDeck(false);
+            }
+          }, 320);
+        });
+      }, burnDoneDelay + i * interval);
+    });
+  }
+  window.dealBoardAnimation = dealBoardAnimation;
+
+  // ⭐ v2.19 板块 3:筹码飞行动画
+  // ───────────────────────────────────────────────────────────────
+  // 1. betChipsToPotAnimation:每轮结束(translate)所有座位的 seat-bet 飞向中央底池
+  // 2. potToWinnerAnimation(winnerId):底池飞向赢家座位
+  // 3. 真实业务:WebSocket round:end → betChipsToPotAnimation
+  //              hand:settle → potToWinnerAnimation
+  // ───────────────────────────────────────────────────────────────
+
+  // 创建一个飞行筹码
+  function createFlyingChip(startX, startY, endX, endY, amount, onArrive) {
+    const page = document.getElementById('page-table');
+    if (!page) return null;
+    const chip = document.createElement('div');
+    chip.className = 'flying-chip';
+    chip.innerHTML = amount ? `<div class="fc-amount">+${amount}</div>` : '';
+    chip.style.left = startX + 'px';
+    chip.style.top = startY + 'px';
+    chip.style.transform = 'translate(-50%, -50%)';
+    chip.style.opacity = '1';
+    page.appendChild(chip);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const dx = endX - startX;
+        const dy = endY - startY;
+        chip.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      });
+    });
+
+    setTimeout(() => {
+      if (typeof onArrive === 'function') onArrive(chip);
+    }, 480);
+
+    return chip;
+  }
+
+  // 找到底池中心点(.pot-chips)
+  function getPotCenter() {
+    const potEl = document.querySelector('.table-center .pot-chips');
+    if (potEl) return getRelativeCenter(potEl);
+    // 兜底:中央
+    const page = document.getElementById('page-table');
+    if (page) {
+      const r = page.getBoundingClientRect();
+      return { x: r.width / 2, y: r.height * 0.3 };
+    }
+    return { x: 195, y: 250 };
+  }
+
+  // 收筹码:所有座位的 .seat-bet 飞向中央底池
+  function betChipsToPotAnimation() {
+    const potPos = getPotCenter();
+    // 收集所有有 bet 的座位
+    const seats = [];
+    document.querySelectorAll('.seat .seat-bet').forEach(betEl => {
+      const seat = betEl.closest('.seat');
+      if (!seat || seat.classList.contains('empty') || seat.classList.contains('full')) return;
+      const amountEl = betEl.querySelector('.seat-bet-amount');
+      const amount = amountEl ? amountEl.textContent : '';
+      if (!amount || amount === '0') return;
+      seats.push({ betEl, seat, amount });
+    });
+    // 自己
+    const myBet = document.querySelector('.my-seat .seat-bet');
+    if (myBet) {
+      const amountEl = myBet.querySelector('.seat-bet-amount');
+      const amount = amountEl ? amountEl.textContent : '';
+      if (amount && amount !== '0') {
+        seats.push({ betEl: myBet, seat: myBet.parentElement, amount });
+      }
+    }
+
+    if (seats.length === 0) {
+      // 演示用:即使没下注也演示一次(每个非空座位生成一个飞行筹码)
+      const dealable = getDealableSeats();
+      dealable.forEach((s, i) => {
+        const startPos = getRelativeCenter(s.el);
+        setTimeout(() => {
+          createFlyingChip(startPos.x, startPos.y, potPos.x, potPos.y, '', null);
+        }, i * 50);
+      });
+      return;
+    }
+
+    seats.forEach((s, i) => {
+      const startPos = getRelativeCenter(s.betEl);
+      // 隐藏原 seat-bet(避免双重显示)
+      s.betEl.style.opacity = '0';
+      setTimeout(() => {
+        createFlyingChip(startPos.x, startPos.y, potPos.x, potPos.y, '', (chip) => {
+          // 到达底池后渐隐
+          chip.style.opacity = '0';
+          setTimeout(() => chip.remove(), 240);
+        });
+      }, i * 50);
+    });
+
+    // 全部完成后清空所有 seat-bet 金额
+    setTimeout(() => {
+      seats.forEach(s => {
+        const amountEl = s.betEl.querySelector('.seat-bet-amount');
+        if (amountEl) amountEl.textContent = '0';
+        s.betEl.style.opacity = '1';
+      });
+    }, seats.length * 50 + 600);
+  }
+  window.betChipsToPotAnimation = betChipsToPotAnimation;
+
+  // 派彩:底池筹码飞向赢家座位
+  function potToWinnerAnimation(winnerId, amount) {
+    const potPos = getPotCenter();
+    // 找赢家座位中心
+    const winnerEl = winnerId === 'my'
+      ? document.querySelector('.my-seat')
+      : document.querySelector('.seat.' + winnerId);
+    if (!winnerEl) return;
+    const tgtPos = getRelativeCenter(winnerEl);
+
+    // 取实际底池金额(若未传 amount)
+    if (!amount) {
+      const potAmountEl = document.getElementById('table-pot');
+      amount = potAmountEl ? potAmountEl.textContent : '1.33K';
+    }
+
+    // 派彩:发 5 个筹码连续飞向赢家(视觉:堆筹码归拢)
+    const chipCount = 5;
+    const interval = 60;
+    for (let i = 0; i < chipCount; i++) {
+      setTimeout(() => {
+        // 起点轻微偏移以增加层叠感
+        const offsetX = (Math.random() - 0.5) * 8;
+        const offsetY = (Math.random() - 0.5) * 4;
+        const showAmount = (i === chipCount - 1) ? amount : ''; // 最后一个显金额
+        createFlyingChip(potPos.x + offsetX, potPos.y + offsetY, tgtPos.x, tgtPos.y, showAmount, (chip) => {
+          setTimeout(() => {
+            chip.style.opacity = '0';
+            setTimeout(() => chip.remove(), 240);
+          }, i === chipCount - 1 ? 600 : 100); // 最后一个金额标签停留久一点
+        });
+      }, i * interval);
+    }
+
+    // 赢家头像短暂金光高亮(0.6s)
+    winnerEl.classList.add('winner-glow');
+    setTimeout(() => winnerEl.classList.remove('winner-glow'), 1500);
+  }
+  window.potToWinnerAnimation = potToWinnerAnimation;
 
   // 计时器状态
   const turnTimer = {

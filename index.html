@@ -5592,6 +5592,55 @@
     transition: transform 0.9s cubic-bezier(.34, 1.56, .64, 1), opacity 0.3s;
   }
 
+  /* ⭐ v2.28.42 子项 6:首次入座动画(头像飞入 + 落地缩放 + 座位光圈)
+     业内标准:玩家买入成功后,头像从屏幕顶部飞入目标座位,落地时缩放弹跳
+     效果:0.6s 飞行 + 0.3s 缩放反馈 + 1.2s 绿光环 */
+  @keyframes seatInFlight {
+    0%   { transform: translate(-50%, -200px) scale(1.2); opacity: 0; }
+    20%  { opacity: 1; }
+    70%  { transform: translate(-50%, 0) scale(1.15); }
+    85%  { transform: translate(-50%, 0) scale(0.92); }
+    100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+  }
+  @keyframes seatInRipple {
+    0%   { transform: scale(0.8); opacity: 0.9; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+  /* 入座光圈 — 绿色脉动环,1.2s 消失 */
+  .seat-in-ripple {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 48px;
+    height: 48px;
+    margin: -24px 0 0 -24px;
+    border-radius: 50%;
+    border: 3px solid var(--green-main);
+    pointer-events: none;
+    z-index: 8;
+    animation: seatInRipple 1.2s ease-out forwards;
+  }
+  /* 飞入头像样式(JS 临时插入到牌桌内,动画完播完移除)*/
+  .seat-in-flying {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #2a4a3a;
+    border: 2px solid var(--green-main);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    z-index: 50;
+    pointer-events: none;
+    box-shadow: 0 0 20px rgba(77, 255, 77, 0.6);
+    animation: seatInFlight 0.7s cubic-bezier(.34, 1.56, .64, 1) forwards;
+  }
+  .seat-in-flying img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
   /* ============================================================
      ⭐ v2.28.41 玩家头像点击弹窗(阶段 2)
      ────────────────────────────────────────────────────────────
@@ -15263,6 +15312,53 @@
     });
   }
 
+  // ⭐ v2.28.42 子项 6:首次入座动画
+  // 业务:头像从屏幕顶部飞入目标座位,落地时缩放弹跳 + 绿色光圈扩散 + 音效
+  // 时长:0.7s 飞行 + 1.2s 光圈,期间不阻塞其他交互
+  function playSeatInAnimation(seatId, player) {
+    const pageTable = document.getElementById('page-table');
+    if (!pageTable) return;
+    const seatEl = document.querySelector('.seat.' + seatId);
+    if (!seatEl) return;
+    const seatAvatar = seatEl.querySelector('.seat-avatar');
+    if (!seatAvatar) return;
+
+    // 计算目标位置(座位头像中心,相对牌桌容器)
+    const pageRect = pageTable.getBoundingClientRect();
+    const avatarRect = seatAvatar.getBoundingClientRect();
+    const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
+    const targetX = (avatarRect.left - pageRect.left + avatarRect.width / 2) / zoom;
+    const targetY = (avatarRect.top - pageRect.top + avatarRect.height / 2) / zoom;
+
+    // 1. 创建飞入头像 DOM(从顶部飞下来)
+    const flying = document.createElement('div');
+    flying.className = 'seat-in-flying';
+    flying.style.left = targetX + 'px';
+    flying.style.top = targetY + 'px';
+    // 头像内容:用 player.avatar(首字)
+    flying.textContent = (player && player.avatar) || '?';
+    pageTable.appendChild(flying);
+
+    // 2. 创建落地光圈
+    setTimeout(() => {
+      const ripple = document.createElement('div');
+      ripple.className = 'seat-in-ripple';
+      ripple.style.left = targetX + 'px';
+      ripple.style.top = targetY + 'px';
+      pageTable.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 1300);
+    }, 550);   // 飞行接近落地时触发光圈
+
+    // 3. 音效(复用现有 dealHole 作为入座反馈,业内常见)
+    if (window.soundEngine && typeof window.soundEngine.play === 'function') {
+      window.soundEngine.play('dealHole');
+    }
+
+    // 4. 飞行动画播完后移除 DOM
+    setTimeout(() => flying.remove(), 800);
+  }
+  window.playSeatInAnimation = playSeatInAnimation;
+
   // ⭐ v2.18.6 买入弹窗交互(子项 2 修订:按"买入个数"档位滑杆)
   // 业务规则:
   //   1 个买入 = 100 × 大盲(独站德州标准)
@@ -15551,8 +15647,18 @@
       if (typeof refreshTopbarRebuy === 'function') refreshTopbarRebuy();
       // 关闭买入弹窗
       buyinMask.classList.remove('show');
-      // ⭐ v2.18.6 子项 5:坐下后立即弹入局选择弹窗
-      openEntryModal(seatId);
+      // ⭐ v2.28.42 子项 6:首次入座动画(头像飞入 + 光圈)
+      if (typeof playSeatInAnimation === 'function') {
+        playSeatInAnimation(seatId, newPlayer);
+      }
+      // ⭐ v2.28.42 子项 F:入座成功 toast(业内标准:其他玩家看到"XX 已入座")
+      if (typeof showToast === 'function') {
+        const bbValue = parseBigBlind((currentTableRoom && currentTableRoom.blinds) || '0.5/1');
+        const buyinBb = bbValue > 0 ? Math.round(amount / bbValue) : 0;
+        showToast(picked.name + ' 已入座 ' + buyinBb + ' BB');
+      }
+      // ⭐ v2.18.6 子项 5:坐下后立即弹入局选择弹窗(延迟 0.5s 让动画播完)
+      setTimeout(() => openEntryModal(seatId), 500);
     });
   }
 
@@ -15576,6 +15682,40 @@
       entryPostDesc.textContent = `补一个大盲 ${formatAmount(bbValue)} 入局,下一手即开始`;
     }
     entryMask.classList.add('show');
+  }
+
+  // ⭐ v2.28.42 子项 D:entryModal 关闭兜底
+  // 业内标准:玩家点 ✕ 或点遮罩外关闭,不能让座位处于"未定义入局方式"状态
+  // 默认按"等大盲"处理(更保守、免费、不扣筹码)
+  function applyDefaultEntryWaitbb() {
+    if (!entryPendingSeat || !currentTableRoom || !currentTableRoom.occupiedSeats) return;
+    const player = currentTableRoom.occupiedSeats[entryPendingSeat];
+    if (!player) return;
+    // 已经选了 waitbb 或 postbb 就不重复处理
+    if (player.waitbb || player.action === 'postbb') return;
+    player.waitbb = true;
+    player.action = 'waitbb';
+    player.actionLabel = '等大盲';
+    if (typeof renderSeats === 'function') renderSeats(currentTableRoom);
+    if (typeof showToast === 'function') {
+      showToast('默认按"等大盲"入局(免费等待)');
+    }
+  }
+  // 拦截 entryModal 的关闭(✕ 按钮 + 遮罩点击),关闭后调兜底
+  if (entryMask) {
+    const entryCloseBtn = entryMask.querySelector('[data-close-modal="entry-modal-mask"]');
+    if (entryCloseBtn) {
+      entryCloseBtn.addEventListener('click', () => {
+        // 通用 close 机制会先关弹窗(34541 行),这里在 click 事件冒泡后跑兜底
+        setTimeout(applyDefaultEntryWaitbb, 0);
+      });
+    }
+    entryMask.addEventListener('click', (e) => {
+      if (e.target === entryMask) {
+        // 通用 close 机制会先关弹窗(34546 行),这里在事件后跑兜底
+        setTimeout(applyDefaultEntryWaitbb, 0);
+      }
+    });
   }
 
   // 等大盲:玩家头像灰显 + 显示"等大盲"标签
@@ -15611,6 +15751,7 @@
       }
       const player = currentTableRoom.occupiedSeats[entryPendingSeat];
       const bbValue = parseBigBlind(currentTableRoom.blinds || '0.5/1');
+      const postedSeatId = entryPendingSeat;
       if (player) {
         player.action = 'postbb';
         player.actionLabel = '补大盲';
@@ -15626,8 +15767,60 @@
       if (typeof showToast === 'function') {
         showToast(`已补 ${formatAmount(bbValue)} 大盲,下一手入局`);
       }
+      // ⭐ v2.28.42 子项 E:postbb 玩家筹码飞行到底池(业内标准动画)
+      // 时机:渲染完成后,延迟 200ms 等 DOM 就绪
+      setTimeout(() => {
+        if (typeof flyPostBbChips === 'function') {
+          flyPostBbChips(postedSeatId);
+        }
+      }, 200);
     });
   }
+
+  // ⭐ v2.28.42 子项 E:postbb 玩家大盲筹码飞行到底池
+  // 业内标准:玩家选"立即下注大盲"后,从座位飞一个大盲筹码到底池中央
+  // 复用 createFlyingChip(已有飞筹码函数)
+  function flyPostBbChips(seatId) {
+    const pageTable = document.getElementById('page-table');
+    if (!pageTable) return;
+    const seatEl = document.querySelector('.seat.' + seatId);
+    if (!seatEl) return;
+    const seatAvatar = seatEl.querySelector('.seat-avatar');
+    if (!seatAvatar) return;
+
+    // 起点:座位头像中心
+    const pageRect = pageTable.getBoundingClientRect();
+    const avatarRect = seatAvatar.getBoundingClientRect();
+    const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
+    const startX = (avatarRect.left - pageRect.left + avatarRect.width / 2) / zoom;
+    const startY = (avatarRect.top - pageRect.top + avatarRect.height / 2) / zoom;
+
+    // 终点:底池中心(getPotCenter 已有)
+    const potPos = (typeof getPotCenter === 'function') ? getPotCenter()
+                 : { x: pageRect.width / zoom / 2, y: pageRect.height / zoom * 0.3 };
+
+    // 飞筹码(用 createFlyingChip 若有,否则用简化版)
+    if (typeof createFlyingChip === 'function') {
+      createFlyingChip(startX, startY, potPos.x, potPos.y);
+    } else {
+      // 简化飞筹码 DOM
+      const chip = document.createElement('div');
+      chip.style.cssText = 'position:absolute;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#e84444,#a01818);border:2px dashed white;z-index:15;pointer-events:none;left:' + startX + 'px;top:' + startY + 'px;transform:translate(-50%,-50%);transition:transform 0.5s cubic-bezier(.4,.15,.25,1);';
+      pageTable.appendChild(chip);
+      requestAnimationFrame(() => {
+        const dx = potPos.x - startX;
+        const dy = potPos.y - startY;
+        chip.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      });
+      setTimeout(() => chip.remove(), 600);
+    }
+
+    // 音效
+    if (window.soundEngine && typeof window.soundEngine.play === 'function') {
+      window.soundEngine.play('chipMove');
+    }
+  }
+  window.flyPostBbChips = flyPostBbChips;
 
   // ⭐ v2.18.6 子项 6:离座确认弹窗
   // 真实业务:发送 /api/table/leave { seatId } → 后端校验 + 处理筹码归还
@@ -27790,6 +27983,22 @@
         // 重置桌面 + 渲染玩家 + 设庄家
         fullResetTable();
         wsCurrentHand = data;
+        // ⭐ v2.28.42 子项 8B:大盲位轮到 waitbb 玩家时,清除等待标记 → 下一手正常发牌
+        // 业务规则:waitbb 玩家在每手开始时检查 — 当前大盲位 = 该玩家座位 → 标记清除
+        if (data.bbSeat && window.currentTableRoom && window.currentTableRoom.occupiedSeats) {
+          const bbPlayer = window.currentTableRoom.occupiedSeats[data.bbSeat];
+          if (bbPlayer && bbPlayer.waitbb) {
+            bbPlayer.waitbb = false;
+            bbPlayer.action = null;
+            bbPlayer.actionLabel = null;
+            // 同步 DOM:移除 .waitbb 类
+            const bbSeatEl = document.querySelector('.seat.' + data.bbSeat);
+            if (bbSeatEl) bbSeatEl.classList.remove('waitbb');
+            if (typeof showToast === 'function') {
+              showToast((bbPlayer.name || data.bbSeat) + ' 等到大盲,本手开始入局');
+            }
+          }
+        }
         // ⭐ v2.28.3 修复:新一手开始,主动清掉所有座位上残留的 .seat-bet 节点
         // (防止上一手未结算干净的筹码残留显示)
         document.querySelectorAll('.seat .seat-bet, .my-seat .seat-bet').forEach(el => el.remove());
@@ -30097,6 +30306,7 @@
       ordered.push(CLOCKWISE[(startIdx + i) % CLOCKWISE.length]);
     }
     // 过滤出真正有人的座位
+    // ⭐ v2.28.42 子项 8:跳过 waitbb 玩家(等大盲状态,不发牌不参与本手)
     const arr = [];
     ordered.forEach(id => {
       const el = id === 'my'
@@ -30105,6 +30315,8 @@
       if (!el) return;
       if (id !== 'my' && (el.classList.contains('empty') || el.classList.contains('full'))) return;
       if (el.style.display === 'none') return;
+      // ⭐ v2.28.42:跳过等大盲玩家(座位有 .waitbb 类 或 数据 player.waitbb=true)
+      if (el.classList.contains('waitbb')) return;
       arr.push({ id, el });
     });
     return arr;

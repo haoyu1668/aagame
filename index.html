@@ -2557,9 +2557,9 @@
      ───────────────────────────────────────── */
   .card-deck {
     position: absolute;
-    /* ⭐ v2.28.25:向上 10px 向左 20px,适配缩放后的发牌起点 */
-    top: calc(44% - 10px);
-    left: calc(56% - 20px);
+    /* ⭐ v2.28.29:从 30% 上移到 20%,避开中央底池筹码标识(底池在 30% 附近) */
+    top: 20%;
+    left: 50%;
     width: 26px;
     height: 36px;
     z-index: 6;
@@ -29447,9 +29447,28 @@
         </div>
       </div>
     `;
-    // 起点定位(translate 居中)
-    fc.style.left = startX + 'px';
-    fc.style.top = startY + 'px';
+    // ⭐ v2.28.33:起点用两套坐标
+    //   1. 视觉定位(fc.style.left/top):直接复制 .card-deck 的 computed style,保证起点 100% 重叠牌堆
+    //   2. 飞行 delta(dx/dy):用 getRelativeCenter(deckEl) 跟 endX/endY 同坐标系算
+    const deckEl = document.getElementById('card-deck');
+    const useDeckStart = !!(deckEl && (type === 'hole' || type === 'board'));
+    let visualStartLeft, visualStartTop;   // 视觉定位坐标
+    let deltaStartX = startX, deltaStartY = startY;   // 飞行 delta 起点坐标
+    if (useDeckStart) {
+      // 视觉定位:复制 .card-deck 字面值
+      const deckStyle = window.getComputedStyle(deckEl);
+      visualStartLeft = deckStyle.left;
+      visualStartTop = deckStyle.top;
+      // 飞行 delta:用 getRelativeCenter(跟终点同算法)
+      const deckCenter = getRelativeCenter(deckEl);
+      deltaStartX = deckCenter.x;
+      deltaStartY = deckCenter.y;
+    } else {
+      visualStartLeft = startX + 'px';
+      visualStartTop = startY + 'px';
+    }
+    fc.style.left = visualStartLeft;
+    fc.style.top = visualStartTop;
     fc.style.transform = 'translate(-50%, -50%) scale(0.85)';
     fc.style.opacity = '0.95';
     page.appendChild(fc);
@@ -29457,8 +29476,8 @@
     // 下一帧触发飞行
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const dx = endX - startX;
-        const dy = endY - startY;
+        const dx = endX - deltaStartX;
+        const dy = endY - deltaStartY;
         fc.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`;
       });
     });
@@ -29523,11 +29542,33 @@
       const cards = document.querySelectorAll('.my-cards .card');
       return cards[slotIdx] || null;
     }
+    // ⭐ v2.28.34:其他座位返回 .seat-cards-back 容器(让飞牌落在小红叠牌位置)
     const back = document.querySelector('.seat.' + seatId + ' .seat-cards-back');
-    if (!back) return null;
-    const minis = back.querySelectorAll('.mini-card');
-    return minis[slotIdx] || back;
+    return back || null;
   }
+
+  // ⭐ v2.28.35:基于头像 + 方向偏移精确算小红叠牌中心位置
+  //   重新计算的偏移参数:
+  //   X 偏移:头像中心 → 小叠牌中心
+  //     .seat.s8 left:-7px(逻辑), .seat width:80px, 头像中心 = -7+40 = 33
+  //     .seat-cards-back left:40px width:30px → 中心 = -7+40+15 = 48
+  //     差距 = 48-33 = +15px(朝右组)/ 对称 -15px(朝左组)
+  //   Y 偏移:头像中心 → 小叠牌中心
+  //     .seat-avatar 48px height,在 .seat 顶部居中(margin: 0 auto + 默认 top:0)
+  //     头像中心 Y(相对 .seat) = 24
+  //     .seat-cards-back top:2px height:~28px,中心 Y = 2+14 = 16
+  //     差距 = 16-24 = -8px
+  function getSeatCardsBackCenter(seatId) {
+    if (seatId === 'my') return null;
+    const avatar = document.querySelector('.seat.' + seatId + ' .seat-avatar');
+    if (!avatar) return null;
+    const avatarCenter = getRelativeCenter(avatar);
+    const rightGroup = ['s1', 's6', 's7', 's8'];
+    const xOffset = rightGroup.indexOf(seatId) >= 0 ? 15 : -15;
+    const yOffset = -8;
+    return { x: avatarCenter.x + xOffset, y: avatarCenter.y + yOffset };
+  }
+  window.getSeatCardsBackCenter = getSeatCardsBackCenter;
 
   // 发底牌动画:每人 2 张,逐张分发(每张间隔 80ms,共 2N×80ms + 380ms 飞行)
   // 模式:第一轮先给每人 1 张,第二轮再 1 张(德州标准发牌顺序)
@@ -29547,7 +29588,18 @@
     const seats = getDealableSeats();
     if (!deck || seats.length === 0) return;
 
-    const deckPos = getRelativeCenter(deck);
+    // ⭐ v2.28.27:不用 getRelativeCenter(deck),直接读 .card-deck 的 CSS top/left
+    //   原因:zoom + transform: translate(-50%, -50%) 组合下,getBoundingClientRect 返回值
+    //         会受多重影响,导致飞牌起点和视觉牌堆位置错位
+    //   解决:直接按 .card-deck 的 CSS 百分比计算逻辑坐标,跟视觉位置 100% 一致
+    const page = document.getElementById('page-table');
+    const pageRect = page.getBoundingClientRect();
+    const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
+    // page 的逻辑尺寸 = 视口尺寸 / zoom
+    const pageW = pageRect.width / zoom;
+    const pageH = pageRect.height / zoom;
+    // .card-deck CSS: top: 20%, left: 50%
+    const deckPos = { x: pageW * 0.5, y: pageH * 0.2 };
     const interval = 80;
     let delay = 0;
 
@@ -29555,9 +29607,17 @@
     for (let round = 0; round < 2; round++) {
       seats.forEach((seat, i) => {
         setTimeout(() => {
-          const targetEl = getSeatCardSlot(seat.id, round);
-          if (!targetEl) return;
-          const tgtPos = getRelativeCenter(targetEl);
+          // ⭐ v2.28.34:用 getSeatCardsBackCenter 精确算小叠牌中心
+          //   my 座位用 .my-cards 的 card,其他座位用头像位置+方向偏移
+          let tgtPos;
+          if (seat.id === 'my') {
+            const targetEl = getSeatCardSlot(seat.id, round);
+            if (!targetEl) return;
+            tgtPos = getRelativeCenter(targetEl);
+          } else {
+            tgtPos = getSeatCardsBackCenter(seat.id);
+            if (!tgtPos) return;
+          }
           // 自己的牌发到位后翻面显示(已存在 .my-cards 不动,这里只做视觉动画)
           // 其他玩家牌背保持
           createFlyingCard('hole', null, deckPos.x, deckPos.y, tgtPos.x, tgtPos.y, false, (fc) => {
@@ -29594,7 +29654,13 @@
     const deck = document.getElementById('card-deck');
     if (!deck) return;
     showDeck(true);
-    const deckPos = getRelativeCenter(deck);
+    // ⭐ v2.28.27:同 dealHoleCardsAnimation,用 CSS 百分比算起点避免 zoom+transform 偏差
+    const page = document.getElementById('page-table');
+    const pageRect = page.getBoundingClientRect();
+    const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
+    const pageW = pageRect.width / zoom;
+    const pageH = pageRect.height / zoom;
+    const deckPos = { x: pageW * 0.5, y: pageH * 0.2 };
 
     // 烧 1 张:从牌堆飞到牌堆右侧 + 旋转消失
     const burn = createFlyingCard('board', null, deckPos.x, deckPos.y, deckPos.x + 40, deckPos.y - 8, false, (fc) => {

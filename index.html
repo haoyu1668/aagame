@@ -4053,7 +4053,32 @@
     pointer-events: none;
   }
 
-  /* ⭐ v2.28.47 方案 3:my-seat 空座状态(玩家未入桌时)
+  /* ⭐ v2.28.55 待本手结束后离桌:my-seat 头像加橙色边框 + 顶部"待离桌"标签 */
+  .my-seat.pending-leave .seat-name-chip::after {
+    content: '· 待离桌';
+    color: #ff9933;
+    margin-left: 4px;
+    font-weight: 700;
+  }
+  .my-seat.pending-leave {
+    position: relative;
+  }
+  .my-seat.pending-leave::before {
+    content: '本手结束后离桌';
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 153, 51, 0.9);
+    color: white;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+    z-index: 7;
+    pointer-events: none;
+  }
+
      业内标准:玩家点击大厅房间进牌桌时,默认 my-seat 是空座,显示"+ 坐下"提示
      入座流程完成(点 s1-s8 空座 + 买入)后,通过 rotateToMySeat 移除 .empty 类,显示玩家信息 */
   .my-seat.empty .my-cards,
@@ -12495,15 +12520,7 @@
         </div>
       </div>
 
-      <!-- ⭐ v2.20.3 完整一手演示快捷按钮(独立浮动,不在切换器内)
-           始终可见,一键播放完整流程,可拖动调整位置 -->
-      <div class="dev-quick-demo" id="dev-quick-demo">
-        <div class="dev-quick-demo-grip" id="dev-quick-demo-grip">⋮⋮</div>
-        <button class="dev-quick-demo-btn" id="dev-quick-demo-btn">
-          <span class="dqd-icon">▶▶</span>
-          <span class="dqd-label">一手演示</span>
-        </button>
-      </div>
+      <!-- ⭐ v2.28.55:移除浮动版"一手演示"按钮(跟 DEV-1 切换器里的重复,且会干扰真实牌局流程) -->
 
       <!-- ⭐ v2.22 模式指示器(右上角小标签),点击可切换模式 -->
       <div class="mode-indicator-wrap" id="mode-indicator-wrap">
@@ -15963,11 +15980,32 @@
       doReturnToLobby();
       return;
     }
-    // 情况 2:已入座 → 弹离座确认弹窗
+    // ⭐ v2.28.55 新增情况 2:正在牌局中(my-seated-waiting 之外的状态)→ 标记"本手结束后离桌"
+    //   业内标准(PokerStars / KKPoker / AAPoker):玩家点离桌时,如果还在牌局中,不会强制踢出
+    //   而是显示"待本手结束后离桌"提示,玩家可以继续玩完本手,然后自动离桌
+    //   如果不在牌局中(my-seated-waiting 等待新一手),可以立即离桌
+    const isInHand = pageTable && !pageTable.classList.contains('my-seated-waiting') && !pageTable.classList.contains('my-not-seated');
+    if (isInHand) {
+      // 标记为"待本手结束后离桌"
+      window._pendingLeaveAfterHand = true;
+      // 顶部状态条提示
+      if (typeof showToast === 'function') {
+        showToast('已设置:本手结束后自动离桌');
+      }
+      // 加视觉标识(my-seat 加 .pending-leave 类,顶部显示"待离桌"标签)
+      if (myEl) myEl.classList.add('pending-leave');
+      return;
+    }
+    // 情况 3:已入座但还没开始牌局(my-seated-waiting)→ 弹确认弹窗
     if (typeof openLeaveSeatModal === 'function') {
       openLeaveSeatModal('my');
     } else {
-      doReturnToLobby();
+      // 兜底:直接结算 + 返大厅
+      if (typeof doLeaveTableAndReturn === 'function') {
+        doLeaveTableAndReturn();
+      } else {
+        doReturnToLobby();
+      }
     }
   }
   window.startLeaveTableFlow = startLeaveTableFlow;
@@ -16014,6 +16052,22 @@
 
   // 清理牌桌会话状态(离桌时调用)
   function cleanupTableSession() {
+    // ⭐ v2.28.54:先停 mockServer + 清异步状态(避免遗留 step() 回调跑到 null actionRound)
+    if (window.mockServer && typeof window.mockServer.stopAllTimers === 'function') {
+      window.mockServer.stopAllTimers();
+    }
+    // ⭐ v2.28.54:停掉 playFullHandDemo(避免离桌后 demo 还在跑导致 actionRound null 崩溃)
+    if (typeof window.stopFullHandDemo === 'function') {
+      window.stopFullHandDemo();
+    }
+    // 重置行动轮状态(避免下一桌延续)
+    if (typeof actionRound !== 'undefined') {
+      try { actionRound = null; } catch(e) {}
+    }
+    // 重置 wsCurrentHand
+    if (typeof window.wsCurrentHand !== 'undefined') {
+      try { window.wsCurrentHand = null; } catch(e) {}
+    }
     // 1. 清除玩家数据
     if (currentTableRoom) {
       if (currentTableRoom.occupiedSeats && currentTableRoom.occupiedSeats['my']) {
@@ -16035,12 +16089,13 @@
     }
     // 3. my-seat 恢复 empty 状态
     const mySeatEl = document.querySelector('#page-table .my-seat');
-    if (mySeatEl) mySeatEl.classList.add('empty');
-    // 4. 停掉 mockServer 的牌局推送(避免离桌后还在推 HAND_START)
-    if (window.mockServer && typeof window.mockServer.stopAllTimers === 'function') {
-      window.mockServer.stopAllTimers();
+    if (mySeatEl) {
+      mySeatEl.classList.add('empty');
+      mySeatEl.classList.remove('pending-leave');   // ⭐ v2.28.55 清除待离桌标记
     }
-    // 5. 清空历史记录 / 边池 / 预选(避免新桌带旧数据)
+    // ⭐ v2.28.55 清掉待离桌标志
+    window._pendingLeaveAfterHand = false;
+    // 4. 清空历史记录 / 边池 / 预选(避免新桌带旧数据)
     if (window.historyStore && typeof window.historyStore.reset === 'function') {
       window.historyStore.reset(null);
     }
@@ -16050,6 +16105,10 @@
     if (window.preselectStore && typeof window.preselectStore.clear === 'function') {
       window.preselectStore.clear();
     }
+    // 5. 清掉当前行动请求
+    if (typeof window.clearActionRequest === 'function') {
+      try { window.clearActionRequest(); } catch(e) {}
+    }
     // 6. 重置发牌阶段 + 清掉公共牌的视觉状态
     const communityCards = document.getElementById('community-cards');
     if (communityCards) communityCards.dataset.stage = 'preflop';
@@ -16057,6 +16116,9 @@
     document.querySelectorAll('#page-table .seat-bet, #page-table .seat-action-tag').forEach(el => {
       if (el.parentNode) el.remove();
     });
+    // 8. 清空 my-seat 的下注气泡(也是残留)
+    const myBet = document.querySelector('#page-table .my-seat .seat-bet');
+    if (myBet) myBet.style.display = '';   // 让 CSS 控制(不强制 inline)
   }
   window.cleanupTableSession = cleanupTableSession;
 
@@ -18615,6 +18677,11 @@
       });
     }
 
+    // ⭐ v2.28.54:暴露"是否在等我行动"判断给前端按钮用
+    function isWaitingMyTurn() {
+      return !!pendingMyTurn;
+    }
+
     // ⭐ v2.24 子项 1:接收前端 CLIENT_ACTION → 兑现 promise,继续推流
     function fulfillMyTurn(action, amount) {
       if (!pendingMyTurn) return;
@@ -19022,7 +19089,7 @@
       }
     }
 
-    return { startHand, stopAllTimers, isRunning, receive, fulfillMyTurn };
+    return { startHand, stopAllTimers, isRunning, receive, fulfillMyTurn, isWaitingMyTurn };
   })();
   window.mockServer = mockServer;
 
@@ -28858,6 +28925,16 @@
         // ⭐ v2.26 子项 5:一手结束清预选(避免预选跨手)
         if (window.preselectStore) window.preselectStore.clear();
         if (window.clearPreselectWindow) window.clearPreselectWindow();
+        // ⭐ v2.28.55:本手结束 → 检查"待离桌"标记,有则自动触发离桌
+        if (window._pendingLeaveAfterHand) {
+          window._pendingLeaveAfterHand = false;
+          // 延迟 1.5s 等结算动画完成,再触发离桌
+          setTimeout(() => {
+            if (typeof doLeaveTableAndReturn === 'function') {
+              doLeaveTableAndReturn();
+            }
+          }, 1500);
+        }
         break;
       }
 
@@ -29339,11 +29416,18 @@
       let currentSeatId = nextActor(startFromSeat);
 
       function step() {
+        // ⭐ v2.28.54:离桌或 fullResetTable 后 actionRound 可能被置 null,防御性退出
+        if (!actionRound) {
+          setActingSeat(null);
+          setTimeout(resolveAll, 0);
+          return;
+        }
         // 检查结束条件
         if (!currentSeatId || isRoundEnded()) {
           // 行动轮结束:停止 acting 头像环
           setActingSeat(null);
-          actionRound.isComplete = true;
+          // ⭐ v2.28.54:修复 actionRound 可能为 null 的崩溃(离桌后会被置 null)
+          if (actionRound) actionRound.isComplete = true;
           // 短停顿后 resolve
           setTimeout(resolveAll, 400);
           return;
@@ -29719,6 +29803,15 @@
 
     runDemo();
   }
+
+  // ⭐ v2.28.54:暴露停止 demo 的入口,供离桌时调用
+  window.stopFullHandDemo = function() {
+    demoHandRunning = false;
+    const demoBtn = document.getElementById('dev-full-hand');
+    if (demoBtn) demoBtn.classList.remove('running');
+    const dqdBtn = document.getElementById('dev-quick-demo-btn');
+    if (dqdBtn) dqdBtn.classList.remove('running');
+  };
 
   // 辅助:批量设置非空座位的下注金额(演示用)
   function setSeatBets(baseAmount) {
@@ -31624,12 +31717,25 @@
   //   - hasLiveRequest():是否处于"轮到我"的真实请求态
   //   - sendClientAction(action, amount):发到 ws,本地关闭弹窗
   function hasLiveRequest() {
+    // ⭐ v2.28.54:mockServer 等我行动(pendingMyTurn 非空)也算真实请求态
+    //   这样点加注/弃牌/跟注按钮就能调 fulfillMyTurn,不再走"开发中"兜底
+    if (window.mockServer && typeof window.mockServer.isWaitingMyTurn === 'function') {
+      if (window.mockServer.isWaitingMyTurn()) return true;
+    }
     // ⭐ v2.24 防御:demo 模式下永远返回 false,避免污染演示流
     const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
     if (currentMode === 'demo') return false;
     return !!(window.currentActionRequest && window.currentActionRequest());
   }
   function sendClientAction(action, amount) {
+    // ⭐ v2.28.54:mockServer 模式 → 调 fulfillMyTurn(不走 ws)
+    if (window.mockServer && typeof window.mockServer.isWaitingMyTurn === 'function' && window.mockServer.isWaitingMyTurn()) {
+      if (typeof window.mockServer.fulfillMyTurn === 'function') {
+        window.mockServer.fulfillMyTurn(action, amount || 0);
+      }
+      if (typeof window.clearActionRequest === 'function') window.clearActionRequest();
+      return true;
+    }
     const req = window.currentActionRequest && window.currentActionRequest();
     if (!req) return false;
     const payload = { handNo: req.handNo, action: action };

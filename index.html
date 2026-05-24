@@ -2410,7 +2410,8 @@
   /* 桌中央信息 - 上移到牌桌中央 */
   .table-center {
     position: absolute;
-    top: 30%;       /* ⭐ v2.18 原40.3%(340/844),上移约60px远离公共牌区 */
+    /* ⭐ v2.28.38:从 30% 上移 30px,给主池下方边池 1/2/3 + 牌局信息留更多空间 */
+    top: calc(30% - 30px);
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
@@ -4714,8 +4715,12 @@
   /* 历史按钮(顶部右侧) */
   .history-toggle-btn {
     position: absolute;
-    top: 12px;
-    right: 50px;
+    /* ⭐ v2.28.36:从牌桌顶部挪到牌谱按钮(table-replay-btn)正上方,间距 10px
+       .table-bottombar bottom:14px + .bb-icon 高 32px + 间距 10px = bottom 56px
+       X 对齐牌谱按钮:.table-bottombar padding-right 16px → right 16px */
+    bottom: 56px;
+    right: 16px;
+    top: auto;
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -5137,111 +5142,6 @@
     color: rgba(255,255,255,0.5);
   }
 
-  /* ============================================================
-     ⭐ v2.28 批次 C3:牌局结算汇总弹窗(HAND_END 时弹)
-     ───────────────────────────────────────────────────────────
-     业内标准:一手结束后玩家能快速看到盈亏快照,可选择收藏
-     ============================================================ */
-  .settlement-modal-mask {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.55);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 175;
-  }
-  .settlement-modal-mask.show { display: flex; }
-  .settlement-modal {
-    width: 280px;
-    background: linear-gradient(160deg, #232733 0%, #16181f 100%);
-    border-radius: 14px;
-    padding: 18px;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 8px 28px rgba(0,0,0,0.65);
-    color: white;
-  }
-  .settlement-header {
-    text-align: center;
-    margin-bottom: 14px;
-  }
-  .settlement-title {
-    font-size: 17px;
-    font-weight: 700;
-    color: white;
-    margin-bottom: 3px;
-  }
-  .settlement-handno {
-    font-size: 11px;
-    color: rgba(255,255,255,0.4);
-    font-family: ui-monospace, monospace;
-  }
-  .settlement-profit-card {
-    background: rgba(77, 255, 77, 0.08);
-    border: 1px solid rgba(77, 255, 77, 0.3);
-    border-radius: 10px;
-    padding: 14px;
-    text-align: center;
-    margin-bottom: 12px;
-  }
-  .settlement-profit-card.loss {
-    background: rgba(232, 68, 68, 0.08);
-    border-color: rgba(232, 68, 68, 0.3);
-  }
-  .settlement-profit-label {
-    font-size: 11px;
-    color: rgba(255,255,255,0.6);
-    margin-bottom: 4px;
-  }
-  .settlement-profit-value {
-    font-size: 28px;
-    font-weight: 800;
-    color: var(--green-main);
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-  }
-  .settlement-profit-card.loss .settlement-profit-value {
-    color: #ff6464;
-  }
-  .settlement-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 7px 0;
-    font-size: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-  }
-  .settlement-row:last-of-type { border-bottom: none; }
-  .settlement-row-label { color: rgba(255,255,255,0.5); }
-  .settlement-row-value { color: white; font-weight: 600; }
-  .settlement-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-  }
-  .settlement-btn {
-    flex: 1;
-    padding: 10px 0;
-    border-radius: 8px;
-    border: none;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .settlement-btn:active { transform: scale(0.96); }
-  .settlement-fav {
-    background: linear-gradient(135deg, #ffd96a, #d4af37);
-    color: #2a1500;
-  }
-  .settlement-fav.faved {
-    background: rgba(255, 217, 106, 0.2);
-    color: #ffd96a;
-    border: 1px solid rgba(255, 217, 106, 0.5);
-  }
-  .settlement-close {
-    background: rgba(255,255,255,0.1);
-    color: white;
-  }
 
   /* ============================================================
      ⭐ v2.28 批次 C2:保险(Insurance)弹窗
@@ -6594,6 +6494,8 @@
     border-top: 1px solid rgba(255,255,255,0.08);
     background: rgba(0,0,0,0.4);
     flex-shrink: 0;
+    /* ⭐ v2.28.36:底部整体上移 10px(发发看/偷偷看/五角星/翻页/牌局数) */
+    margin-bottom: 10px;
   }
   .rp-star {
     width: 32px;
@@ -11916,15 +11818,19 @@
           </div>
         </div>
 
-        <!-- ⭐ v2.27 子项 4:行动历史按钮(竖屏顶部右侧,小圆形带 ⏱ 图标) -->
-        <button class="history-toggle-btn" id="history-toggle-btn" aria-label="行动历史">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M12 7v5l3 2"/>
-          </svg>
-          <span class="history-badge" id="history-badge"></span>
-        </button>
+        <!-- 可存证按钮原本在这里(保留) -->
+
       </div>
+
+      <!-- ⭐ v2.27 子项 4:行动历史按钮(v2.28.37 移到 .table-topbar 外,作为 #page-table 直接子元素,
+           这样 bottom: 56px 才相对牌桌底部生效,放在牌谱按钮正上方 10px) -->
+      <button class="history-toggle-btn" id="history-toggle-btn" aria-label="行动历史">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 7v5l3 2"/>
+        </svg>
+        <span class="history-badge" id="history-badge"></span>
+      </button>
 
       <!-- 9 个座位(s1~s8 由 renderSeats 动态填充内容) -->
       <!-- s1: 顶部偏左 -->
@@ -12331,39 +12237,6 @@
         </div>
       </div>
 
-      <!-- ⭐ v2.28 批次 C3:牌局结算汇总弹窗(HAND_END 时弹) -->
-      <div class="settlement-modal-mask" id="settlement-modal-mask">
-        <div class="settlement-modal">
-          <div class="settlement-header">
-            <div class="settlement-title">本手结算</div>
-            <div class="settlement-handno" id="settlement-handno">--</div>
-          </div>
-          <div class="settlement-profit-card" id="settlement-profit-card">
-            <div class="settlement-profit-label">我的盈亏</div>
-            <div class="settlement-profit-value" id="settlement-profit-value">+0</div>
-          </div>
-          <div class="settlement-row">
-            <span class="settlement-row-label">底池总额</span>
-            <span class="settlement-row-value" id="settlement-pot">0</span>
-          </div>
-          <div class="settlement-row">
-            <span class="settlement-row-label">我的牌型</span>
-            <span class="settlement-row-value" id="settlement-handtype">--</span>
-          </div>
-          <div class="settlement-row">
-            <span class="settlement-row-label">赢家</span>
-            <span class="settlement-row-value" id="settlement-winner">--</span>
-          </div>
-          <div class="settlement-row">
-            <span class="settlement-row-label">当前筹码</span>
-            <span class="settlement-row-value" id="settlement-chips">0</span>
-          </div>
-          <div class="settlement-actions">
-            <button class="settlement-btn settlement-fav" id="settlement-fav-btn">⭐ 收藏本手</button>
-            <button class="settlement-btn settlement-close" id="settlement-close-btn">关闭</button>
-          </div>
-        </div>
-      </div>
 
       <!-- ⭐ v2.28 批次 C2:保险(Insurance)弹窗 -->
       <!-- 业内标准:All-In 后,落后玩家可买保险,对冲翻牌/转牌/河牌的特定结果 -->
@@ -25828,103 +25701,6 @@
   };
   window.straddleModal = straddleModal;
 
-  // ⭐ v2.28 批次 C3:牌局结算汇总弹窗(HAND_END 时弹)
-  // ─────────────────────────────────────────────────────────────────────
-  const settlementModal = {
-    mask: null,
-    currentHandNo: null,
-    isFaved: false,
-
-    init() {
-      this.mask = document.getElementById('settlement-modal-mask');
-      if (!this.mask) return;
-      const closeBtn = document.getElementById('settlement-close-btn');
-      const favBtn = document.getElementById('settlement-fav-btn');
-      if (closeBtn) closeBtn.addEventListener('click', () => this.hide());
-      if (favBtn) favBtn.addEventListener('click', () => this.toggleFav());
-      // 点遮罩外面关闭
-      this.mask.addEventListener('click', (e) => {
-        if (e.target === this.mask) this.hide();
-      });
-    },
-
-    show(data) {
-      if (!this.mask) return;
-      const { handNo, profit, potSize, myHandType, winnerLabel, chipsAfter } = data;
-      this.currentHandNo = handNo;
-
-      const handNoEl = document.getElementById('settlement-handno');
-      const profitCard = document.getElementById('settlement-profit-card');
-      const profitVal = document.getElementById('settlement-profit-value');
-      const potEl = document.getElementById('settlement-pot');
-      const handTypeEl = document.getElementById('settlement-handtype');
-      const winnerEl = document.getElementById('settlement-winner');
-      const chipsEl = document.getElementById('settlement-chips');
-
-      if (handNoEl) handNoEl.textContent = '#' + (handNo || '--');
-      const profitNum = Number(profit) || 0;
-      if (profitVal) profitVal.textContent = (profitNum > 0 ? '+' : '') + profitNum;
-      if (profitCard) profitCard.classList.toggle('loss', profitNum < 0);
-      if (potEl) potEl.textContent = potSize || 0;
-      if (handTypeEl) handTypeEl.textContent = myHandType || '--';
-      if (winnerEl) winnerEl.textContent = winnerLabel || '--';
-      if (chipsEl) chipsEl.textContent = chipsAfter || 0;
-
-      // 同步收藏状态
-      this.isFaved = (window.favoritesStore && handNo) ? window.favoritesStore.has(handNo) : false;
-      const favBtn = document.getElementById('settlement-fav-btn');
-      if (favBtn) {
-        favBtn.classList.toggle('faved', this.isFaved);
-        favBtn.textContent = this.isFaved ? '⭐ 已收藏' : '⭐ 收藏本手';
-      }
-
-      this.mask.classList.add('show');
-    },
-
-    hide() {
-      if (this.mask) this.mask.classList.remove('show');
-    },
-
-    toggleFav() {
-      if (!this.currentHandNo || !window.favoritesStore) return;
-      const favBtn = document.getElementById('settlement-fav-btn');
-      if (this.isFaved) {
-        window.favoritesStore.remove(this.currentHandNo);
-        this.isFaved = false;
-      } else {
-        // 构造收藏快照(从 historyStore 取数据)
-        const snapshot = this.buildSnapshot();
-        if (snapshot) window.favoritesStore.add(snapshot);
-        this.isFaved = true;
-      }
-      if (favBtn) {
-        favBtn.classList.toggle('faved', this.isFaved);
-        favBtn.textContent = this.isFaved ? '⭐ 已收藏' : '⭐ 收藏本手';
-      }
-      if (window.soundEngine) window.soundEngine.play('tap');
-    },
-
-    buildSnapshot() {
-      if (!window.historyStore) return null;
-      const entries = window.historyStore.list();
-      const myEntries = entries.filter(e => e.seatId === 'my');
-      const lastPayout = entries.filter(e => e.type === 'payout' && e.seatId === 'my').pop();
-      const myShowdown = entries.find(e => e.type === 'showdown' && e.seatId === 'my');
-      return {
-        handNo: this.currentHandNo,
-        roomName: '俱乐部 NLH',
-        blinds: '',
-        myCards: (myShowdown && myShowdown.extra && myShowdown.extra.cards) || [],
-        myResult: lastPayout ? 'win' : 'loss',
-        myProfit: lastPayout ? lastPayout.amount : 0,
-        board: [],
-        handType: (myShowdown && myShowdown.extra && myShowdown.extra.handType) || '',
-        potSize: 0,
-        playerCount: Object.keys(window._historyPlayerLookup || {}).length
-      };
-    }
-  };
-  window.settlementModal = settlementModal;
 
   // ⭐ v2.28 批次 C2:保险(Insurance)弹窗
   // ─────────────────────────────────────────────────────────────────────
@@ -26200,7 +25976,6 @@
   // 延迟初始化(等 DOM 就绪)
   setTimeout(() => {
     straddleModal.init();
-    settlementModal.init();
     insuranceModal.init();
     giftModal.init();
   }, 200);
@@ -27599,26 +27374,6 @@
         // ⭐ v2.26 子项 5:一手结束清预选(避免预选跨手)
         if (window.preselectStore) window.preselectStore.clear();
         if (window.clearPreselectWindow) window.clearPreselectWindow();
-        // ⭐ v2.28 批次 C3:弹结算汇总弹窗(延迟 1.5s 让派彩动画播完)
-        const mySnap = data.mySnap || {};
-        const lastPayout = window.historyStore ?
-          window.historyStore.list().filter(e => e.type === 'payout').pop() : null;
-        const myShowdown = window.historyStore ?
-          window.historyStore.list().find(e => e.type === 'showdown' && e.seatId === 'my') : null;
-        const totalPot = window.historyStore ?
-          window.historyStore.list().reduce((s, e) => s + (e.type === 'payout' ? e.amount : 0), 0) : 0;
-        setTimeout(() => {
-          if (window.settlementModal) {
-            window.settlementModal.show({
-              handNo: data.handNo,
-              profit: mySnap.profit || 0,
-              potSize: totalPot,
-              myHandType: (myShowdown && myShowdown.extra && myShowdown.extra.handType) || '--',
-              winnerLabel: lastPayout ? (lastPayout.seatId === 'my' ? '我' : lastPayout.seatId) : '--',
-              chipsAfter: mySnap.chipsAfter || 0
-            });
-          }
-        }, 1500);
         break;
       }
 

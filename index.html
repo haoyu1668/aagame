@@ -3947,180 +3947,6 @@
     text-align: center;
     z-index: 6;
   }
-  /* ⭐ v2.28.48 选项 B:玩家未入座(.my-seat.empty)时,底部所有"轮到我"按钮全部隐藏
-     业内逻辑:玩家从大厅进牌桌但还没坐下时,不能看到加注/弃牌/跟注/全下等行动按钮
-     涉及元素:
-       #action-area  → 主行动按钮区(加注/弃牌/跟注/全下 + 5 快捷加注)
-       #ab-add-time-btn → +15S 延时按钮
-       #raise-slider-overlay → 加注滑杆精调弹窗
-       .preselect-bar → 预选条(过牌/跟注/过弃)
-     入座后(my-seat 移除 .empty 类)恢复显示,由各自原有的状态机控制 */
-  body:has(.my-seat.empty) #page-table #action-area,
-  body:has(.my-seat.empty) #page-table #ab-add-time-btn,
-  body:has(.my-seat.empty) #page-table .preselect-bar {
-    display: none !important;
-  }
-  /* :has 不支持的旧浏览器兜底:JS 会在 my-seat empty 时给 #page-table 加 .my-not-seated 类 */
-  #page-table.my-not-seated #action-area,
-  #page-table.my-not-seated #ab-add-time-btn,
-  #page-table.my-not-seated .preselect-bar {
-    display: none !important;
-  }
-  /* ⭐ v2.28.51 玩家未入座时,牌桌彻底干净(业内标准)
-     业务:玩家从大厅进牌桌但还没入座时,不应该看到任何"已经在牌局中"的状态:
-       - 座位上的演示玩家(s1-s8 都应该是空座 + 坐下)
-       - 公共牌(J♦7♣K♥)
-       - 底池金额 + pot-chips 筹码图标
-       - 牌局编号 + 计时器
-       - 牌桌上的所有 .seat-bet 下注筹码气泡
-       - 牌桌上的所有 .seat-cards-back 红色叠牌(对手手牌)
-       - DEMO 标签 + 一手演示按钮(测试入口)
-     保留:
-       - 房间名 + 盲注 + 止损上限(这些是房间属性)
-       - my-seat 空座占位符(已在 v2.28.47 处理)
-       - DEV 切换器(开发用)
-     入座后(.my-not-seated 移除)恢复显示 */
-  #page-table.my-not-seated .community-cards { visibility: hidden !important; }
-  #page-table.my-not-seated .pot-chips,
-  #page-table.my-not-seated .pot-label,
-  #page-table.my-not-seated #table-hand-no,
-  #page-table.my-not-seated #table-timer,
-  #page-table.my-not-seated #pot-list {
-    display: none !important;
-  }
-  /* 座位演示数据:全部隐藏(含下注气泡、对手叠牌、名字、筹码、行动标签、D 标)
-     座位框架(.seat)保留,因为还要显示空座 "+ 坐下" — 这部分由 renderSeats(emptyMode) 处理 */
-  #page-table.my-not-seated .seat .seat-bet,
-  #page-table.my-not-seated .seat .seat-cards-back,
-  #page-table.my-not-seated .seat .seat-action-tag,
-  #page-table.my-not-seated .seat .dealer-mark,
-  #page-table.my-not-seated .seat .seat-name-chip,
-  #page-table.my-not-seated .seat .seat-chips,
-  #page-table.my-not-seated .seat .win-tag,
-  #page-table.my-not-seated .my-seat .dealer-mark {
-    display: none !important;
-  }
-  /* 牌桌 DEMO 标签 + 一手演示按钮 — 入桌前隐藏(已入座后中间状态也隐藏)*/
-  body:has(#page-table.my-not-seated) .mode-indicator-wrap,
-  body:has(#page-table.my-not-seated) #dev-quick-demo,
-  body:has(#page-table.my-seated-waiting) .mode-indicator-wrap,
-  body:has(#page-table.my-seated-waiting) #dev-quick-demo {
-    display: none !important;
-  }
-  /* ⭐ v2.28.52 入座后等待新一手开始的中间状态(.my-seated-waiting)
-     业务:玩家点空座 + 买入完成 → 入座成功 → 但还没开始牌局
-     业内标准:此时 my-seat 显示玩家信息(头像/名字/筹码),但不显示手牌/下注气泡/行动按钮
-     等 mockServer 推 HAND_START 时移除该类,所有发牌动画 + 行动按钮才真正生效
-     入桌流程:
-       未入座(.my-not-seated)→ 入座(.my-seated-waiting)→ 新一手开始(无 class) */
-  #page-table.my-seated-waiting #action-area,
-  #page-table.my-seated-waiting #ab-add-time-btn,
-  #page-table.my-seated-waiting .preselect-bar,
-  #page-table.my-seated-waiting .community-cards,
-  #page-table.my-seated-waiting .pot-chips,
-  #page-table.my-seated-waiting .pot-label,
-  #page-table.my-seated-waiting #table-hand-no,
-  #page-table.my-seated-waiting #table-timer,
-  #page-table.my-seated-waiting #pot-list,
-  #page-table.my-seated-waiting .my-cards,
-  #page-table.my-seated-waiting .my-seat .seat-bet,
-  #page-table.my-seated-waiting .seat .seat-bet,
-  #page-table.my-seated-waiting .seat .seat-cards-back,
-  #page-table.my-seated-waiting .seat .seat-action-tag,
-  #page-table.my-seated-waiting .seat .dealer-mark,
-  #page-table.my-seated-waiting .my-seat .dealer-mark {
-    display: none !important;
-  }
-  /* 入座后中间状态:my-seat 头像/名字/筹码正常显示(不在隐藏列表)*/
-  /* DEMO 标签 + 一手演示按钮 — 入座后仍然隐藏(只有真实牌局开始才显示)*/
-  #page-table.my-seated-waiting ~ .mode-indicator-wrap,
-  #page-table.my-seated-waiting #dev-quick-demo {
-    display: none !important;
-  }
-  /* 入座等待状态的提示文字(可选 — 在牌桌中央显示"等待新一手开始")*/
-  #page-table.my-seated-waiting .waiting-next-hand-hint {
-    display: block !important;
-  }
-  .waiting-next-hand-hint {
-    display: none;
-    position: absolute;
-    top: 35%;
-    left: 50%;
-    transform: translateX(-50%);
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 13px;
-    text-align: center;
-    pointer-events: none;
-  }
-
-  /* ⭐ v2.28.55 待本手结束后离桌:my-seat 头像加橙色边框 + 顶部"待离桌"标签 */
-  .my-seat.pending-leave .seat-name-chip::after {
-    content: '· 待离桌';
-    color: #ff9933;
-    margin-left: 4px;
-    font-weight: 700;
-  }
-  .my-seat.pending-leave {
-    position: relative;
-  }
-  .my-seat.pending-leave::before {
-    content: '本手结束后离桌';
-    position: absolute;
-    top: -20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 153, 51, 0.9);
-    color: white;
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 8px;
-    white-space: nowrap;
-    z-index: 7;
-    pointer-events: none;
-  }
-
-     业内标准:玩家点击大厅房间进牌桌时,默认 my-seat 是空座,显示"+ 坐下"提示
-     入座流程完成(点 s1-s8 空座 + 买入)后,通过 rotateToMySeat 移除 .empty 类,显示玩家信息 */
-  .my-seat.empty .my-cards,
-  .my-seat.empty .seat-name-chip,
-  .my-seat.empty .seat-chips,
-  .my-seat.empty .seat-bet,
-  .my-seat.empty .dealer-mark {
-    display: none !important;
-  }
-  .my-seat.empty .my-seat-empty-placeholder {
-    display: flex !important;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.06);
-    border: 2px dashed rgba(255, 255, 255, 0.3);
-    cursor: pointer;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 10px;
-    transition: background 0.15s;
-  }
-  .my-seat.empty .my-seat-empty-placeholder:active {
-    background: rgba(77, 255, 77, 0.15);
-    border-color: var(--green-main);
-  }
-  .my-seat.empty .my-seat-empty-placeholder .empty-plus {
-    font-size: 24px;
-    line-height: 1;
-    font-weight: 100;
-    margin-bottom: 1px;
-  }
-  /* 非空座状态隐藏占位符 */
-  .my-seat:not(.empty) .my-seat-empty-placeholder {
-    display: none !important;
-  }
-  .my-seat-empty-placeholder {
-    display: none;   /* 默认隐藏,只在 .empty 时显示 */
-  }
-  .my-cards {
     display: flex;
     gap: 4px;
     justify-content: center;
@@ -12229,7 +12055,7 @@
     </div>
 
     <!-- ============ 子页面：牌桌界面 ============ -->
-    <div class="page table-9seats poker-color4 my-not-seated" id="page-table">
+    <div class="page table-9seats poker-color4 state-p1" id="page-table">
       <!-- 牌桌椭圆 -->
       <div class="table-ellipse">
         <div class="table-watermark">C</div>
@@ -12328,9 +12154,6 @@
         </div>
       </div>
 
-      <!-- ⭐ v2.28.52 入座后等待新一手开始的提示文字(只在 .my-seated-waiting 状态显示) -->
-      <div class="waiting-next-hand-hint">等待新一手开始...</div>
-
       <!-- ⭐ v2.19 牌堆(发牌动画起点) -->
       <div class="card-deck hidden" id="card-deck"><div class="deck-top"></div></div>
 
@@ -12347,13 +12170,8 @@
         <div class="card red" data-suit="♦" data-slot="5"><span class="rank">5</span><span class="suit">♦</span></div>
       </div>
 
-      <!-- 自己(底部) - ⭐ v2.28.47 方案 3:默认 empty(玩家未入座),DEV 模式初始化时自动入座为"伯恩" -->
-      <div class="my-seat empty">
-        <!-- ⭐ v2.28.47:空座占位符(.empty 状态显示)-->
-        <div class="my-seat-empty-placeholder">
-          <span class="empty-plus">+</span>
-          <span>坐下</span>
-        </div>
+      <!-- 自己(底部) - ⭐ v2.28.46 演示账号"伯恩",所有 DEV 切换器测试都用这个视角 -->
+      <div class="my-seat">
         <!-- ⭐ 自己的下注筹码块(头像上方) ⭐ v2.18 单筹码红蓝交叉 -->
         <div class="seat-bet">
           <div class="seat-chip-icon">C</div>
@@ -12520,7 +12338,15 @@
         </div>
       </div>
 
-      <!-- ⭐ v2.28.55:移除浮动版"一手演示"按钮(跟 DEV-1 切换器里的重复,且会干扰真实牌局流程) -->
+      <!-- ⭐ v2.20.3 完整一手演示快捷按钮(独立浮动,不在切换器内)
+           始终可见,一键播放完整流程,可拖动调整位置 -->
+      <div class="dev-quick-demo" id="dev-quick-demo">
+        <div class="dev-quick-demo-grip" id="dev-quick-demo-grip">⋮⋮</div>
+        <button class="dev-quick-demo-btn" id="dev-quick-demo-btn">
+          <span class="dqd-icon">▶▶</span>
+          <span class="dqd-label">一手演示</span>
+        </button>
+      </div>
 
       <!-- ⭐ v2.22 模式指示器(右上角小标签),点击可切换模式 -->
       <div class="mode-indicator-wrap" id="mode-indicator-wrap">
@@ -15292,29 +15118,6 @@
   // 部分字段(底池/牌局号/计时)是牌局动态产生的,现阶段用合理示例值
   function fillTableCenter(room) {
     if (!room) return;
-    // ⭐ v2.28.47 方案 3:进新牌桌时,my-seat 重置为 empty 状态(玩家未入座)
-    //   DEV 模式后续会自动入座(参考延迟初始化里的 mock 自动入座);
-    //   真实流程通过"点空座 → 买入 → 座位旋转"入座
-    const mySeatReset = document.querySelector('#page-table .my-seat');
-    if (mySeatReset) mySeatReset.classList.add('empty');
-    // ⭐ v2.28.48 选项 B:同步给 #page-table 加 .my-not-seated 类,隐藏行动按钮区
-    const pageTableForReset = document.getElementById('page-table');
-    if (pageTableForReset) pageTableForReset.classList.add('my-not-seated');
-    // 同时清掉残留的 occupiedSeats['my'](避免上次的玩家数据带到新桌)
-    if (room.occupiedSeats && room.occupiedSeats['my']) {
-      delete room.occupiedSeats['my'];
-    }
-    window._mySeatLogicalId = null;
-    // ⭐ v2.28.51:进新桌时强制清空所有座位演示数据(玩家未入座 → 桌上没有任何人)
-    //   业内逻辑:玩家进牌桌时看到 9 个空座,等其他玩家加入
-    //   清空 occupiedSeats(让 renderSeats 把 s1-s8 渲染为"+ 坐下"空座)
-    //   把 seats 设为 0(表示没人坐)
-    room.occupiedSeats = {};
-    room.seats = 0;
-    // 清掉公共牌 + 底池显示(后端推送 HAND_START 时才会重新填充)
-    const communityCards = document.getElementById('community-cards');
-    if (communityCards) communityCards.dataset.stage = 'preflop';   // 0 张公共牌
-
     // ⭐ v2.15 座位重构:桌面永远 9 位固定,只用 maxSeats 决定满员阈值
     // room.maxSeats 优先,兼容旧字段 seatTotal/total
     const maxSeats = room.maxSeats || room.seatTotal || room.total || 9;
@@ -15502,22 +15305,9 @@
   // ⭐ v2.15 空座点击监听(事件委托,绑在牌桌容器上)
   // ⭐ v2.28.44 业内标准:玩家点空座 → 弹买入弹窗 → 确认买入 → 座位旋转(该座位变 my-seat)
   //   参考:KKPoker / AAPoker / PokerStars Mobile / HHPoker / TGPoker 都是这个流程
-  // ⭐ v2.28.47 方案 3:my-seat.empty 状态下点占位符也能触发买入(走"假定坐 my"分支)
   const pageTableEl = document.getElementById('page-table');
   if (pageTableEl) {
     pageTableEl.addEventListener('click', (e) => {
-      // ⭐ v2.28.47:先判断是否点了 my-seat 空座占位符
-      const myEmpty = e.target.closest('.my-seat.empty .my-seat-empty-placeholder');
-      if (myEmpty) {
-        // 玩家直接点 my-seat 的"+坐下"占位符 → 弹买入弹窗
-        // 用一个伪 seatEl(标记 my)传给 openBuyinModal
-        const mySeat = document.querySelector('#page-table .my-seat');
-        if (mySeat && typeof openBuyinModal === 'function') {
-          openBuyinModal(mySeat);
-        }
-        return;
-      }
-
       // 找到被点击的座位
       const seat = e.target.closest('.seat');
       if (!seat) return;
@@ -15605,15 +15395,16 @@
   // 执行座位旋转:目标座位 → my-seat 视角
   function rotateToMySeat(targetSeatId, newPlayer) {
     if (!currentTableRoom) return;
-    // ⭐ v2.28.53:入座时,不再用 demoOccupied 生成其他演示玩家(业内逻辑:玩家入座时
-    //   桌上只有真实坐着的玩家,新玩家进桌不会突然多出 7 个 AI)
-    //   occupiedSeats 保持干净,只放玩家自己;其他真实玩家由后端 PLAYER_SIT 推送添加
     if (!currentTableRoom.occupiedSeats) {
-      currentTableRoom.occupiedSeats = {};
+      currentTableRoom.occupiedSeats = demoOccupied(currentTableRoom.seats || 0, currentTableRoom.maxSeats || 9);
     }
     // 记录:玩家逻辑上坐在 targetSeatId,但视觉上是 my-seat
     window._mySeatLogicalId = targetSeatId;
 
+    // 清掉原 my-seat 上的演示数据(伯恩),替换成玩家自己
+    if (currentTableRoom.occupiedSeats['my']) {
+      delete currentTableRoom.occupiedSeats['my'];
+    }
     // 把玩家放到 my(视觉正下方)
     currentTableRoom.occupiedSeats['my'] = Object.assign({}, newPlayer, { isMe: true });
     // 同步从 targetSeatId 清除(因为玩家不在那里,玩家视觉上在 my)
@@ -15622,17 +15413,7 @@
     }
     currentTableRoom.seats = (currentTableRoom.seats || 0) + 1;
 
-    // ⭐ v2.28.47 方案 3:玩家入座后,my-seat 移除 .empty 类(显示玩家信息)
-    const mySeatEl = document.querySelector('#page-table .my-seat');
-    if (mySeatEl) mySeatEl.classList.remove('empty');
-    // ⭐ v2.28.52:入座后切到"等待新一手"中间状态
-    const pageTableEl2 = document.getElementById('page-table');
-    if (pageTableEl2) {
-      pageTableEl2.classList.remove('my-not-seated');
-      pageTableEl2.classList.add('my-seated-waiting');
-    }
-
-    // 重新渲染(renderSeats 会读 occupiedSeats,my-seat 显示玩家自己)
+    // 重新渲染
     if (typeof renderSeats === 'function') {
       renderSeats(currentTableRoom);
     }
@@ -15889,15 +15670,7 @@
       if (buyinConfirm.classList.contains('disabled')) return;
       const { currentUnits, perUnit } = buyinState;
       const amount = currentUnits * perUnit;
-      // ⭐ v2.28.47:pendingSeat 可能是 .my-seat 或 .seat.sN
-      //   .my-seat → 没有 sN,认为是 'my'
-      //   .seat.sN → 提取 sN 编号
-      let targetSeatId;
-      if (pendingSeat && pendingSeat.classList.contains('my-seat')) {
-        targetSeatId = 'my';
-      } else if (pendingSeat) {
-        targetSeatId = pendingSeat.className.match(/s\d+/)?.[0];
-      }
+      const targetSeatId = pendingSeat ? pendingSeat.className.match(/s\d+/)?.[0] : null;
       if (!targetSeatId || !currentTableRoom) {
         buyinMask.classList.remove('show');
         return;
@@ -15972,40 +15745,17 @@
   //   5. 真实业务:发送 CLIENT_LEAVE → 后端校验(不在牌局中,或盲注前)→ 返还筹码
   // ════════════════════════════════════════════════════════════════════════
   function startLeaveTableFlow() {
-    const pageTable = document.getElementById('page-table');
     const myEl = document.querySelector('#page-table .my-seat');
-    // 情况 1:未入座 → 直接返回大厅(没有筹码需要结算)
-    const isNotSeated = !myEl || myEl.classList.contains('empty');
-    if (isNotSeated) {
+    // 情况 1:未入座 → 直接返回大厅
+    if (!myEl) {
       doReturnToLobby();
       return;
     }
-    // ⭐ v2.28.55 新增情况 2:正在牌局中(my-seated-waiting 之外的状态)→ 标记"本手结束后离桌"
-    //   业内标准(PokerStars / KKPoker / AAPoker):玩家点离桌时,如果还在牌局中,不会强制踢出
-    //   而是显示"待本手结束后离桌"提示,玩家可以继续玩完本手,然后自动离桌
-    //   如果不在牌局中(my-seated-waiting 等待新一手),可以立即离桌
-    const isInHand = pageTable && !pageTable.classList.contains('my-seated-waiting') && !pageTable.classList.contains('my-not-seated');
-    if (isInHand) {
-      // 标记为"待本手结束后离桌"
-      window._pendingLeaveAfterHand = true;
-      // 顶部状态条提示
-      if (typeof showToast === 'function') {
-        showToast('已设置:本手结束后自动离桌');
-      }
-      // 加视觉标识(my-seat 加 .pending-leave 类,顶部显示"待离桌"标签)
-      if (myEl) myEl.classList.add('pending-leave');
-      return;
-    }
-    // 情况 3:已入座但还没开始牌局(my-seated-waiting)→ 弹确认弹窗
+    // 情况 2:已入座 → 弹离座确认弹窗
     if (typeof openLeaveSeatModal === 'function') {
       openLeaveSeatModal('my');
     } else {
-      // 兜底:直接结算 + 返大厅
-      if (typeof doLeaveTableAndReturn === 'function') {
-        doLeaveTableAndReturn();
-      } else {
-        doReturnToLobby();
-      }
+      doReturnToLobby();
     }
   }
   window.startLeaveTableFlow = startLeaveTableFlow;
@@ -16052,15 +15802,11 @@
 
   // 清理牌桌会话状态(离桌时调用)
   function cleanupTableSession() {
-    // ⭐ v2.28.54:先停 mockServer + 清异步状态(避免遗留 step() 回调跑到 null actionRound)
+    // 停 mockServer
     if (window.mockServer && typeof window.mockServer.stopAllTimers === 'function') {
       window.mockServer.stopAllTimers();
     }
-    // ⭐ v2.28.54:停掉 playFullHandDemo(避免离桌后 demo 还在跑导致 actionRound null 崩溃)
-    if (typeof window.stopFullHandDemo === 'function') {
-      window.stopFullHandDemo();
-    }
-    // 重置行动轮状态(避免下一桌延续)
+    // 重置行动轮状态
     if (typeof actionRound !== 'undefined') {
       try { actionRound = null; } catch(e) {}
     }
@@ -16068,34 +15814,14 @@
     if (typeof window.wsCurrentHand !== 'undefined') {
       try { window.wsCurrentHand = null; } catch(e) {}
     }
-    // 1. 清除玩家数据
+    // 清除玩家数据
     if (currentTableRoom) {
       if (currentTableRoom.occupiedSeats && currentTableRoom.occupiedSeats['my']) {
         delete currentTableRoom.occupiedSeats['my'];
       }
-      currentTableRoom.occupiedSeats = {};
-      currentTableRoom.seats = 0;
     }
     window._mySeatLogicalId = null;
-    // 2. 重置牌桌状态机:回到 my-not-seated
-    const pageTable = document.getElementById('page-table');
-    if (pageTable) {
-      pageTable.classList.remove('my-seated-waiting');
-      pageTable.classList.add('my-not-seated');
-      // 清除所有 state-pX(行动按钮态)
-      ['p1','p2','p3','p4','y1','y2','y3','s1','s2'].forEach(s => {
-        pageTable.classList.remove('state-' + s);
-      });
-    }
-    // 3. my-seat 恢复 empty 状态
-    const mySeatEl = document.querySelector('#page-table .my-seat');
-    if (mySeatEl) {
-      mySeatEl.classList.add('empty');
-      mySeatEl.classList.remove('pending-leave');   // ⭐ v2.28.55 清除待离桌标记
-    }
-    // ⭐ v2.28.55 清掉待离桌标志
-    window._pendingLeaveAfterHand = false;
-    // 4. 清空历史记录 / 边池 / 预选(避免新桌带旧数据)
+    // 清空历史记录 / 边池 / 预选
     if (window.historyStore && typeof window.historyStore.reset === 'function') {
       window.historyStore.reset(null);
     }
@@ -16105,20 +15831,10 @@
     if (window.preselectStore && typeof window.preselectStore.clear === 'function') {
       window.preselectStore.clear();
     }
-    // 5. 清掉当前行动请求
+    // 清掉当前行动请求
     if (typeof window.clearActionRequest === 'function') {
       try { window.clearActionRequest(); } catch(e) {}
     }
-    // 6. 重置发牌阶段 + 清掉公共牌的视觉状态
-    const communityCards = document.getElementById('community-cards');
-    if (communityCards) communityCards.dataset.stage = 'preflop';
-    // 7. 清掉所有座位上的下注气泡 + 行动标签残留
-    document.querySelectorAll('#page-table .seat-bet, #page-table .seat-action-tag').forEach(el => {
-      if (el.parentNode) el.remove();
-    });
-    // 8. 清空 my-seat 的下注气泡(也是残留)
-    const myBet = document.querySelector('#page-table .my-seat .seat-bet');
-    if (myBet) myBet.style.display = '';   // 让 CSS 控制(不强制 inline)
   }
   window.cleanupTableSession = cleanupTableSession;
 
@@ -16175,8 +15891,6 @@
     if (typeof showToast === 'function') {
       showToast('默认按"等大盲"入局(免费等待)');
     }
-    // ⭐ v2.28.53:兜底也自动启动一手
-    if (typeof triggerFirstHandStart === 'function') triggerFirstHandStart();
   }
   // 拦截 entryModal 的关闭(✕ 按钮 + 遮罩点击),关闭后调兜底
   if (entryMask) {
@@ -16215,8 +15929,6 @@
       if (typeof showToast === 'function') {
         showToast('已选择等大盲(免费等待入局)');
       }
-      // ⭐ v2.28.53:入局方式选择完成 → 自动启动第一手牌(2 秒后)
-      triggerFirstHandStart();
     });
   }
 
@@ -16252,27 +15964,8 @@
           flyPostBbChips(postedSeatId);
         }
       }, 200);
-      // ⭐ v2.28.53:入局方式选择完成 → 自动启动第一手牌
-      triggerFirstHandStart();
     });
   }
-
-  // ⭐ v2.28.53:入局方式选完后,自动启动第一手牌(业内标准:让玩家立刻进入牌局)
-  // mock 模式:延迟 2 秒,Toast 提示后 mockServer.startHand() 开始一手
-  // WS 模式:不主动启动,等真实后端推 HAND_START
-  function triggerFirstHandStart() {
-    const isMockMode = !document.body.classList.contains('app-mode-ws');
-    if (!isMockMode) return;   // WS 模式由后端控制
-    setTimeout(() => {
-      if (typeof showToast === 'function') showToast('准备开始新一手...');
-      setTimeout(() => {
-        if (window.mockServer && typeof window.mockServer.startHand === 'function') {
-          window.mockServer.startHand();
-        }
-      }, 800);
-    }, 1500);
-  }
-  window.triggerFirstHandStart = triggerFirstHandStart;
 
   // ⭐ v2.28.42 子项 E:postbb 玩家大盲筹码飞行到底池
   // 业内标准:玩家选"立即下注大盲"后,从座位飞一个大盲筹码到底池中央
@@ -18009,15 +17702,6 @@
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const newState = btn.dataset.devState;
-        // ⭐ v2.28.49:玩家未入座时,切 P1/P2/P3/P4/Y1/Y2/Y3/S1/S2 没意义(底部行动按钮区被隐藏)
-        //   业内逻辑:轮到我行动 → 必须先入座。这里 toast 提示,然后撤掉 active 状态
-        const myEl = document.querySelector('#page-table .my-seat');
-        if (myEl && myEl.classList.contains('empty')) {
-          if (typeof showToast === 'function') {
-            showToast('请先点击空座位入座,再测试行动态');
-          }
-          return;
-        }
         // 切换 active 类
         devQueryAll('.dev-state-btn[data-dev-state]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -28507,10 +28191,6 @@
         // 重置桌面 + 渲染玩家 + 设庄家
         fullResetTable();
         wsCurrentHand = data;
-        // ⭐ v2.28.52:新一手开始 → 移除 .my-seated-waiting,真正开始牌局
-        //   此时手牌/下注气泡/行动按钮/公共牌/底池等才正常显示
-        const pageTableHs = document.getElementById('page-table');
-        if (pageTableHs) pageTableHs.classList.remove('my-seated-waiting');
         // ⭐ v2.28.42 子项 8B:大盲位轮到 waitbb 玩家时,清除等待标记 → 下一手正常发牌
         // 业务规则:waitbb 玩家在每手开始时检查 — 当前大盲位 = 该玩家座位 → 标记清除
         if (data.bbSeat && window.currentTableRoom && window.currentTableRoom.occupiedSeats) {
@@ -28925,16 +28605,6 @@
         // ⭐ v2.26 子项 5:一手结束清预选(避免预选跨手)
         if (window.preselectStore) window.preselectStore.clear();
         if (window.clearPreselectWindow) window.clearPreselectWindow();
-        // ⭐ v2.28.55:本手结束 → 检查"待离桌"标记,有则自动触发离桌
-        if (window._pendingLeaveAfterHand) {
-          window._pendingLeaveAfterHand = false;
-          // 延迟 1.5s 等结算动画完成,再触发离桌
-          setTimeout(() => {
-            if (typeof doLeaveTableAndReturn === 'function') {
-              doLeaveTableAndReturn();
-            }
-          }, 1500);
-        }
         break;
       }
 
@@ -29803,15 +29473,6 @@
 
     runDemo();
   }
-
-  // ⭐ v2.28.54:暴露停止 demo 的入口,供离桌时调用
-  window.stopFullHandDemo = function() {
-    demoHandRunning = false;
-    const demoBtn = document.getElementById('dev-full-hand');
-    if (demoBtn) demoBtn.classList.remove('running');
-    const dqdBtn = document.getElementById('dev-quick-demo-btn');
-    if (dqdBtn) dqdBtn.classList.remove('running');
-  };
 
   // 辅助:批量设置非空座位的下注金额(演示用)
   function setSeatBets(baseAmount) {

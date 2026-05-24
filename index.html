@@ -3947,6 +3947,8 @@
     text-align: center;
     z-index: 6;
   }
+  /* ⭐ v2.28.57 修复:补回 .my-cards 选择器(此前被某次 str_replace 误删,导致下面 4 行变孤儿属性,手牌竖排) */
+  .my-cards {
     display: flex;
     gap: 4px;
     justify-content: center;

@@ -5592,6 +5592,245 @@
     transition: transform 0.9s cubic-bezier(.34, 1.56, .64, 1), opacity 0.3s;
   }
 
+  /* ============================================================
+     ⭐ v2.28.41 玩家头像点击弹窗(阶段 2)
+     ────────────────────────────────────────────────────────────
+     业务:点击任何在桌账号头像(座位/旁观/弃牌/留座站起)弹出
+     内容:玩家信息 + 4 统计 + 备注 + 颜色标签 + 11 个表情 + (管理员)划币
+     ──────────────────────────────────────────────────────────── */
+  .player-modal-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 195;
+  }
+  .player-modal-mask.show { display: flex; }
+  .player-modal {
+    width: 290px;
+    background: #1a1d24;
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.7);
+    color: white;
+  }
+  /* 顶部:头像 + 昵称 + ID + 划币按钮(管理员) */
+  .pm-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .pm-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: #2a4a3a;
+    border: 2px solid rgba(255,255,255,0.15);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .pm-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .pm-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .pm-nick {
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pm-id {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: ui-monospace, monospace;
+  }
+  .pm-id-copy {
+    cursor: pointer;
+    color: rgba(255,255,255,0.4);
+    transition: color 0.15s;
+  }
+  .pm-id-copy:hover { color: var(--green-main); }
+  /* 划币按钮(只管理员看到) */
+  .pm-transfer-btn {
+    display: none;       /* 默认隐藏,JS 在管理员视角下显示 */
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--green-main);
+    color: #0a1f0a;
+    border: none;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.1s;
+  }
+  .pm-transfer-btn.show { display: flex; }
+  .pm-transfer-btn:active { transform: scale(0.92); }
+  .pm-transfer-btn svg { width: 18px; height: 18px; }
+
+  /* 统计区(4 列网格) */
+  .pm-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 10px 4px;
+    margin-bottom: 10px;
+  }
+  .pm-stat-cell {
+    text-align: center;
+  }
+  .pm-stat-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: white;
+    line-height: 1.2;
+    margin-bottom: 2px;
+  }
+  .pm-stat-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    white-space: nowrap;
+  }
+
+  /* 备注区(私人标签,只我自己看见) */
+  .pm-note-row {
+    display: flex;
+    align-items: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+  .pm-note-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 12px;
+    outline: none;
+    min-width: 0;
+  }
+  .pm-note-input::placeholder { color: rgba(255,255,255,0.35); }
+  .pm-note-edit {
+    color: rgba(255,255,255,0.4);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .pm-note-edit:hover { color: var(--green-main); }
+
+  /* 颜色标签(7 个圆) */
+  .pm-colors {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 0 4px;
+    margin-bottom: 12px;
+  }
+  .pm-color-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s, border-color 0.15s;
+    position: relative;
+  }
+  .pm-color-dot:active { transform: scale(0.88); }
+  .pm-color-dot.selected {
+    border-color: white;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
+  }
+  /* 7 个颜色:无标签(灰) + 6 个标签色 */
+  .pm-color-dot[data-color="none"]    { background: #555; }
+  .pm-color-dot[data-color="red"]     { background: #e74c3c; }
+  .pm-color-dot[data-color="orange"]  { background: #f39c12; }
+  .pm-color-dot[data-color="yellow"]  { background: #f1c40f; }
+  .pm-color-dot[data-color="green"]   { background: #2ecc71; }
+  .pm-color-dot[data-color="blue"]    { background: #3498db; }
+  .pm-color-dot[data-color="purple"]  { background: #9b59b6; }
+
+  /* 表情区(网格,11 个) */
+  .pm-emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+  }
+  .pm-emoji-item {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 0 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+    position: relative;
+  }
+  .pm-emoji-item:active {
+    transform: scale(0.92);
+    background: rgba(255,215,106,0.12);
+  }
+  /* 自己点自己时禁用(灰显但仍显示) */
+  .pm-emoji-item.disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  .pm-emoji-item.disabled:active {
+    transform: none;
+    background: rgba(255,255,255,0.05);
+  }
+  .pm-emoji-icon {
+    font-size: 22px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .pm-emoji-cost {
+    font-size: 9px;
+    color: #ffd96a;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+  }
+  .pm-emoji-cost-icon {
+    background: #0d1116;
+    color: var(--green-main);
+    border-radius: 50%;
+    width: 11px;
+    height: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7px;
+    margin-right: 1px;
+  }
+  /* ============================================================
+     v2.28.41 玩家弹窗 END
+     ============================================================ */
+
   /* =====================================================
      ⭐ v2.16 临时三态切换器(开发用,WebSocket 接入后删)
      ===================================================== */
@@ -12322,6 +12561,162 @@
           </div>
           <div class="gift-balance">
             余额: <span id="gift-balance-value">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.28.41 玩家头像点击弹窗(阶段 2)
+           触发:点击任何在桌账号头像(座位/旁观/弃牌/留座站起/自己)
+           内容:玩家信息 + 4 统计 + 备注 + 颜色 + 表情 + (管理员)划币 -->
+      <div class="player-modal-mask" id="player-modal-mask">
+        <div class="player-modal">
+          <!-- 顶部:头像 + 昵称 + ID + 划币按钮 -->
+          <div class="pm-header">
+            <div class="pm-avatar" id="pm-avatar">--</div>
+            <div class="pm-info">
+              <div class="pm-nick" id="pm-nick">--</div>
+              <div class="pm-id">
+                <span id="pm-id-text">--</span>
+                <span class="pm-id-copy" id="pm-id-copy" title="复制 ID">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/>
+                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <!-- 划币按钮(只管理员可见,JS 根据 window.isClubAdmin 切 .show) -->
+            <button class="pm-transfer-btn" id="pm-transfer-btn" aria-label="划币">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 3l4 4-4 4"/>
+                <path d="M21 7H9"/>
+                <path d="M7 21l-4-4 4-4"/>
+                <path d="M3 17h12"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- 4 统计(入池率 / 翻前加注率 / 摊牌率 / 手牌数)-->
+          <div class="pm-stats">
+            <div class="pm-stat-cell">
+              <div class="pm-stat-value" id="pm-stat-pool">--</div>
+              <div class="pm-stat-label">入池率</div>
+            </div>
+            <div class="pm-stat-cell">
+              <div class="pm-stat-value" id="pm-stat-raise">--</div>
+              <div class="pm-stat-label">翻前加注率</div>
+            </div>
+            <div class="pm-stat-cell">
+              <div class="pm-stat-value" id="pm-stat-showdown">--</div>
+              <div class="pm-stat-label">摊牌率</div>
+            </div>
+            <div class="pm-stat-cell">
+              <div class="pm-stat-value" id="pm-stat-hands">--</div>
+              <div class="pm-stat-label">手牌数</div>
+            </div>
+          </div>
+
+          <!-- 备注区(私人标签,只我自己看见,maxlength=20) -->
+          <div class="pm-note-row">
+            <input class="pm-note-input" id="pm-note-input" type="text" maxlength="20" placeholder="不要超过20个字符">
+            <span class="pm-note-edit" id="pm-note-edit" title="保存">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </span>
+          </div>
+
+          <!-- 颜色标签(7 个圆,默认无标签) -->
+          <div class="pm-colors">
+            <div class="pm-color-dot selected" data-color="none" title="无标签"></div>
+            <div class="pm-color-dot" data-color="red" title="红色"></div>
+            <div class="pm-color-dot" data-color="orange" title="橙色"></div>
+            <div class="pm-color-dot" data-color="yellow" title="黄色"></div>
+            <div class="pm-color-dot" data-color="green" title="绿色"></div>
+            <div class="pm-color-dot" data-color="blue" title="蓝色"></div>
+            <div class="pm-color-dot" data-color="purple" title="紫色"></div>
+          </div>
+
+          <!-- 表情区(11 个,统一价 emoji_gift 配置)-->
+          <div class="pm-emoji-grid" id="pm-emoji-grid">
+            <div class="pm-emoji-item" data-emoji="👍">
+              <div class="pm-emoji-icon">👍</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="👏">
+              <div class="pm-emoji-icon">👏</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="🌹">
+              <div class="pm-emoji-icon">🌹</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="🍺">
+              <div class="pm-emoji-icon">🍺</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="💋">
+              <div class="pm-emoji-icon">💋</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="🔥">
+              <div class="pm-emoji-icon">🔥</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="❤️">
+              <div class="pm-emoji-icon">❤️</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="😂">
+              <div class="pm-emoji-icon">😂</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="😡">
+              <div class="pm-emoji-icon">😡</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="💩">
+              <div class="pm-emoji-icon">💩</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
+            <div class="pm-emoji-item" data-emoji="👑">
+              <div class="pm-emoji-icon">👑</div>
+              <div class="pm-emoji-cost">
+                <span class="pm-emoji-cost-icon">₮</span>
+                <span data-fee-key="emoji_gift" data-fee-show="cost">20</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -25971,29 +26366,10 @@
         });
       });
 
-      // 绑定座位点击(委托给 page-table)
-      const pageTable = document.getElementById('page-table');
-      if (pageTable) {
-        pageTable.addEventListener('click', (e) => {
-          // 不能点自己 / 不能在 P 弹窗模式下乱点
-          const seat = e.target.closest('.seat[class*="s"]');
-          if (!seat) return;
-          // 找出 seatId(s1-s8)
-          const match = seat.className.match(/\bs([1-8])\b/);
-          if (!match) return;
-          const seatId = 's' + match[1];
-          // 必须有玩家(座位上有头像/名字)
-          if (!seat.querySelector('.seat-avatar')) return;
-          // 弃牌 / 空座位也不打开
-          if (seat.classList.contains('folded') || seat.classList.contains('empty')) return;
-          // 旁观模式禁止打赏
-          if (document.body.classList.contains('spectator-mode')) {
-            showToast('旁观模式无法打赏');
-            return;
-          }
-          this.show(seatId);
-        });
-      }
+      // ⭐ v2.28.41:解除座位点击触发,让位给 playerModal
+      // 原因:playerModal 接管所有头像点击,giftModal 改成通过 playerModal 内的"更多礼物"入口触发
+      // 现在 giftModal 只保留 DOM + flyGift 函数,被 playerModal 复用做飞行动画
+      // 真实业务:点 playerModal 里的"更多礼物"按钮 → 关 playerModal → 开 giftModal.show(seatId)
     },
 
     show(targetSeatId) {
@@ -26078,11 +26454,342 @@
   };
   window.giftModal = giftModal;
 
+  // ⭐⭐⭐ v2.28.41 阶段 2:玩家头像点击弹窗 ⭐⭐⭐
+  // ════════════════════════════════════════════════════════════════════════
+  // 业务规则:
+  //   - 任何在桌账号头像都可点(座位/旁观/弃牌/留座站起/自己)
+  //   - A 点 B:数据 + 备注 + 颜色 + 表情 ✓ / 划币 ❌
+  //   - A 点自己:数据 + 备注 + 颜色 + 表情(灰显禁用) ✓ / 划币 ❌
+  //   - 管理员点任何人:数据 + 备注 + 颜色 + 表情 + 划币 ✓
+  //   - 表情从 emoji_gift 配置读价格(平台后台可改)
+  //   - 表情扔出后,从我座位飞向对方头像(复用 giftModal.flyGift)
+  //   - 备注 + 颜色:私人标签,只我自己看见,存 localStorage
+  // ════════════════════════════════════════════════════════════════════════
+  const playerModal = {
+    mask: null,
+    targetSeatId: null,
+    targetIsMe: false,
+    targetName: '--',
+
+    // 私人标签存储 key 前缀
+    NOTE_KEY: 'aagame_player_note_',
+    COLOR_KEY: 'aagame_player_color_',
+
+    init() {
+      this.mask = document.getElementById('player-modal-mask');
+      if (!this.mask) return;
+
+      // 点遮罩外关闭
+      this.mask.addEventListener('click', (e) => {
+        if (e.target === this.mask) this.hide();
+      });
+
+      // 复制 ID
+      const copyBtn = document.getElementById('pm-id-copy');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+          const idText = document.getElementById('pm-id-text');
+          if (idText && navigator.clipboard) {
+            navigator.clipboard.writeText(idText.textContent).then(() => {
+              if (typeof showToast === 'function') showToast('ID 已复制');
+            }).catch(() => {
+              if (typeof showToast === 'function') showToast('复制失败');
+            });
+          }
+        });
+      }
+
+      // 划币按钮(管理员才能点)
+      const transferBtn = document.getElementById('pm-transfer-btn');
+      if (transferBtn) {
+        transferBtn.addEventListener('click', () => {
+          if (!window.isClubAdmin) return;
+          if (typeof showToast === 'function') {
+            showToast('划币(开发中)→ ' + this.targetName);
+          }
+          // 真实业务:打开划币弹窗 / wsClient.send(CLIENT_TRANSFER, {...})
+        });
+      }
+
+      // 备注输入 + 保存
+      const noteInput = document.getElementById('pm-note-input');
+      if (noteInput) {
+        noteInput.addEventListener('change', () => this.saveNote());
+        noteInput.addEventListener('blur', () => this.saveNote());
+      }
+      const noteEdit = document.getElementById('pm-note-edit');
+      if (noteEdit) {
+        noteEdit.addEventListener('click', () => {
+          this.saveNote();
+          if (typeof showToast === 'function') showToast('已保存备注');
+        });
+      }
+
+      // 颜色标签选择
+      this.mask.querySelectorAll('.pm-color-dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+          this.mask.querySelectorAll('.pm-color-dot').forEach(d => d.classList.remove('selected'));
+          dot.classList.add('selected');
+          this.saveColor(dot.dataset.color);
+        });
+      });
+
+      // 表情点击 → 飞行(自己点自己时禁用)
+      this.mask.querySelectorAll('.pm-emoji-item').forEach(item => {
+        item.addEventListener('click', () => {
+          if (item.classList.contains('disabled')) {
+            if (typeof showToast === 'function') showToast('不能对自己扔表情');
+            return;
+          }
+          this.sendEmoji(item.dataset.emoji);
+        });
+      });
+
+      // 头像点击触发(整个牌桌一个委托,覆盖座位 + 旁观)
+      const pageTable = document.getElementById('page-table');
+      if (pageTable) {
+        pageTable.addEventListener('click', (e) => {
+          // 1. 座位头像(s1-s8 + my)
+          const seat = e.target.closest('.seat, .my-seat');
+          if (seat) {
+            const avatar = e.target.closest('.seat-avatar');
+            if (!avatar) return;
+            // 空座位不弹(没账号)
+            if (seat.classList.contains('empty')) return;
+            // 确定 seatId
+            let seatId = null;
+            if (seat.classList.contains('my-seat')) {
+              seatId = 'my';
+            } else {
+              const match = seat.className.match(/\bs([1-8])\b/);
+              if (match) seatId = 's' + match[1];
+            }
+            if (seatId) {
+              this.show(seatId);
+              e.stopPropagation();
+            }
+            return;
+          }
+        });
+      }
+
+      // 旁观席头像(在战绩弹窗的 rm-spectator-grid 内)
+      const spectatorGrid = document.getElementById('rm-spectator-grid');
+      if (spectatorGrid) {
+        spectatorGrid.addEventListener('click', (e) => {
+          const item = e.target.closest('.rm-spectator-item, [data-spectator-id]');
+          if (!item) return;
+          const specId = item.dataset.spectatorId || item.dataset.uid || ('spec-' + Date.now());
+          this.show('spec:' + specId);
+          e.stopPropagation();
+        });
+      }
+    },
+
+    show(seatIdOrSpec) {
+      if (!this.mask) return;
+      this.targetSeatId = seatIdOrSpec;
+      this.targetIsMe = (seatIdOrSpec === 'my');
+
+      // 拉玩家信息(从 _historyPlayerLookup 或座位 DOM 取)
+      const info = this.resolvePlayerInfo(seatIdOrSpec);
+      this.targetName = info.name;
+
+      // 填头像
+      const avatarEl = document.getElementById('pm-avatar');
+      if (avatarEl) {
+        if (info.avatarUrl) {
+          avatarEl.innerHTML = '<img src="' + info.avatarUrl + '" alt="">';
+        } else {
+          avatarEl.textContent = info.avatarLetter || info.name.charAt(0) || '?';
+        }
+      }
+
+      // 填昵称 + ID
+      const nickEl = document.getElementById('pm-nick');
+      const idEl = document.getElementById('pm-id-text');
+      if (nickEl) nickEl.textContent = info.name;
+      if (idEl) idEl.textContent = info.id;
+
+      // 填 4 统计(假数据,等后端 API)
+      this.fillStats(info);
+
+      // 填备注 + 颜色(从 localStorage 取)
+      this.loadNoteAndColor(seatIdOrSpec);
+
+      // 管理员才显示划币按钮
+      const transferBtn = document.getElementById('pm-transfer-btn');
+      if (transferBtn) {
+        transferBtn.classList.toggle('show', !!window.isClubAdmin);
+      }
+
+      // 自己点自己:表情灰显禁用
+      this.mask.querySelectorAll('.pm-emoji-item').forEach(item => {
+        item.classList.toggle('disabled', this.targetIsMe);
+      });
+
+      this.mask.classList.add('show');
+      if (window.soundEngine) window.soundEngine.play('tap');
+    },
+
+    hide() {
+      if (this.mask) this.mask.classList.remove('show');
+    },
+
+    // 取玩家信息(从历史快照 / 座位 DOM 兜底)
+    resolvePlayerInfo(seatIdOrSpec) {
+      // 旁观席
+      if (seatIdOrSpec && seatIdOrSpec.indexOf('spec:') === 0) {
+        const specId = seatIdOrSpec.slice(5);
+        return {
+          id: specId,
+          name: '旁观-' + specId.slice(-4),
+          avatarLetter: '观',
+          avatarUrl: null,
+          isSpectator: true
+        };
+      }
+      // 自己
+      if (seatIdOrSpec === 'my') {
+        return {
+          id: '1004420',
+          name: '我',
+          avatarLetter: '我',
+          avatarUrl: null,
+          isMe: true
+        };
+      }
+      // 座位 s1-s8
+      const lookup = window._historyPlayerLookup || {};
+      const li = lookup[seatIdOrSpec];
+      if (li) {
+        return {
+          id: li.uid || ('UID-' + seatIdOrSpec),
+          name: li.name || seatIdOrSpec,
+          avatarLetter: (li.name || seatIdOrSpec).charAt(0),
+          avatarUrl: li.avatarUrl || null
+        };
+      }
+      // 兜底:从 DOM 取
+      const seat = document.querySelector('.seat.' + seatIdOrSpec);
+      const nameEl = seat ? seat.querySelector('.seat-name') : null;
+      const name = nameEl ? nameEl.textContent : seatIdOrSpec;
+      return {
+        id: 'UID-' + seatIdOrSpec,
+        name: name,
+        avatarLetter: name.charAt(0),
+        avatarUrl: null
+      };
+    },
+
+    // 4 统计填充(假数据演示)
+    fillStats(info) {
+      // 真实业务:从后端 /api/player_stats/:uid 拉
+      // 演示用:基于 seatId 哈希出固定假数据(每个玩家固定显示一组,不要每次随机)
+      const seed = (this.targetSeatId || 'default').split('').reduce((s, c) => s + c.charCodeAt(0), 0);
+      const pool = (40 + seed % 30) + '%';
+      const raise = (25 + seed % 25) + '%';
+      const showdown = (10 + seed % 15) + '%';
+      const hands = 800 + (seed * 17) % 2000;
+
+      const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+      set('pm-stat-pool', pool);
+      set('pm-stat-raise', raise);
+      set('pm-stat-showdown', showdown);
+      set('pm-stat-hands', hands);
+    },
+
+    // 备注 + 颜色:从 localStorage 取
+    loadNoteAndColor(seatIdOrSpec) {
+      const info = this.resolvePlayerInfo(seatIdOrSpec);
+      const key = info.id;
+
+      // 备注
+      const noteInput = document.getElementById('pm-note-input');
+      if (noteInput) {
+        try {
+          noteInput.value = localStorage.getItem(this.NOTE_KEY + key) || '';
+        } catch (e) {
+          noteInput.value = '';
+        }
+      }
+
+      // 颜色(默认 none)
+      let color = 'none';
+      try {
+        color = localStorage.getItem(this.COLOR_KEY + key) || 'none';
+      } catch (e) {}
+      this.mask.querySelectorAll('.pm-color-dot').forEach(dot => {
+        dot.classList.toggle('selected', dot.dataset.color === color);
+      });
+    },
+
+    saveNote() {
+      const noteInput = document.getElementById('pm-note-input');
+      if (!noteInput || !this.targetSeatId) return;
+      const info = this.resolvePlayerInfo(this.targetSeatId);
+      try {
+        localStorage.setItem(this.NOTE_KEY + info.id, noteInput.value || '');
+      } catch (e) {}
+    },
+
+    saveColor(color) {
+      if (!this.targetSeatId) return;
+      const info = this.resolvePlayerInfo(this.targetSeatId);
+      try {
+        localStorage.setItem(this.COLOR_KEY + info.id, color);
+      } catch (e) {}
+    },
+
+    // 扔表情:扣费 + 从我座位飞到目标头像(复用 giftModal.flyGift)
+    sendEmoji(emoji) {
+      if (this.targetIsMe) return;   // 自己点自己被前面 disabled 拦了
+
+      const fee = window.getFee('emoji_gift');
+      // 真实业务:wsClient.send(CLIENT_EMOJI, { targetSeatId, emoji, cost: fee.cost })
+      //   后端扣费成功后广播给所有人,所有人客户端都播放飞行动画
+
+      // 演示:直接调 giftModal.flyGift(复用现有飞行动画)
+      if (window.giftModal && typeof window.giftModal.flyGift === 'function') {
+        // 旁观席飞行暂不做(没座位 DOM 锚点),只支持座位
+        if (this.targetSeatId && this.targetSeatId.indexOf('spec:') !== 0) {
+          window.giftModal.flyGift(emoji, this.targetSeatId);
+        } else {
+          if (typeof showToast === 'function') showToast('已发送 ' + emoji + ' 给 ' + this.targetName);
+        }
+      }
+
+      // 历史记录
+      if (window.historyStore) {
+        window.historyStore.push({
+          type: 'emoji',
+          seatId: 'my',
+          playerName: '我',
+          avatar: '我',
+          action: 'emoji',
+          amount: fee.cost,
+          extra: { emoji, targetSeatId: this.targetSeatId, targetName: this.targetName }
+        });
+      }
+      if (typeof showToast === 'function') {
+        showToast('扣 ₮' + fee.cost + ' → ' + this.targetName + ' ' + emoji);
+      }
+      if (window.soundEngine) window.soundEngine.play('tap');
+
+      // 不关闭弹窗,玩家可连续扔多个表情(KKPoker 业内做法)
+    }
+  };
+  window.playerModal = playerModal;
+
   // 延迟初始化(等 DOM 就绪)
   setTimeout(() => {
     straddleModal.init();
     insuranceModal.init();
     giftModal.init();
+    playerModal.init();   // ⭐ v2.28.41 阶段 2 玩家头像弹窗
   }, 200);
 
   // ⭐ v2.27 子项 2:历史时间轴 push 辅助函数(从 _historyPlayerLookup 取头像/名字)

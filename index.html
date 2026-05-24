@@ -18664,37 +18664,85 @@
         await wait(2800);
 
         // 派彩(读 potsStore)— 按真实牌型强度选赢家(strength + tiebreak)
-        function pickWinner(candidates) {
+        // ⭐ v2.28.57 修复:平局派彩平分底池
+        //   原:pickWinner 只返回单个赢家 → 平局时第一个遇到的拿全部
+        //   现:pickWinners 返回所有同等最佳牌型的胜者 → 整除平分,余数给位置最前的(DEALER_ORDER)
+        function pickWinners(candidates) {
           // candidates: showdownPlayers 子集
-          if (candidates.length === 0) return null;
-          let best = candidates[0];
+          if (candidates.length === 0) return [];
+          // 1. 找到最强的 evalResult
+          let bestSp = candidates[0];
           candidates.forEach(c => {
-            if (!c.evalResult || !best.evalResult) return;
-            const cmp = c.evalResult.strength - best.evalResult.strength;
+            if (!c.evalResult || !bestSp.evalResult) return;
+            const cmp = c.evalResult.strength - bestSp.evalResult.strength;
             if (cmp > 0 ||
                 (cmp === 0 && typeof compareTiebreak === 'function' &&
-                  compareTiebreak(c.evalResult.tiebreak, best.evalResult.tiebreak) > 0)) {
-              best = c;
+                  compareTiebreak(c.evalResult.tiebreak, bestSp.evalResult.tiebreak) > 0)) {
+              bestSp = c;
             }
           });
-          return best;
+          // 2. 收集所有跟 bestSp 同等强度的胜者(strength 相同 + tiebreak 相同)
+          const winnersList = candidates.filter(c => {
+            if (!c.evalResult || !bestSp.evalResult) return c === bestSp;
+            if (c.evalResult.strength !== bestSp.evalResult.strength) return false;
+            if (typeof compareTiebreak === 'function') {
+              return compareTiebreak(c.evalResult.tiebreak, bestSp.evalResult.tiebreak) === 0;
+            }
+            return c === bestSp;
+          });
+          // 3. 按 DEALER_ORDER 顺序排(让"奇 chip"给位置最前的)
+          if (winnersList.length > 1 && typeof DEALER_ORDER !== 'undefined') {
+            winnersList.sort((a, b) => {
+              const ia = DEALER_ORDER.indexOf(a.seatId);
+              const ib = DEALER_ORDER.indexOf(b.seatId);
+              return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+            });
+          }
+          return winnersList;
+        }
+        // ⭐ v2.28.57 平分工具:把一个池的金额平分给胜者列表,余数给第一个
+        function splitPot(potAmount, winnersList, potId, potName) {
+          const n = winnersList.length;
+          if (n === 0) return [];
+          const base = Math.floor(potAmount / n);
+          const remainder = potAmount - base * n;
+          return winnersList.map((w, i) => ({
+            seatId: w.seatId,
+            amount: base + (i === 0 ? remainder : 0),  // 余数(奇 chip)给位置最前的
+            handType: w.handType,
+            potId: potId,
+            split: n > 1,                              // 标记是否平分(给历史/UI 提示用)
+            splitOf: n > 1 ? n : undefined             // 一池分几份
+          }));
         }
         const pots = potsStore.list();
         const winners = pots.length > 0
-          ? pots.map(p => {
+          ? pots.flatMap(p => {
               // 该池资格内的玩家
               const eligibleCandidates = showdownPlayers.filter(sp => (p.eligibleSeats || []).includes(sp.seatId));
-              const winner = pickWinner(eligibleCandidates) || showdownPlayers[0];
-              return {
-                seatId: winner.seatId,
-                amount: p.amount,
-                handType: winner.handType,
-                potId: p.id
-              };
+              const winnersList = pickWinners(eligibleCandidates);
+              if (winnersList.length === 0) {
+                // 兜底:无资格胜者,退化成 showdownPlayers[0] 拿全池
+                return [{ seatId: showdownPlayers[0].seatId, amount: p.amount, handType: showdownPlayers[0].handType, potId: p.id }];
+              }
+              return splitPot(p.amount, winnersList, p.id, p.name);
             })
           : (function() {
-              const winner = pickWinner(showdownPlayers) || showdownPlayers[0];
-              return [{ seatId: winner.seatId, amount: pot, handType: winner.handType }];
+              const winnersList = pickWinners(showdownPlayers);
+              if (winnersList.length === 0) {
+                return [{ seatId: showdownPlayers[0].seatId, amount: pot, handType: showdownPlayers[0].handType }];
+              }
+              // 单一主池(无 potId)
+              const n = winnersList.length;
+              const base = Math.floor(pot / n);
+              const remainder = pot - base * n;
+              return winnersList.map((w, i) => ({
+                seatId: w.seatId,
+                amount: base + (i === 0 ? remainder : 0),
+                handType: w.handType,
+                split: n > 1,
+                splitOf: n > 1 ? n : undefined
+              }));
             })();
         emit(WS_EVENTS.PAYOUT, { winners }, 100);
         await wait(winners.length * 1500 + 800);
@@ -28562,40 +28610,60 @@
               setTimeout(() => {
                 const pot = potsStore.list().find(p => p.id === pid);
                 const potName = pot ? pot.name : '主池';
+                // ⭐ v2.28.57:平局平分时给 toast 加"平分 N 份"提示
+                const splitTip = winner.split ? '(平分 ' + winner.splitOf + ' 份)' : '';
                 if (typeof showToast === 'function') {
                   const who = winner.seatId === 'my' ? '我' : winner.seatId;
                   const ht = winner.handType ? '(' + winner.handType + ')' : '';
-                  showToast(potName + ' → ' + who + ' ' + formatPotMoney(winner.amount) + ' ' + ht);
+                  showToast(potName + splitTip + ' → ' + who + ' ' + formatPotMoney(winner.amount) + ' ' + ht);
                 }
                 potToWinnerAnimation(winner.seatId);
                 // ⭐ v2.27 子项 2:推派彩记录到历史
-                historyPushPayout(winner.seatId, winner.amount, potName, winner.handType);
+                // ⭐ v2.28.57:平局时历史记录追加"(平分)"
+                const histPotName = winner.split ? (potName + '(平分)') : potName;
+                historyPushPayout(winner.seatId, winner.amount, histPotName, winner.handType);
                 // ⭐ v2.28 批次 A1:派彩音效(我赢 vs 他人赢)
                 if (window.soundEngine) {
                   window.soundEngine.play(winner.seatId === 'my' ? 'winMine' : 'winOther');
                 }
                 // 派完该池 → 从 potsStore 移除(让 UI 实时减少边池条目)
-                const remaining = potsStore.list().filter(p => p.id !== pid);
-                potsStore.set(remaining);
+                // ⭐ v2.28.57:平分场景下,该池有多个 winner,只在"最后一个"派彩后移除
+                //   (winnersByPot[pid] 是该池所有 winner,index 等于 length-1 时才是最后一个)
+                const isLastOfThisPot = ws.indexOf(winner) === ws.length - 1;
+                if (isLastOfThisPot) {
+                  const remaining = potsStore.list().filter(p => p.id !== pid);
+                  potsStore.set(remaining);
+                }
               }, delay);
               delay += PAYOUT_STEP;
             });
           });
         } else {
-          // 旧格式兼容:第一个 winner 拿全场(单一主池场景)
-          const winner = data.winners[0];
-          if (typeof showToast === 'function') {
-            showToast('派彩 → ' + (winner.seatId === 'my' ? '我' : winner.seatId) +
-                      (winner.handType ? '(' + winner.handType + ')' : ''));
-          }
-          potToWinnerAnimation(winner.seatId);
-          // ⭐ v2.27 子项 2:推派彩记录到历史(旧格式)
-          historyPushPayout(winner.seatId, winner.amount, '底池', winner.handType);
-          // ⭐ v2.28 批次 A1:派彩音效
-          if (window.soundEngine) {
-            window.soundEngine.play(winner.seatId === 'my' ? 'winMine' : 'winOther');
-          }
-          potsStore.clear();
+          // 旧格式兼容:无 potId,单一主池场景
+          // ⭐ v2.28.57 修复:平分时 data.winners 会有多条,要遍历每条派彩
+          const PAYOUT_STEP_LEGACY = 1400;
+          data.winners.forEach((winner, idx) => {
+            setTimeout(() => {
+              const splitTip = winner.split ? '(平分 ' + winner.splitOf + ' 份)' : '';
+              if (typeof showToast === 'function') {
+                const who = winner.seatId === 'my' ? '我' : winner.seatId;
+                const ht = winner.handType ? '(' + winner.handType + ')' : '';
+                showToast('派彩' + splitTip + ' → ' + who + ' ' + formatPotMoney(winner.amount) + ' ' + ht);
+              }
+              potToWinnerAnimation(winner.seatId);
+              // ⭐ v2.27 子项 2:推派彩记录到历史(旧格式)
+              const histPotName = winner.split ? '底池(平分)' : '底池';
+              historyPushPayout(winner.seatId, winner.amount, histPotName, winner.handType);
+              // ⭐ v2.28 批次 A1:派彩音效
+              if (window.soundEngine) {
+                window.soundEngine.play(winner.seatId === 'my' ? 'winMine' : 'winOther');
+              }
+              // 最后一个 winner 派完后清池
+              if (idx === data.winners.length - 1) {
+                potsStore.clear();
+              }
+            }, idx * PAYOUT_STEP_LEGACY);
+          });
         }
         break;
       }

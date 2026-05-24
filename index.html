@@ -12289,35 +12289,35 @@
             <button class="gift-close" id="gift-close-btn">✕</button>
           </div>
           <div class="gift-grid">
-            <div class="gift-item" data-gift="rose" data-cost="5">
+            <div class="gift-item" data-gift="rose" data-fee-key-cost="gift_rose">
               <div class="gift-icon">🌹</div>
               <div class="gift-name">玫瑰</div>
-              <div class="gift-cost">5</div>
+              <div class="gift-cost" data-fee-key="gift_rose" data-fee-show="cost">5</div>
             </div>
-            <div class="gift-item" data-gift="beer" data-cost="10">
+            <div class="gift-item" data-gift="beer" data-fee-key-cost="gift_beer">
               <div class="gift-icon">🍺</div>
               <div class="gift-name">啤酒</div>
-              <div class="gift-cost">10</div>
+              <div class="gift-cost" data-fee-key="gift_beer" data-fee-show="cost">10</div>
             </div>
-            <div class="gift-item" data-gift="kiss" data-cost="20">
+            <div class="gift-item" data-gift="kiss" data-fee-key-cost="gift_kiss">
               <div class="gift-icon">💋</div>
               <div class="gift-name">飞吻</div>
-              <div class="gift-cost">20</div>
+              <div class="gift-cost" data-fee-key="gift_kiss" data-fee-show="cost">20</div>
             </div>
-            <div class="gift-item" data-gift="fire" data-cost="50">
+            <div class="gift-item" data-gift="fire" data-fee-key-cost="gift_fire">
               <div class="gift-icon">🔥</div>
               <div class="gift-name">火力</div>
-              <div class="gift-cost">50</div>
+              <div class="gift-cost" data-fee-key="gift_fire" data-fee-show="cost">50</div>
             </div>
-            <div class="gift-item" data-gift="heart" data-cost="100">
+            <div class="gift-item" data-gift="heart" data-fee-key-cost="gift_heart">
               <div class="gift-icon">❤️</div>
               <div class="gift-name">爱心</div>
-              <div class="gift-cost">100</div>
+              <div class="gift-cost" data-fee-key="gift_heart" data-fee-show="cost">100</div>
             </div>
-            <div class="gift-item" data-gift="crown" data-cost="500">
+            <div class="gift-item" data-gift="crown" data-fee-key-cost="gift_crown">
               <div class="gift-icon">👑</div>
               <div class="gift-name">皇冠</div>
-              <div class="gift-cost">500</div>
+              <div class="gift-cost" data-fee-key="gift_crown" data-fee-show="cost">500</div>
             </div>
           </div>
           <div class="gift-balance">
@@ -12467,20 +12467,20 @@
           <div id="rp-rounds"></div>
         </div>
 
-        <!-- 付费按钮(发发看/偷偷看) -->
+        <!-- 付费按钮(发发看/偷偷看)⭐ v2.28.40 金额从 AAGAME_FEE_CONFIG 读 -->
         <div class="rp-paid-bar" id="rp-paid-bar">
           <button class="rp-paid-btn" id="rp-faafakan">
             <span>发发看</span>
             <span class="rp-paid-price">
               <span class="rp-paid-price-icon">₮</span>
-              <span>50</span>
+              <span data-fee-key="faafakan" data-fee-show="cost">50</span>
             </span>
           </button>
           <button class="rp-paid-btn" id="rp-toutoukan">
             <span>偷偷看</span>
             <span class="rp-paid-price">
               <span class="rp-paid-price-icon">₮</span>
-              <span>50</span>
+              <span data-fee-key="toutoukan" data-fee-show="cost">50</span>
             </span>
           </button>
         </div>
@@ -16584,7 +16584,10 @@
         if (typeof showToast === 'function') showToast('河牌已出,不需要发发看');
         return;
       }
-      if (typeof showToast === 'function') showToast('发发看(开发中,扣 ₮50 查看未发完的牌)');
+      if (typeof showToast === 'function') {
+        const fee = window.getFee('faafakan');
+        showToast('发发看(开发中,扣 ₮' + fee.cost + ' 查看未发完的牌)');
+      }
     });
   }
   if (rpTouBtn) {
@@ -16601,7 +16604,10 @@
         if (typeof showToast === 'function') showToast('所有玩家已亮牌,无需偷偷看');
         return;
       }
-      if (typeof showToast === 'function') showToast('偷偷看(开发中,扣 ₮50 查看别人手牌)');
+      if (typeof showToast === 'function') {
+        const fee = window.getFee('toutoukan');
+        showToast('偷偷看(开发中,扣 ₮' + fee.cost + ' 查看别人手牌)');
+      }
     });
   }
 
@@ -17405,6 +17411,9 @@
     PAYOUT:           'payout',             // 派彩      { winners: [{seatId, amount, handType, potId?}] }(potId 指明拿的是哪个池)
     HAND_END:         'hand:end',           // 一手结束   { handNo, mySnap: { chipsAfter, profit } }
 
+    // ⭐ v2.28.40 配置热更新(后台改扣费金额时实时下发)
+    CONFIG_UPDATE:    'config:update',      // 配置更新 { config: { emoji_gift: {cost,currency}, ... } }(增量或全量)
+
     // ───── 连接管理 ─────
     CONN_PING:        'conn:ping',          // 心跳      { ts }
     CONN_PONG:        'conn:pong',          // 心跳回应   { ts }
@@ -17418,6 +17427,102 @@
     CLIENT_STRADDLE:  'client:straddle'     // 抓头选择   { straddle: true|false }
   };
   window.WS_EVENTS = WS_EVENTS;
+
+  // ⭐⭐⭐ v2.28.40 阶段 1:扣费配置框架(铁律 0.8)⭐⭐⭐
+  // ════════════════════════════════════════════════════════════════════════
+  // 铁律 0.8:所有需要扣费的项目禁止硬编码金额,必须通过 AAGAME_FEE_CONFIG
+  //   集中配置,业务代码用 getFee(key) 读取。后端通过 CONFIG_UPDATE WS 事件
+  //   实时下发新配置。配置写权限只属于 AAPoker 平台后台管理员。
+  // ════════════════════════════════════════════════════════════════════════
+
+  // 子项 1-1:扣费配置默认值(等后端 /api/config 拉到真实值后覆盖)
+  window.AAGAME_FEE_CONFIG = {
+    // 表情互动(在桌玩家相互扔表情,从我座位飞向对方头像)
+    emoji_gift:     { cost: 20,  currency: 'USDT', label: '表情互动' },
+
+    // 礼物打赏(高级飞行礼物,6 档:玫瑰/啤酒/飞吻/火力/爱心/皇冠)
+    gift_rose:      { cost: 5,   currency: 'USDT', label: '玫瑰' },
+    gift_beer:      { cost: 10,  currency: 'USDT', label: '啤酒' },
+    gift_kiss:      { cost: 20,  currency: 'USDT', label: '飞吻' },
+    gift_fire:      { cost: 50,  currency: 'USDT', label: '火力' },
+    gift_heart:     { cost: 100, currency: 'USDT', label: '爱心' },
+    gift_crown:     { cost: 500, currency: 'USDT', label: '皇冠' },
+
+    // 牌谱付费功能
+    faafakan:       { cost: 50,  currency: 'USDT', label: '发发看(查看未发完的牌)' },
+    toutoukan:      { cost: 50,  currency: 'USDT', label: '偷偷看(查看别人手牌)' },
+
+    // 保险相关(具体金额按池子算,这里只是默认上限)
+    insurance:      { cost: 0,   currency: 'USDT', label: '买保险', note: '按池子动态计算' },
+
+    // 补码(最低补码限制,占位用)
+    rebuy_min:      { cost: 100, currency: 'USDT', label: '最低补码' }
+  };
+
+  // 子项 1-2:工具函数 getFee(key) — 业务代码读配置的统一入口
+  window.getFee = function(key) {
+    const cfg = window.AAGAME_FEE_CONFIG && window.AAGAME_FEE_CONFIG[key];
+    if (!cfg) {
+      console.warn('[fee] 未定义的扣费项:', key, '请在 AAGAME_FEE_CONFIG 中声明');
+      return { cost: 0, currency: 'USDT', label: key };
+    }
+    return cfg;
+  };
+
+  // 子项 1-5:管理员判断(俱乐部管理员可见划币按钮)
+  // 演示阶段:开关控制;真实业务:后端推送 currentUser.clubRole 字段
+  window.isClubAdmin = false;   // ← 改成 true 可看划币按钮(后续阶段 2-F 用)
+
+  // 子项 1-4:CONFIG_UPDATE 路由处理函数(WS 事件骨架)
+  // 后端推送增量或全量配置,前端合并到 AAGAME_FEE_CONFIG,所有页面立刻读到新值
+  window.applyConfigUpdate = function(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    const newCfg = payload.config || payload;
+    if (!newCfg || typeof newCfg !== 'object') return;
+    // 增量合并(后端只下发变更项)
+    Object.keys(newCfg).forEach(key => {
+      window.AAGAME_FEE_CONFIG[key] = Object.assign(
+        {},
+        window.AAGAME_FEE_CONFIG[key] || {},
+        newCfg[key]
+      );
+    });
+    // 通知 UI 重新渲染所有显示扣费金额的元素
+    if (typeof window.refreshFeeLabels === 'function') {
+      window.refreshFeeLabels();
+    }
+    console.log('[fee] AAGAME_FEE_CONFIG 已更新:', newCfg);
+  };
+
+  // 子项 1-3 配套:UI 文字刷新函数(把页面上所有扣费金额从配置同步)
+  // 用 data-fee-key 属性标记:<span data-fee-key="emoji_gift" data-fee-show="cost"></span>
+  //   data-fee-show: cost(只显示金额) / full(₮20 完整带符号) / label(显示文字)
+  window.refreshFeeLabels = function() {
+    document.querySelectorAll('[data-fee-key]').forEach(el => {
+      const key = el.getAttribute('data-fee-key');
+      const show = el.getAttribute('data-fee-show') || 'cost';
+      const fee = window.getFee(key);
+      if (show === 'cost') {
+        el.textContent = fee.cost;
+      } else if (show === 'full') {
+        el.textContent = '₮' + fee.cost;
+      } else if (show === 'label') {
+        el.textContent = fee.label || key;
+      }
+    });
+  };
+  // DOM 加载后初次同步一次
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => window.refreshFeeLabels());
+  } else {
+    setTimeout(() => window.refreshFeeLabels(), 0);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 阶段 1 完成。后续所有扣费功能直接用 getFee(key) 读金额,不要硬编码。
+  // ════════════════════════════════════════════════════════════════════════
+
+
 
   // ⭐ v2.22 Mock 后端 server(纯前端 setTimeout 模拟事件流)
   // ═════════════════════════════════════════════════════════════════
@@ -27374,6 +27479,14 @@
         // ⭐ v2.26 子项 5:一手结束清预选(避免预选跨手)
         if (window.preselectStore) window.preselectStore.clear();
         if (window.clearPreselectWindow) window.clearPreselectWindow();
+        break;
+      }
+
+      // ⭐ v2.28.40 子项 1-4:配置热更新(后台改扣费金额时实时下发)
+      case WS_EVENTS.CONFIG_UPDATE: {
+        if (typeof window.applyConfigUpdate === 'function') {
+          window.applyConfigUpdate(data);
+        }
         break;
       }
 

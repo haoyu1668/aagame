@@ -27246,7 +27246,11 @@
   // ⭐ v2.27 子项 2:历史时间轴 push 辅助函数(从 _historyPlayerLookup 取头像/名字)
   function getHistoryPlayer(seatId) {
     if (!seatId) return { name: '', avatar: '' };
-    if (seatId === 'my') return { name: '伯恩', avatar: '伯' };
+    // ⭐ v2.28.58:'my' 改为从 window.currentUser 取(Telegram 用户真实身份 / 演示兜底"伯恩")
+    if (seatId === 'my') {
+      const u = window.currentUser || {};
+      return { name: u.name || '伯恩', avatar: u.avatar || '伯' };
+    }
     const lookup = window._historyPlayerLookup || {};
     return lookup[seatId] || { name: seatId, avatar: seatId.toUpperCase() };
   }
@@ -36363,6 +36367,13 @@
   //   - 项目铁律:不允许有任何元素裁切,宁可有黑边
   //   - 大屏封顶 2.0(避免 iPad Pro 过度放大)
   // 触发时机:页面加载 / 窗口尺寸变化 / 屏幕方向变化
+  //
+  // ⭐ v2.28.58 新增:Telegram 用户身份接入(读 initDataUnsafe.user 拿真实昵称/头像)
+  //   - 默认"伯恩"作兜底(浏览器里打开或读不到 user 信息时)
+  //   - Telegram 里打开 → 用真实 first_name + last_name 替换"伯恩"
+  //   - ⚠️ initDataUnsafe 顾名思义"不安全":前端读到的可被伪造
+  //         演示阶段够用,内测真上线前必须改成:前端把 initData 发给后端,后端用 Bot Token 验签
+  //         (届时这里改成 fetch('/api/auth', {body: tg.initData}).then(r => r.json()))
   (function setupAppScale() {
     const DESIGN_W = 390;
     const DESIGN_H = 844;
@@ -36383,6 +36394,95 @@
         // 老版本 Telegram SDK 没这些方法,忽略错误
       }
     }
+
+    // ⭐ v2.28.58 当前用户身份模块(currentUser 单例)
+    //   - 任何需要显示"我"的名字/头像的地方,都从 window.currentUser 拿
+    //   - 默认值兜底:"伯恩 ♥"(浏览器演示场景)
+    //   - Telegram 里打开:用真实 user 覆盖
+    //   - 头像策略:Telegram 头像 URL 存到 photoUrl,但 my-seat 本来就没头像位置 → 仅用于以后扩展(如行动历史/玩家弹窗)
+    window.currentUser = {
+      name: '伯恩',           // 显示名(seat-name-chip 文本)
+      avatar: '伯',            // 单字头像(座位列表/历史/玩家弹窗用)
+      avatarChar: '♥',         // 名字后的小符号(原"伯恩 ♥"那个红心)
+      telegramId: null,        // Telegram 数字 ID
+      username: null,          // Telegram @ 用户名
+      photoUrl: null,          // Telegram 头像 URL(高清,80x80)
+      source: 'demo'           // 'demo' | 'telegram'(标记数据来源)
+    };
+
+    // 尝试从 Telegram 拿真实身份
+    if (window.Telegram && window.Telegram.WebApp) {
+      try {
+        const tg = window.Telegram.WebApp;
+        const u = tg.initDataUnsafe && tg.initDataUnsafe.user;
+        if (u && u.id) {
+          const fullName = ((u.first_name || '') + ' ' + (u.last_name || '')).trim();
+          // 长名字截断:超过 8 字显示前 7 字 + "…"
+          const displayName = fullName.length > 8 ? (fullName.slice(0, 7) + '…') : (fullName || ('User' + u.id));
+          // 头像取名字第一个字符(中英文都行)
+          const avatarChar = displayName ? displayName.charAt(0) : 'U';
+          window.currentUser = {
+            name: displayName,
+            avatar: avatarChar,
+            avatarChar: '',                              // Telegram 用户不加 ♥ 符号
+            telegramId: u.id,
+            username: u.username || null,
+            photoUrl: u.photo_url || null,
+            source: 'telegram'
+          };
+          console.log('[user] Telegram 身份接入成功:', window.currentUser);
+        } else {
+          console.log('[user] Telegram 内打开但读不到 user(老版本 Telegram 或非 Mini App 模式)');
+        }
+      } catch (e) {
+        console.warn('[user] Telegram initDataUnsafe 读取异常,使用默认"伯恩"', e);
+      }
+    }
+
+    // 同步到 UI:my-seat 的 seat-name-chip 文本 + 我的页 + 个人信息页
+    // 在 DOM 已经构建后立即执行(本 IIFE 在 </body> 之前调用,DOM 已就绪)
+    function syncCurrentUserToUI() {
+      const u = window.currentUser;
+      // 1. my-seat 名字胶囊
+      const mySeatNameChip = document.querySelector('.my-seat .seat-name-chip');
+      if (mySeatNameChip) {
+        // 演示模式保留"伯恩 ♥"格式,Telegram 用户直接显示名字
+        if (u.source === 'demo') {
+          mySeatNameChip.textContent = u.name + ' ' + u.avatarChar;
+        } else {
+          mySeatNameChip.textContent = u.name;
+        }
+      }
+      // 2. 我的页:.me-name 昵称 + .me-avatar 头像字符 + .me-uid Telegram ID(如果有)
+      document.querySelectorAll('.me-name').forEach(el => { el.textContent = u.name; });
+      document.querySelectorAll('.me-avatar').forEach(el => {
+        // 演示模式 'HB' 双字符,Telegram 用户首字符
+        if (u.source === 'telegram') {
+          el.textContent = u.avatar;
+        }
+        // 演示模式保留原样('HB' 写死在 HTML)
+      });
+      // me-uid 文本"ID: 1001941" → Telegram 真实 ID(保留前缀 + 复制图标)
+      if (u.source === 'telegram' && u.telegramId) {
+        document.querySelectorAll('.me-uid').forEach(el => {
+          // 找到第一个文本节点,只改 ID 数字部分(保留 svg 图标)
+          const textNode = Array.from(el.childNodes).find(n => n.nodeType === 3);
+          if (textNode) {
+            textNode.textContent = 'ID: ' + u.telegramId + ' ';
+          }
+        });
+        // 个人信息页 ID 字段
+        const idEl = document.getElementById('profile-id-value');
+        if (idEl) idEl.textContent = String(u.telegramId);
+      }
+      // 3. 兜底全局变量(以后接入更多位置时用)
+      window.MY_NAME = u.name;
+      window.MY_AVATAR = u.avatar;
+    }
+    // 立即同步一次
+    syncCurrentUserToUI();
+    // 暴露给外部按需调用(以后清场/重渲染时可重新同步)
+    window.syncCurrentUserToUI = syncCurrentUserToUI;
 
     function fitScreen() {
       // ⭐ v2.18 兼容 Claude 预览框 / iframe 等场景:

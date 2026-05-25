@@ -36603,12 +36603,113 @@
   //   - 大屏封顶 2.0(避免 iPad Pro 过度放大)
   // 触发时机:页面加载 / 窗口尺寸变化 / 屏幕方向变化
   //
-  // ⭐ v2.28.58 新增:Telegram 用户身份接入(读 initDataUnsafe.user 拿真实昵称/头像)
-  //   - 默认"伯恩"作兜底(浏览器里打开或读不到 user 信息时)
-  //   - Telegram 里打开 → 用真实 first_name + last_name 替换"伯恩"
-  //   - ⚠️ initDataUnsafe 顾名思义"不安全":前端读到的可被伪造
-  //         演示阶段够用,内测真上线前必须改成:前端把 initData 发给后端,后端用 Bot Token 验签
-  //         (届时这里改成 fetch('/api/auth', {body: tg.initData}).then(r => r.json()))
+  // ════════════════════════════════════════════════════════════════════════
+  // ⭐ v2.28.68 F1:前端验签对接 — 核心工具(API_BASE_URL / tokenStore / apiLogin / apiClient)
+  // ════════════════════════════════════════════════════════════════════════
+  // 用途:把 initData 发到后端验签,拿 JWT token,后续接口带 Bearer
+  // 流程:Telegram.WebApp.initData → POST /api/auth/telegram → {token, user} → localStorage
+  // 失败降级:网络/后端不通 → 保留 demo 兜底"伯恩"(本地 UI 仍可看)
+  // ════════════════════════════════════════════════════════════════════════
+
+  // 后端域名(MVP 1 阶段硬编码;以后切多环境再做 hostname 探测)
+  window.API_BASE_URL = 'https://aagame-backend-production.up.railway.app';
+
+  // localStorage 存 JWT token 的工具
+  window.tokenStore = {
+    KEY: 'aagame_jwt',
+    set(token) {
+      try { localStorage.setItem(this.KEY, token); }
+      catch (e) { console.warn('[token] localStorage 写入失败:', e); }
+    },
+    get() {
+      try { return localStorage.getItem(this.KEY); }
+      catch (e) { return null; }
+    },
+    clear() {
+      try { localStorage.removeItem(this.KEY); }
+      catch (e) {}
+    }
+  };
+
+  // 登录接口封装(POST /api/auth/telegram)
+  // 入参:initData 字符串(window.Telegram.WebApp.initData)
+  // 返回:Promise<{token, user}> 成功 / Promise.reject(Error) 失败
+  window.apiLogin = async function apiLogin(initData) {
+    if (!initData) throw new Error('initData 为空,无法登录');
+    const url = window.API_BASE_URL + '/api/auth/telegram';
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData })
+      });
+    } catch (netErr) {
+      throw new Error('网络错误:' + netErr.message);
+    }
+    let data;
+    try {
+      data = await resp.json();
+    } catch (e) {
+      throw new Error('后端返回的不是合法 JSON,HTTP ' + resp.status);
+    }
+    if (!resp.ok || !data.ok) {
+      throw new Error('登录失败(' + resp.status + '):' + (data.error || '未知原因'));
+    }
+    if (!data.token || !data.user) {
+      throw new Error('后端返回缺少 token/user 字段');
+    }
+    return { token: data.token, user: data.user };
+  };
+
+  // 通用 fetch 封装(自动带 Authorization: Bearer <token>)
+  // 用法:apiClient.get('/api/user/me') / apiClient.post('/api/xxx', {...body})
+  // 注意:401 时会自动 clear token,但不强制跳登录(让调用方决定)
+  window.apiClient = (function() {
+    async function request(method, path, body) {
+      const token = window.tokenStore.get();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      let resp;
+      try {
+        resp = await fetch(window.API_BASE_URL + path, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : undefined
+        });
+      } catch (netErr) {
+        throw new Error('网络错误:' + netErr.message);
+      }
+      let data;
+      try { data = await resp.json(); }
+      catch (e) { throw new Error('后端返回非 JSON,HTTP ' + resp.status); }
+      if (resp.status === 401) {
+        console.warn('[api] 401 鉴权失败,清除 token');
+        window.tokenStore.clear();
+      }
+      if (!resp.ok || !data.ok) {
+        const err = new Error('接口错误(' + resp.status + '):' + (data.error || '未知'));
+        err.status = resp.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+    return {
+      get(path)        { return request('GET', path); },
+      post(path, body) { return request('POST', path, body); },
+      patch(path, body){ return request('PATCH', path, body); },
+      del(path)        { return request('DELETE', path); }
+    };
+  })();
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ⭐ v2.28.58 / v2.28.68 改造:Telegram 用户身份接入
+  //   - v2.28.58 旧版:读 initDataUnsafe.user(前端可伪造)直接渲染
+  //   - v2.28.68 新版:把 initData 发后端验签 → 拿后端返回的 user(真实身份)
+  //   - 失败降级:网络错/后端不通/浏览器打开 → 保留默认"伯恩"兜底
+  //   - 异步流程:UI 先渲染 demo 兜底,登录成功后再 syncCurrentUserToUI() 覆盖
+  // ════════════════════════════════════════════════════════════════════════
   (function setupAppScale() {
     const DESIGN_W = 390;
     const DESIGN_H = 844;
@@ -36645,33 +36746,59 @@
       source: 'demo'           // 'demo' | 'telegram'(标记数据来源)
     };
 
-    // 尝试从 Telegram 拿真实身份
+    // 尝试从 Telegram 拿真实身份(v2.28.68 改造:走后端验签)
+    // 异步流程:UI 先用 demo 兜底渲染,登录成功后 currentUser 覆盖 → syncCurrentUserToUI() 再渲一次
     if (window.Telegram && window.Telegram.WebApp) {
-      try {
-        const tg = window.Telegram.WebApp;
-        const u = tg.initDataUnsafe && tg.initDataUnsafe.user;
-        if (u && u.id) {
-          const fullName = ((u.first_name || '') + ' ' + (u.last_name || '')).trim();
-          // 长名字截断:超过 8 字显示前 7 字 + "…"
-          const displayName = fullName.length > 8 ? (fullName.slice(0, 7) + '…') : (fullName || ('User' + u.id));
-          // 头像取名字第一个字符(中英文都行)
+      const tg = window.Telegram.WebApp;
+      const initData = tg.initData || '';
+      // initData 是后端验签需要的"完整带 hash 的字符串",initDataUnsafe.user 才是可读对象
+      if (initData) {
+        // 在 Telegram 内打开 + 有 initData → 走真验签
+        console.log('[user] 检测到 Telegram initData,开始后端验签...');
+        window.apiLogin(initData).then(function(result) {
+          // 后端验签成功,用返回的真实 user 覆盖 demo
+          window.tokenStore.set(result.token);
+          const u = result.user;
+          const fullName = ((u.firstName || '') + ' ' + (u.lastName || '')).trim();
+          const displayName = fullName.length > 8
+            ? (fullName.slice(0, 7) + '…')
+            : (fullName || ('User' + u.telegramId));
           const avatarChar = displayName ? displayName.charAt(0) : 'U';
           window.currentUser = {
             name: displayName,
             avatar: avatarChar,
-            avatarChar: '',                              // Telegram 用户不加 ♥ 符号
-            telegramId: u.id,
+            avatarChar: '',                          // Telegram 用户不加 ♥ 符号
+            telegramId: u.telegramId,
+            userId: u.id,                            // 后端 users 表主键(MVP 2 接口用)
             username: u.username || null,
-            photoUrl: u.photo_url || null,
-            source: 'telegram'
+            photoUrl: u.photoUrl || null,
+            source: 'telegram_verified'              // 标记已验签(区别旧版 telegram)
           };
-          console.log('[user] Telegram 身份接入成功:', window.currentUser);
-        } else {
-          console.log('[user] Telegram 内打开但读不到 user(老版本 Telegram 或非 Mini App 模式)');
-        }
-      } catch (e) {
-        console.warn('[user] Telegram initDataUnsafe 读取异常,使用默认"伯恩"', e);
+          console.log('[user] ✅ Telegram 后端验签成功:', window.currentUser);
+          // 重新同步 UI(覆盖之前 demo 兜底的渲染)
+          if (typeof window.syncCurrentUserToUI === 'function') {
+            window.syncCurrentUserToUI();
+          }
+          // 子项 6:自检调用 /api/user/me,确认 token 真的可用(F1 闭环验收)
+          window.apiClient.get('/api/user/me').then(function(meResp) {
+            console.log('[user] ✅ /api/user/me 自检通过,鉴权链路全通:', meResp.user);
+          }).catch(function(err) {
+            console.error('[user] ❌ /api/user/me 自检失败:', err.message);
+          });
+        }).catch(function(err) {
+          // 验签失败:网络错/后端 401/后端 500
+          //   保留 demo 兜底"伯恩",用户仍能看 UI(降级策略)
+          //   清掉旧 token(可能是过期的)
+          console.warn('[user] ⚠️ Telegram 后端验签失败,保留演示兜底:', err.message);
+          window.tokenStore.clear();
+        });
+      } else {
+        // Telegram 内打开但读不到 initData(老版本 / 非 Mini App 模式)
+        console.log('[user] Telegram 内打开但没有 initData,保留演示兜底"伯恩"');
       }
+    } else {
+      // 浏览器里打开 → 完全降级到 demo,不调后端
+      console.log('[user] 浏览器打开(非 Telegram),保留演示兜底"伯恩"');
     }
 
     // 同步到 UI:my-seat 的 seat-name-chip 文本 + 我的页 + 个人信息页
@@ -36715,15 +36842,15 @@
           textEl.style.display = '';
           if (imgEl) imgEl.style.display = 'none';
           el.classList.remove('has-img');
-          // 演示模式保留 'HB' 写死,Telegram 用户首字符
-          if (u.source === 'telegram') {
+          // 演示模式保留 'HB' 写死,Telegram 用户(含已验签)首字符
+          if (u.source !== 'demo') {
             textEl.textContent = u.avatar;
           }
         }
       });
 
       // me-uid 文本"ID: 1001941" → Telegram 真实 ID(保留前缀 + 复制图标)
-      if (u.source === 'telegram' && u.telegramId) {
+      if (u.source !== 'demo' && u.telegramId) {
         document.querySelectorAll('.me-uid').forEach(el => {
           // 找到第一个文本节点,只改 ID 数字部分(保留 svg 图标)
           const textNode = Array.from(el.childNodes).find(n => n.nodeType === 3);
@@ -36763,8 +36890,8 @@
             if (silhouette) silhouette.style.display = 'none';
             profileAvatar.classList.remove('has-img');
           };
-        } else if (u.source === 'telegram' && textEl) {
-          // Telegram 用户没头像:用首字符替代剪影 SVG
+        } else if (u.source !== 'demo' && textEl) {
+          // Telegram 用户(含已验签)没头像:用首字符替代剪影 SVG
           if (silhouette) silhouette.style.display = 'none';
           if (imgEl) imgEl.style.display = 'none';
           textEl.style.display = '';

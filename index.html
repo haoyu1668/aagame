@@ -1342,7 +1342,7 @@
   .lobby-action svg { width: 22px; height: 22px; }
   .lobby-action span { font-size: 11px; }
 
-  /* USDT 余额行 */
+  /* 记分牌 余额行 */
   .lobby-usdt-row {
     display: flex;
     align-items: center;
@@ -2586,6 +2586,91 @@
   /* 默认隐藏,发牌阶段动态显示 */
   .card-deck.hidden { display: none; }
 
+  /* ⭐ N6.4 洗牌动画占位(CSS 自绘版,等设计师素材就绪后替换为 APNG/WebM)
+     位置:.table-center 旁,牌桌中央偏上
+     时序:0-400ms 扇形展开 → 400-1100ms 旋转 → 1100-1500ms 收拢 */
+  .shuffle-stage {
+    position: absolute;
+    top: 38%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 60px;
+    z-index: 25;          /* 高于公共牌(z:5),低于弹窗(z:60+) */
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .shuffle-stage.hidden { display: none; }
+  .shuffle-card {
+    position: absolute;
+    width: 28px;
+    height: 40px;
+    border-radius: 3px;
+    background:
+      linear-gradient(180deg,
+        #c14a5e 0%,
+        #b8455a 75%,
+        #ffffff 75%,
+        #ffffff 100%);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.4),
+      0 2px 6px rgba(0,0,0,0.4),
+      0 0 8px rgba(77,255,77,0.5);
+  }
+  .shuffle-hash-label {
+    position: absolute;
+    bottom: -22px;
+    color: #7fff7f;
+    font-size: 11px;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    letter-spacing: 1px;
+    text-shadow: 0 0 6px rgba(77,255,77,0.6);
+    opacity: 0;
+  }
+
+  /* 动画激活:整个 stage 加 .playing 类时跑动画 */
+  .shuffle-stage.playing .shuffle-card-1 {
+    animation: shuffleCardLeft 1500ms cubic-bezier(.4,.15,.25,1) forwards;
+  }
+  .shuffle-stage.playing .shuffle-card-2 {
+    animation: shuffleCardCenter 1500ms cubic-bezier(.4,.15,.25,1) forwards;
+  }
+  .shuffle-stage.playing .shuffle-card-3 {
+    animation: shuffleCardRight 1500ms cubic-bezier(.4,.15,.25,1) forwards;
+  }
+  .shuffle-stage.playing .shuffle-hash-label {
+    animation: shuffleLabelFade 1500ms ease-out forwards;
+  }
+  @keyframes shuffleCardLeft {
+    0%   { transform: translateX(0) rotate(0deg) scale(0.6); opacity: 0; }
+    25%  { transform: translateX(-32px) rotate(-15deg) scale(1); opacity: 1; }
+    50%  { transform: translateX(-32px) rotate(-180deg) scale(1); opacity: 1; }
+    75%  { transform: translateX(-32px) rotate(-360deg) scale(1); opacity: 1; }
+    100% { transform: translateX(0) rotate(-360deg) scale(0.85); opacity: 0; }
+  }
+  @keyframes shuffleCardCenter {
+    0%   { transform: translateX(0) rotate(0deg) scale(0.6); opacity: 0; }
+    25%  { transform: translateX(0) rotate(0deg) scale(1); opacity: 1; }
+    50%  { transform: translateX(0) rotate(180deg) scale(1.05); opacity: 1; }
+    75%  { transform: translateX(0) rotate(360deg) scale(1); opacity: 1; }
+    100% { transform: translateX(0) rotate(360deg) scale(0.85); opacity: 0; }
+  }
+  @keyframes shuffleCardRight {
+    0%   { transform: translateX(0) rotate(0deg) scale(0.6); opacity: 0; }
+    25%  { transform: translateX(32px) rotate(15deg) scale(1); opacity: 1; }
+    50%  { transform: translateX(32px) rotate(180deg) scale(1); opacity: 1; }
+    75%  { transform: translateX(32px) rotate(360deg) scale(1); opacity: 1; }
+    100% { transform: translateX(0) rotate(360deg) scale(0.85); opacity: 0; }
+  }
+  @keyframes shuffleLabelFade {
+    0%   { opacity: 0; }
+    30%  { opacity: 0.9; }
+    80%  { opacity: 0.9; }
+    100% { opacity: 0; }
+  }
+
   /* 飞行牌容器 - 从牌堆飞向目标 */
   .flying-card {
     position: absolute;
@@ -3128,6 +3213,56 @@
     font-weight: 400;
     letter-spacing: 0.5px;
     text-shadow: 0 0 4px rgba(127,255,127,0.5);
+  }
+
+  /* ⭐ N6.2 牌桌右上角 Hash 短码胶囊
+     位置:可存证按钮(right:12px top:4px width:56px)的正下方
+     视觉:深底+绿字,字号小,等宽字体凸显 Hash 字符 */
+  .hash-chip {
+    position: absolute;
+    right: 12px;
+    top: 60px;            /* evidence-box 总高约 50px,+10px 间距 */
+    width: 56px;          /* 跟可存证按钮等宽,视觉对齐 */
+    padding: 2px 4px;
+    background: rgba(13, 16, 20, 0.65);
+    border: 1px solid rgba(77, 255, 77, 0.35);
+    border-radius: 4px;
+    z-index: 5;
+    cursor: pointer;
+    user-select: none;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .hash-chip:hover {
+    background: rgba(13, 16, 20, 0.85);
+    border-color: rgba(77, 255, 77, 0.7);
+  }
+  .hash-chip-prefix {
+    color: rgba(77, 255, 77, 0.7);
+    font-size: 9px;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    line-height: 1;
+  }
+  .hash-chip-text {
+    color: #7fff7f;
+    font-size: 10px;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    line-height: 1;
+  }
+  /* 数据刷新时短闪效果(N6.3 事件触发) */
+  .hash-chip.refreshing {
+    animation: hashChipFlash 0.6s ease-out;
+  }
+  @keyframes hashChipFlash {
+    0%   { box-shadow: 0 0 0 0 rgba(77, 255, 77, 0); }
+    40%  { box-shadow: 0 0 8px 2px rgba(77, 255, 77, 0.6); }
+    100% { box-shadow: 0 0 0 0 rgba(77, 255, 77, 0); }
   }
 
   /* 座位通用 */
@@ -8531,7 +8666,7 @@
   }
   .recharge-history svg { width: 20px; height: 20px; }
 
-  /* USDT 货币卡 */
+  /* 记分牌货币卡 */
   .recharge-currency {
     background: var(--bg-card);
     margin: 12px 14px 0;
@@ -8676,6 +8811,74 @@
   }
   .recharge-share-btn:active { opacity: 0.7; }
 
+  /* ⭐ F5/F6(MVP 1) 充提币联系客服占位 UI */
+  .recharge-contact-wrap {
+    margin: 20px 14px;
+    padding: 28px 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(77, 255, 77, 0.18);
+    border-radius: 12px;
+    text-align: center;
+  }
+  .recharge-contact-icon {
+    font-size: 38px;
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+  .recharge-contact-title {
+    font-size: 16px;
+    color: var(--green-main);
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .recharge-contact-desc {
+    font-size: 13px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.7;
+    margin-bottom: 22px;
+  }
+  .recharge-contact-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 180px;
+    height: 44px;
+    padding: 0 24px;
+    background: var(--green-main);
+    color: #0a3d0a;
+    border: none;
+    border-radius: 22px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(77,255,77,0.35);
+  }
+  .recharge-contact-btn:active { opacity: 0.78; transform: translateY(1px); }
+  .recharge-contact-btn-icon {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+  }
+  .recharge-contact-btn-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+  .recharge-contact-tip {
+    margin-top: 16px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    line-height: 1.6;
+  }
+  .recharge-contact-handle {
+    color: var(--green-main);
+    font-weight: 600;
+  }
+  .recharge-contact-tip-small {
+    color: rgba(255,255,255,0.4);
+    font-size: 11px;
+  }
+
   /* ===================================================
      ====== 提币页 (复用充币页的大部分样式) ======
      =================================================== */
@@ -8710,7 +8913,7 @@
     background: var(--bg-card);
   }
 
-  /* 数量输入框带右侧 USDT + 最大 */
+  /* 数量输入框带右侧 记分牌 + 最大 */
   .withdraw-amount-wrap {
     position: relative;
   }
@@ -11779,7 +11982,7 @@
         </div>
         <div class="asset-row">
           <div class="asset-icon">₮</div>
-          <div class="asset-name">USDT</div>
+          <div class="asset-name">记分牌</div>
           <div class="asset-amount">0.10</div>
         </div>
       </div>
@@ -11871,7 +12074,7 @@
 
     <!-- ============ 子页面：俱乐部内部大厅 ============ -->
     <div class="page" id="page-club-lobby">
-      <!-- 整个顶部都吸顶:返回栏+头像信息+USDT行+筛选栏 -->
+      <!-- 整个顶部都吸顶:返回栏+头像信息+记分牌行+筛选栏 -->
       <div class="lobby-sticky">
         <div class="sub-topbar" style="position:relative;">
           <div class="sub-back" data-back="club">
@@ -11927,11 +12130,11 @@
           </div>
         </div>
 
-        <!-- USDT余额行 -->
+        <!-- 记分牌余额行(原 USDT 行,v2.28.62 改名) -->
         <div class="lobby-usdt-row">
           <div class="lobby-usdt-left">
             <span class="usdt-icon">₮</span>
-            USDT: <span id="lobby-usdt">0</span>
+            记分牌: <span id="lobby-usdt">0</span>
             <span class="lobby-usdt-eye" id="lobby-eye-toggle">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -12087,6 +12290,14 @@
           <div class="ev-label" id="ev-label">可存证</div>
         </div>
 
+        <!-- ⭐ N6.2 牌桌右上角 Hash 短码(前4...后4)
+             点击 = 打开验证洗牌弹窗(跟 evidence-box 入口一致)
+             Hash 数据由 N6.3 监听 aagame:hand-hash-updated 事件刷新 -->
+        <div class="hash-chip" id="hash-chip">
+          <span class="hash-chip-prefix">#</span>
+          <span class="hash-chip-text" id="hash-chip-text">--------</span>
+        </div>
+
         <!-- ⭐ v2.18.6 子项 9:顶部余额+补码快捷入口(s1 和 s2 中间偏上) -->
         <div class="topbar-rebuy" id="topbar-rebuy">
           <button class="topbar-recharge-btn" id="topbar-recharge-btn" aria-label="充值">+</button>
@@ -12158,6 +12369,19 @@
 
       <!-- ⭐ v2.19 牌堆(发牌动画起点) -->
       <div class="card-deck hidden" id="card-deck"><div class="deck-top"></div></div>
+
+      <!-- ⭐ N6.4 洗牌动画占位
+           触发函数: window.playShuffleAnimation(callback)
+           默认 .hidden,只在 playShuffleAnimation 调用时显示
+           动画约 1500ms:3 张牌扇形展开→旋转→收拢
+           动画结束自动调 startNewHandHash() → N6.3 联动刷新
+           未来替换:删 .shuffle-stage 内 SVG,换成 <img src="shuffle.apng"> -->
+      <div class="shuffle-stage hidden" id="shuffle-stage">
+        <div class="shuffle-card shuffle-card-1"></div>
+        <div class="shuffle-card shuffle-card-2"></div>
+        <div class="shuffle-card shuffle-card-3"></div>
+        <div class="shuffle-hash-label">洗牌中...</div>
+      </div>
 
       <!-- ⭐ v2.19 公共牌区:5 个固定卡位,按阶段动态显隐(JS 控制)
            - preflop: 0 张全隐
@@ -13171,7 +13395,7 @@
             </div>
             <div class="info-row">
               <span class="info-label">买入货币</span>
-              <span class="info-value" id="info-currency">USDT</span>
+              <span class="info-value" id="info-currency">记分牌</span>
             </div>
             <div class="info-row">
               <span class="info-label">盲注</span>
@@ -13207,11 +13431,11 @@
             </div>
             <div class="info-row">
               <span class="info-label">付费看公牌</span>
-              <span class="info-value" id="info-paypublic">0.05USDT</span>
+              <span class="info-value" id="info-paypublic">0.05</span>
             </div>
             <div class="info-row">
               <span class="info-label">付费看手牌</span>
-              <span class="info-value" id="info-payhand">0.05USDT</span>
+              <span class="info-value" id="info-payhand">0.05</span>
             </div>
           </div>
         </div>
@@ -13592,64 +13816,35 @@
         </div>
       </div>
 
-      <!-- USDT 货币卡 -->
+      <!-- ⭐ F5(MVP 1):充值页改造为"联系客服跳转"
+           原因:MVP 1 决策 "USDT 链接 + 人工客服" 模式,前端只做跳转入口
+           原 USDT 充值 UI(货币卡/二维码/充币地址/详情) 已整段移除
+           等 MVP 2 接入链上充值时,从 git 历史里取回原 UI -->
       <div class="recharge-currency">
         <span class="usdt-icon">₮</span>
-        <span class="name">USDT</span>
+        <span class="name">记分牌</span>
       </div>
 
-      <!-- 主网 -->
-      <div class="recharge-network-label">主网</div>
-      <div class="recharge-network-input">TRON -TRC20</div>
-
-      <!-- 二维码 -->
-      <div class="recharge-qr-wrap">
-        <div class="recharge-qr">
-          <canvas id="recharge-qr-canvas" width="160" height="160"></canvas>
-          <div class="recharge-qr-center">₮</div>
+      <div class="recharge-contact-wrap">
+        <div class="recharge-contact-icon">💬</div>
+        <div class="recharge-contact-title">联系俱乐部客服充币</div>
+        <div class="recharge-contact-desc">
+          MVP 内测期间,所有充币通过俱乐部客服人工处理。<br>
+          请点击下方按钮联系客服,提供您的 ID 和充币金额,
+          客服确认收款后会将记分牌打到您的账户。
         </div>
-      </div>
-
-      <!-- 充币地址 -->
-      <div class="recharge-addr-label">充币地址</div>
-      <div class="recharge-addr">
-        <span id="recharge-addr-text">TS1LjwADiZMQuepnEo2NzAFJrsoCs36mXV</span>
-        <span class="recharge-addr-copy" id="recharge-addr-copy">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2"/>
-            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-          </svg>
-        </span>
-      </div>
-
-      <!-- 橙色注意提示 -->
-      <div class="recharge-warn">
-        注意:只能向此地址充入USDT,充入其他资产将无法找回
-      </div>
-
-      <!-- 详情卡 -->
-      <div class="recharge-detail">
-        <div class="recharge-detail-row">
-          <span class="label">最小充币额</span>
-          <span class="value">10 USDT</span>
+        <button class="recharge-contact-btn" id="recharge-contact-btn">
+          <span class="recharge-contact-btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+            </svg>
+          </span>
+          联系客服
+        </button>
+        <div class="recharge-contact-tip">
+          客服 Telegram:<span class="recharge-contact-handle">@your_service</span><br>
+          <span class="recharge-contact-tip-small">(占位,上线前替换为真实客服账号)</span>
         </div>
-        <div class="recharge-detail-row">
-          <span class="label">充币到账</span>
-          <span class="value">1次区块确认</span>
-        </div>
-        <div class="recharge-detail-row">
-          <span class="label">提币解锁</span>
-          <span class="value">1次区块确认</span>
-        </div>
-        <div class="recharge-detail-row">
-          <span class="label">合约地址</span>
-          <span class="value">TR7NHq...gjLj6t</span>
-        </div>
-      </div>
-
-      <!-- 底部分享按钮 -->
-      <div class="recharge-share-wrap">
-        <button class="recharge-share-btn" id="recharge-share-btn">分享充币详情</button>
       </div>
     </div>
 
@@ -13671,64 +13866,40 @@
         </div>
       </div>
 
-      <!-- USDT 货币卡 -->
+      <!-- ⭐ F6(MVP 1):提币页改造为"联系客服跳转"
+           原因:MVP 1 决策 "USDT 链接 + 人工客服" 模式
+           原 USDT 提币 UI(地址/数量/手续费/详情) 已整段移除
+           等 MVP 2 接入链上提币时,从 git 历史里取回原 UI -->
       <div class="recharge-currency">
         <span class="usdt-icon">₮</span>
-        <span class="name">USDT</span>
+        <span class="name">记分牌</span>
       </div>
 
-      <!-- 提币地址 -->
-      <div class="withdraw-input-block">
-        <div class="withdraw-input-label">提币地址</div>
-        <input type="text" class="withdraw-input" id="withdraw-addr-input" placeholder="点击输入">
-      </div>
-
-      <!-- 主网 -->
-      <div class="withdraw-input-block">
-        <div class="withdraw-input-label">主网</div>
-        <input type="text" class="withdraw-input readonly" value="TRON-TRC20" readonly>
-      </div>
-
-      <!-- 数量 -->
-      <div class="withdraw-input-block">
-        <div class="withdraw-input-label">数量</div>
-        <div class="withdraw-amount-wrap">
-          <input type="number" class="withdraw-input" id="withdraw-amount-input" placeholder="点击输入数量...">
-          <div class="withdraw-amount-suffix">
-            <span>USDT</span>
-            <span class="withdraw-max-btn" id="withdraw-max-btn">最大</span>
-          </div>
+      <div class="recharge-contact-wrap">
+        <div class="recharge-contact-icon">💬</div>
+        <div class="recharge-contact-title">联系俱乐部客服提币</div>
+        <div class="recharge-contact-desc">
+          MVP 内测期间,所有提币通过俱乐部客服人工处理。<br>
+          请点击下方按钮联系客服,提供您的 ID、提币金额和收款地址,
+          客服核对后将以 USDT 方式发送到您的钱包。
         </div>
-      </div>
+        <button class="recharge-contact-btn" id="withdraw-contact-btn">
+          <span class="recharge-contact-btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+            </svg>
+          </span>
+          联系客服
+        </button>
+        <div class="recharge-contact-tip">
+          客服 Telegram:<span class="recharge-contact-handle">@your_service</span><br>
+          <span class="recharge-contact-tip-small">(占位,上线前替换为真实客服账号)</span>
+        </div>
 
-      <!-- 详情列表 -->
-      <div class="recharge-detail">
-        <div class="recharge-detail-row">
-          <span class="label">可提资产</span>
-          <span class="value" id="withdraw-balance">0</span>
+        <!-- 橙色警示(保留原文,防诈骗提醒) -->
+        <div class="recharge-warn" style="margin-top:16px;">
+          注意:AAGame官方不会在任何情况下要求你转账,也不会向你索要验证码,谨防网络诈骗。请不要参与代买、洗钱、非法集资等违法行为。
         </div>
-        <div class="recharge-detail-row">
-          <span class="label">手续费</span>
-          <span class="value">3.5 USDT</span>
-        </div>
-        <div class="recharge-detail-row">
-          <span class="label">最小提币额</span>
-          <span class="value">10 USDT</span>
-        </div>
-        <div class="recharge-detail-row">
-          <span class="label">到账时间</span>
-          <span class="value">1-10分钟</span>
-        </div>
-      </div>
-
-      <!-- 橙色警示 -->
-      <div class="recharge-warn">
-        注意:AAGame官方不会在任何情况下要求你转账,也不会向你索要验证码,谨防网络诈骗。请不要参与代买、洗钱、非法集资等违法行为。
-      </div>
-
-      <!-- 底部提币按钮 -->
-      <div class="withdraw-submit-wrap">
-        <button class="withdraw-submit-btn" id="withdraw-submit-btn">提币</button>
       </div>
     </div>
 
@@ -14755,10 +14926,10 @@
         <span class="transfer-close" id="transfer-close">✕</span>
       </div>
 
-      <!-- 货币选择(USDT) -->
+      <!-- 货币选择(记分牌) -->
       <div class="transfer-currency-row">
         <span class="usdt-icon">₮</span>
-        <span class="name">USDT</span>
+        <span class="name">记分牌</span>
         <span class="arrow">›</span>
       </div>
 
@@ -14862,10 +15033,10 @@
         <span class="mt-title">向 <span id="mt-target-name">-</span> 转币</span>
         <span class="mt-close" id="mt-close">✕</span>
       </div>
-      <!-- 币种选择行(目前只有USDT,>是占位) -->
+      <!-- 币种选择行(目前只有记分牌,>是占位) -->
       <div class="mt-coin-row">
         <span class="mt-coin-icon">₮</span>
-        <span class="mt-coin-name">USDT</span>
+        <span class="mt-coin-name">记分牌</span>
         <span class="mt-coin-arrow">›</span>
       </div>
       <!-- 数量行 -->
@@ -14986,7 +15157,7 @@
     return Object.assign({
       // 牌局信息弹窗需要的额外字段
       roomCode: '562#' + Math.random().toString(16).substring(2, 12).toUpperCase(),
-      currency: 'USDT',
+      currency: '记分牌',
       buyinRange: (buyin) + '-' + (buyin * 3),
       seatTotal: 7,
       duration: '1.5h',
@@ -14994,8 +15165,8 @@
       autoStart: isShort ? 2 : 3,
       poolLimit: '无限制',
       forceGrab: '已开启',
-      payPublic: '0.05USDT',
-      payHand: '0.05USDT',
+      payPublic: '0.05',
+      payHand: '0.05',
       maxBuyins: 100  // ⭐ v2.18.6 最大买入个数(开桌时设置,后端推送)
     }, opts);
   }
@@ -31843,8 +32014,8 @@
     uid: '1001941'
   };
 
-  // ========== 全平台 USDT 余额(全局共用) ==========
-  // 业务方案B:全平台统一USDT,所有俱乐部共用这一个余额
+  // ========== 全平台记分牌余额(全局共用) ==========
+  // 业务方案B:全平台统一记分牌,所有俱乐部共用这一个余额
   // 真实业务:从后端 /api/user/balance 获取
   // 大厅页/我的页/提币页/充币后 都从这里读取或更新
   let userPlatformBalance = 0;
@@ -31909,7 +32080,7 @@
     clubRooms[clubId] = clubRooms[clubId].map(r => makeRoom(r));
   });
 
-  // 俱乐部币(USDT)图标 - 用于俱乐部行
+  // 俱乐部币(记分牌)图标 - 用于俱乐部行
   const ICON_USDT = '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--green-usdt);color:#fff;font-size:12px;font-weight:700;">₮</span>';
 
   // 渲染俱乐部列表
@@ -31969,8 +32140,8 @@
         <text x="32" y="48" text-anchor="middle" fill="white" font-size="9">★★★</text>
       </svg>`;
     }
-    // 名字 + ID + 成员数 + 全平台 USDT 余额
-    // (业务方案B:不再有俱乐部币,所有俱乐部共用平台 USDT 余额)
+    // 名字 + ID + 成员数 + 全平台记分牌余额
+    // (业务方案B:不再有俱乐部币,所有俱乐部共用平台记分牌余额)
     document.getElementById('lobby-name').textContent = club.name;
     document.getElementById('lobby-id').textContent = club.id;
     // 成员数显示真实数据(过滤黑名单)
@@ -32055,7 +32226,7 @@
     });
   }
 
-  // 大厅页 USDT 显示/隐藏切换
+  // 大厅页 记分牌 显示/隐藏切换
   const eyeToggle = document.getElementById('lobby-eye-toggle');
   if (eyeToggle) {
     eyeToggle.addEventListener('click', () => {
@@ -32532,7 +32703,7 @@
 
   // ========== 大厅页 充币/提币 按钮 ==========
   // 直接跳转到平台统一的充币页/提币页
-  // (业务方案B:全平台统一USDT,删除原来的"申请发放/回收"机制)
+  // (业务方案B:全平台统一记分牌,删除原来的"申请发放/回收"机制)
   const lobbyDepositBtn = document.getElementById('lobby-deposit-btn');
   const lobbyWithdrawBtn = document.getElementById('lobby-withdraw-btn');
   if (lobbyDepositBtn) {
@@ -32863,7 +33034,7 @@
         <span class="clubacc-asset-tab-label">${tab}</span>
         <div class="clubacc-asset-left">
           <span class="usdt-icon">₮</span>
-          <span class="clubacc-asset-name">USDT</span>
+          <span class="clubacc-asset-name">记分牌</span>
         </div>
         <div class="clubacc-asset-amount">${amount}</div>
       </div>
@@ -32960,7 +33131,7 @@
   const transferConfirm = document.getElementById('transfer-confirm');
 
   // 各账户余额(假数据,真实业务从后端获取)
-  // 资产 = 用户的全平台 USDT 余额
+  // 资产 = 用户的全平台记分牌余额
   // 金库 = 俱乐部金库余额(收抽水/保险)
   // Jackpot = 俱乐部 Jackpot 池(中奖支出用)
   // 总管理 = 俱乐部主指定的总管理账号(俱乐部主自己)
@@ -33820,7 +33991,7 @@
     // 等后端:替换为转账 API,等到账确认后再更新
     userPlatformBalance = (userPlatformBalance || 0) - amt;
     currentTransferTarget.balance = (currentTransferTarget.balance || 0) + amt;
-    showToast(`已向 ${currentTransferTarget.name} 转出 ${amt} USDT(等后端到账确认)`);
+    showToast(`已向 ${currentTransferTarget.name} 转出 ${amt} 记分牌(等后端到账确认)`);
     closeMemberTransferModal();
     // 刷新可能受影响的 UI(余额展示)
     if (typeof updateLobbyBalance === 'function') updateLobbyBalance();
@@ -34813,7 +34984,7 @@
             document.getElementById('info-type').textContent = r.type || '-';
             document.getElementById('info-name').textContent = r.name || '-';
             document.getElementById('info-code').textContent = r.roomCode || '-';
-            document.getElementById('info-currency').textContent = r.currency || 'USDT';
+            document.getElementById('info-currency').textContent = r.currency || '记分牌';
             document.getElementById('info-blinds').textContent = r.blinds || '-';
             document.getElementById('info-buyin').textContent = r.buyinRange || '-';
             document.getElementById('info-seats').textContent = r.seatTotal || r.total || 7;
@@ -35221,6 +35392,37 @@
     });
   }
 
+  // ⭐ F5(MVP 1) 充值页"联系客服"按钮
+  // 真实业务:跳转到俱乐部客服 Telegram(t.me/your_service)
+  // 现阶段:占位 toast,等上线前替换为真实客服账号
+  const rechargeContactBtn = document.getElementById('recharge-contact-btn');
+  if (rechargeContactBtn) {
+    rechargeContactBtn.addEventListener('click', () => {
+      // MVP 上线时把 @your_service 替换为真实客服 Telegram 用户名
+      const serviceHandle = '@your_service';
+      // 优先用 Telegram Mini App API 打开私聊(脱离 WebView 跳 Telegram 原生)
+      if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+        window.Telegram.WebApp.openTelegramLink('https://t.me/' + serviceHandle.replace('@', ''));
+      } else {
+        // 浏览器测试兜底:开新标签
+        window.open('https://t.me/' + serviceHandle.replace('@', ''), '_blank');
+      }
+    });
+  }
+
+  // ⭐ F6(MVP 1) 提币页"联系客服"按钮(同 F5)
+  const withdrawContactBtn = document.getElementById('withdraw-contact-btn');
+  if (withdrawContactBtn) {
+    withdrawContactBtn.addEventListener('click', () => {
+      const serviceHandle = '@your_service';
+      if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+        window.Telegram.WebApp.openTelegramLink('https://t.me/' + serviceHandle.replace('@', ''));
+      } else {
+        window.open('https://t.me/' + serviceHandle.replace('@', ''), '_blank');
+      }
+    });
+  }
+
   // 右上历史图标 → 跳账单页(默认打开"充币" Tab)
   const rechargeHistoryBtn = document.getElementById('recharge-history-btn');
   if (rechargeHistoryBtn) {
@@ -35239,7 +35441,7 @@
   });
 
   // ========== 提币页 ==========
-  // 当前用户的全平台 USDT 余额(大厅页/提币页/我的页 共用)
+  // 当前用户的全平台记分牌余额(大厅页/提币页/我的页 共用)
   // 真实业务:从后端获取
   // 改余额时调用 setUserPlatformBalance() 让所有地方同步刷新
   const withdrawAddrInput = document.getElementById('withdraw-addr-input');
@@ -35297,7 +35499,7 @@
         return;
       }
       if (amount < 10) {
-        showToast('最小提币额为 10 USDT');
+        showToast('最小提币额为 10 记分牌');
         return;
       }
       if (amount > userPlatformBalance) {
@@ -35311,25 +35513,25 @@
 
   // ========== 个人账单页 ==========
   // 4 个 Tab 的假数据(真实业务:从后端按 Tab 类型分页拉取)
-  // 充币:USDT 充值流水(链上 → 平台余额)
-  // 提币:USDT 提现流水(平台余额 → 链上),含审核中/失败状态
+  // 充币:记分牌充值流水(客服人工 → 平台余额) ⭐ F4 改造
+  // 提币:记分牌提现流水(平台余额 → 客服人工),含审核中/失败状态 ⭐ F4 改造
   // 消耗:玩家牌局输赢(每局对应一条,正数为赢、负数为输)
   // Jackpot:中奖记录(击中大牌奖励,牌型 + 奖金)
   const billData = {
     '充币': [
-      { name: 'USDT', time: '2026-05-16 14:53:01', amount: '1000.0', status: 'success' },
-      { name: 'USDT', time: '2026-05-16 06:53:01', amount: '20.0',   status: 'success' },
-      { name: 'USDT', time: '2026-05-16 06:15:47', amount: '1000.0', status: 'success' },
-      { name: 'USDT', time: '2026-05-16 01:55:07', amount: '500.0',  status: 'success' },
-      { name: 'USDT', time: '2026-05-15 19:30:38', amount: '300.0',  status: 'success' },
-      { name: 'USDT', time: '2026-05-15 19:25:13', amount: '200.0',  status: 'success' }
+      { name: '记分牌', time: '2026-05-16 14:53:01', amount: '1000.0', status: 'success' },
+      { name: '记分牌', time: '2026-05-16 06:53:01', amount: '20.0',   status: 'success' },
+      { name: '记分牌', time: '2026-05-16 06:15:47', amount: '1000.0', status: 'success' },
+      { name: '记分牌', time: '2026-05-16 01:55:07', amount: '500.0',  status: 'success' },
+      { name: '记分牌', time: '2026-05-15 19:30:38', amount: '300.0',  status: 'success' },
+      { name: '记分牌', time: '2026-05-15 19:25:13', amount: '200.0',  status: 'success' }
     ],
     '提币': [
-      { name: 'USDT', time: '2026-05-18 22:10:33', amount: '-500.0', status: 'success' },
-      { name: 'USDT', time: '2026-05-18 18:45:12', amount: '-200.0', status: 'pending', statusText: '审核中' },
-      { name: 'USDT', time: '2026-05-17 09:22:08', amount: '-1000.0', status: 'success' },
-      { name: 'USDT', time: '2026-05-16 11:08:55', amount: '-50.0',  status: 'failed', statusText: '失败' },
-      { name: 'USDT', time: '2026-05-15 23:17:41', amount: '-300.0', status: 'success' }
+      { name: '记分牌', time: '2026-05-18 22:10:33', amount: '-500.0', status: 'success' },
+      { name: '记分牌', time: '2026-05-18 18:45:12', amount: '-200.0', status: 'pending', statusText: '审核中' },
+      { name: '记分牌', time: '2026-05-17 09:22:08', amount: '-1000.0', status: 'success' },
+      { name: '记分牌', time: '2026-05-16 11:08:55', amount: '-50.0',  status: 'failed', statusText: '失败' },
+      { name: '记分牌', time: '2026-05-15 23:17:41', amount: '-300.0', status: 'success' }
     ],
     '消耗': [
       { name: '长牌 NL100', time: '2026-05-18 23:45:12', amount: '+125.5', status: 'success', statusText: '已结算' },
@@ -36525,6 +36727,304 @@
     // Telegram WebView 在 expand 后视口尺寸变化,200ms 后再算一次
     setTimeout(fitScreen, 200);
   })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⭐ N6.1 假哈希生成函数(MVP 1 仪式感,非真 SHA-256)
+  // ───────────────────────────────────────────────────────────────────────
+  // 业务说明:
+  //   - MVP 1 阶段:服务端发牌 + 前端展示假哈希字符串,作为"洗牌公平"的仪式感
+  //   - MVP 2 才做真哈希预提交(加密洗牌 + SHA-256 + 玩家可验证)
+  //   - 本函数返回的是格式正确的 64 位 16 进制字符串(仿 SHA-256 输出),
+  //     但内容是 Math.random() 拼出来的,不具备密码学性质
+  //
+  // 后续依赖:
+  //   - N6.2 右上角 Hash 短显示(前 4 后 4)
+  //   - N6.3 验证弹窗"牌序列 Hash"读 window.currentHandHash
+  //   - N6.4 洗牌动画结束后调用 startNewHandHash() 触发新 Hash
+  //   - N6.5 DEV 切换器"新一手"按钮触发
+  // ═══════════════════════════════════════════════════════════════════════
+  (function setupFakeHash() {
+    'use strict';
+
+    // 生成 64 位 16 进制字符串(8 段 × 8 字符 = 64 字符,仿 SHA-256 长度)
+    function generateFakeHash() {
+      const segments = [];
+      for (let i = 0; i < 8; i++) {
+        // 每段 8 位 16 进制 = 32 bit
+        // Math.random() * 0xffffffff,toString(16),padStart 到 8 位
+        const seg = Math.floor(Math.random() * 0x100000000).toString(16).padStart(8, '0');
+        segments.push(seg);
+      }
+      return segments.join('');
+    }
+
+    // 生成手牌 ID(对照截图风格:H30199-1 这种)
+    // 规则:H + 5 位随机数字 + - + 局内手数(默认 1,后续可由调用方覆写)
+    let handCounter = 0;
+    function generateHandId() {
+      handCounter++;
+      // 5 位随机数(每个牌局会话内随机,看起来像服务端编号)
+      // 这里用一个会话级 base + counter,让同一会话内 ID 看起来连续
+      if (!window._handIdBase) {
+        window._handIdBase = 10000 + Math.floor(Math.random() * 89999);
+      }
+      return 'H' + window._handIdBase + '-' + handCounter;
+    }
+
+    // 触发新一手:生成 Hash + 手牌 ID,写入 window
+    function startNewHandHash() {
+      window.currentHandHash = generateFakeHash();
+      window.currentHandId = generateHandId();
+      // 派发自定义事件,后续 N6.2/N6.3 监听此事件刷新 UI
+      try {
+        window.dispatchEvent(new CustomEvent('aagame:hand-hash-updated', {
+          detail: {
+            hash: window.currentHandHash,
+            handId: window.currentHandId
+          }
+        }));
+      } catch (e) {
+        // 老浏览器 CustomEvent 兜底
+      }
+      return {
+        hash: window.currentHandHash,
+        handId: window.currentHandId
+      };
+    }
+
+    // 暴露到 window(N6.2-5 都会用)
+    window.generateFakeHash = generateFakeHash;
+    window.startNewHandHash = startNewHandHash;
+
+    // 页面加载时自动生成首份 Hash(让首次进入也有数据,不是 undefined)
+    startNewHandHash();
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⭐ N6.3 验证弹窗 Hash 联动
+  // ───────────────────────────────────────────────────────────────────────
+  // 业务说明:
+  //   - 把验证弹窗里 3 个静态占位元素改成读 window.currentHandHash / handId
+  //   - 监听 N6.1 派发的 aagame:hand-hash-updated 事件,自动刷新
+  //   - 打开弹窗那一刻也同步一次(防御:首次打开还是 HTML 静态占位的情况)
+  //
+  // 不动:
+  //   - 弹窗布局/样式/按钮/帮助文字/公布牌序列(那是后端的事)
+  // ═══════════════════════════════════════════════════════════════════════
+  (function setupHashUiSync() {
+    'use strict';
+
+    // 同步函数:把 window 当前的 Hash/handId 写到所有相关 DOM
+    function syncHashUi() {
+      const hash = window.currentHandHash;
+      const handId = window.currentHandId;
+      if (!hash || !handId) return;
+
+      // 1) 验证洗牌弹窗里"牌序列 Hash"
+      const vmHash = document.getElementById('vm-hash-text');
+      if (vmHash) vmHash.textContent = hash;
+
+      // 2) 验证洗牌弹窗顶部"牌局 ID"
+      const vmGameId = document.getElementById('vm-game-id');
+      if (vmGameId) vmGameId.textContent = handId;
+
+      // 3) 验证牌局子弹窗顶部"牌局 ID"
+      const vgGameId = document.getElementById('vg-game-id');
+      if (vgGameId) vgGameId.textContent = handId;
+    }
+
+    // 监听新一手事件:N6.1 / N6.4 / N6.5 触发 startNewHandHash 时自动刷新
+    window.addEventListener('aagame:hand-hash-updated', syncHashUi);
+
+    // 打开验证弹窗时立刻同步一次(防御:DOM 上还是静态占位的极端情况)
+    // 用 MutationObserver 监听 #verify-modal-mask 的 class 变化(show/hide)
+    function setupModalOpenHook() {
+      const verifyMask = document.getElementById('verify-modal-mask');
+      const vgMask = document.getElementById('vg-modal-mask');
+
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((m) => {
+          if (m.attributeName === 'class') {
+            const target = m.target;
+            if (target.classList.contains('show')) {
+              // 弹窗刚被打开,立即同步一次
+              syncHashUi();
+            }
+          }
+        });
+      });
+
+      if (verifyMask) {
+        observer.observe(verifyMask, { attributes: true, attributeFilter: ['class'] });
+      }
+      if (vgMask) {
+        observer.observe(vgMask, { attributes: true, attributeFilter: ['class'] });
+      }
+    }
+
+    // DOM 就绪后挂监听
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        syncHashUi();
+        setupModalOpenHook();
+      });
+    } else {
+      syncHashUi();
+      setupModalOpenHook();
+    }
+
+    // 暴露调试接口
+    window.syncHashUi = syncHashUi;
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⭐ N6.2 牌桌右上角 Hash 短码胶囊
+  // ───────────────────────────────────────────────────────────────────────
+  // 业务:
+  //   - 显示 Hash 前 4 + ... + 后 4(如 e818...f884)
+  //   - 点击 = 打开验证洗牌弹窗(复用 evidence-box 的入口逻辑)
+  //   - 监听 aagame:hand-hash-updated 事件自动刷新 + 短闪
+  //   - 同时刷新牌桌中央"#table-hand-no"(顺手联动,跟手牌 ID 保持一致)
+  // ═══════════════════════════════════════════════════════════════════════
+  (function setupHashChip() {
+    'use strict';
+
+    function shortenHash(hash) {
+      if (!hash || hash.length < 12) return '--------';
+      return hash.slice(0, 4) + '...' + hash.slice(-4);
+    }
+
+    function refreshHashChip() {
+      const chip = document.getElementById('hash-chip');
+      const chipText = document.getElementById('hash-chip-text');
+      const handNo = document.getElementById('table-hand-no');
+      if (!chip || !chipText) return;
+
+      chipText.textContent = shortenHash(window.currentHandHash);
+
+      // 牌桌中央 #table-hand-no 顺手联动,跟 currentHandId 一致
+      if (handNo && window.currentHandId) {
+        handNo.textContent = '#' + window.currentHandId;
+      }
+
+      // 短闪效果(去类再加,触发动画)
+      chip.classList.remove('refreshing');
+      void chip.offsetWidth;
+      chip.classList.add('refreshing');
+    }
+
+    function setupChip() {
+      const chip = document.getElementById('hash-chip');
+      if (!chip) return;
+
+      // 初始填充
+      refreshHashChip();
+
+      // 点击 = 打开验证洗牌弹窗(跟 evidence-box 一样)
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const verifyMask = document.getElementById('verify-modal-mask');
+        if (verifyMask) verifyMask.classList.add('show');
+      });
+    }
+
+    // 监听新一手事件 → 自动刷新
+    window.addEventListener('aagame:hand-hash-updated', refreshHashChip);
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupChip);
+    } else {
+      setupChip();
+    }
+
+    window.refreshHashChip = refreshHashChip;
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⭐ N6.4 洗牌动画占位(CSS 自绘版)
+  // ───────────────────────────────────────────────────────────────────────
+  // 接口:
+  //   window.playShuffleAnimation(callback)
+  //     - 显示 .shuffle-stage,跑 1500ms CSS 动画
+  //     - 动画结束自动 startNewHandHash() → N6.1 派发事件 → N6.2/N6.3 联动刷新
+  //     - 可选 callback 在动画结束后再调
+  //
+  // 未来素材就绪后替换路径:
+  //   1. .shuffle-stage 里换成 <img src="shuffle.apng">
+  //   2. CSS 删 .shuffle-card-* / @keyframes shuffleCard*
+  //   3. JS 保留,只是 stage 内容换了
+  // ═══════════════════════════════════════════════════════════════════════
+  (function setupShuffleAnimation() {
+    'use strict';
+
+    const SHUFFLE_DURATION = 1500;
+    let playing = false;
+
+    function playShuffleAnimation(callback) {
+      const stage = document.getElementById('shuffle-stage');
+      if (!stage) {
+        // 没找到 DOM,直接调 hash 刷新和 callback
+        if (typeof window.startNewHandHash === 'function') window.startNewHandHash();
+        if (typeof callback === 'function') callback();
+        return;
+      }
+      if (playing) return;  // 防止重叠触发
+      playing = true;
+
+      // 显示 + 启动动画
+      stage.classList.remove('hidden');
+      void stage.offsetWidth;  // 强制 reflow,确保 .playing 触发动画
+      stage.classList.add('playing');
+
+      setTimeout(() => {
+        // 动画结束:隐藏 + 触发新 Hash
+        stage.classList.remove('playing');
+        stage.classList.add('hidden');
+        playing = false;
+        if (typeof window.startNewHandHash === 'function') window.startNewHandHash();
+        if (typeof callback === 'function') callback();
+      }, SHUFFLE_DURATION);
+    }
+
+    window.playShuffleAnimation = playShuffleAnimation;
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⭐ N6.5 DEV 切换器"新一手"按钮 hook
+  // ───────────────────────────────────────────────────────────────────────
+  // 复用现有 #dev-new-hand 按钮(▶ 新一手(全重置)),不新增按钮
+  // 用 addEventListener 附加新行为(不替换原 fullResetTable 监听):
+  //   原有行为:fullResetTable() + flash + toast
+  //   新增行为:playShuffleAnimation() → startNewHandHash() → 联动刷新
+  // ═══════════════════════════════════════════════════════════════════════
+  (function hookDevNewHand() {
+    'use strict';
+
+    function attachHook() {
+      const btn = document.getElementById('dev-new-hand');
+      if (!btn) return;
+      // 防重复挂载
+      if (btn.dataset.n6Hooked === '1') return;
+      btn.dataset.n6Hooked = '1';
+
+      btn.addEventListener('click', () => {
+        // 跑洗牌动画 + 生成新 Hash(原 fullResetTable 已被另一个 listener 处理)
+        if (typeof window.playShuffleAnimation === 'function') {
+          window.playShuffleAnimation();
+        } else if (typeof window.startNewHandHash === 'function') {
+          // 兜底:没动画也至少生成新 Hash
+          window.startNewHandHash();
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', attachHook);
+    } else {
+      attachHook();
+    }
+  })();
+
 </script>
 
 </body>

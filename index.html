@@ -922,6 +922,21 @@
     font-weight: 700;
     font-size: 20px;
     flex-shrink: 0;
+    overflow: hidden;       /* ⭐ F2:图片头像时裁圆 */
+    position: relative;
+  }
+  /* ⭐ F2 头像图片模式:有 Telegram photoUrl 时 .me-avatar.has-img + 内嵌 <img> */
+  .me-avatar.has-img {
+    background: #2a2a4e;     /* 图片加载前的占位底色 */
+  }
+  .me-avatar.has-img > .me-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .me-avatar.has-img > .me-avatar-text {
+    display: none;           /* 有图时隐藏文字 */
   }
   .me-info { flex: 1; }
   .me-name {
@@ -10025,6 +10040,23 @@
     justify-content: center;
     position: relative;
     color: rgba(255,255,255,0.6);
+    overflow: hidden;       /* ⭐ F2:图片头像时裁圆 */
+  }
+  /* ⭐ F2 个人信息页头像图片模式 */
+  .profile-avatar.has-img > .profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .profile-avatar.has-img > svg.silhouette,
+  .profile-avatar.has-img > .profile-avatar-text {
+    display: none;
+  }
+  .profile-avatar-text {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--white);
   }
   .profile-avatar svg.silhouette { width: 50px; height: 50px; }
   .profile-avatar-cam {
@@ -11905,7 +11937,10 @@
         </div>
 
         <div class="me-user">
-          <div class="me-avatar">HB</div>
+          <div class="me-avatar">
+            <span class="me-avatar-text">HB</span>
+            <img class="me-avatar-img" alt="" style="display:none;">
+          </div>
           <div class="me-info">
             <div class="me-name">HB华强</div>
             <div class="me-uid">
@@ -13842,8 +13877,7 @@
           联系客服
         </button>
         <div class="recharge-contact-tip">
-          客服 Telegram:<span class="recharge-contact-handle">@your_service</span><br>
-          <span class="recharge-contact-tip-small">(占位,上线前替换为真实客服账号)</span>
+          客服 Telegram:<span class="recharge-contact-handle">@aapkkf</span>
         </div>
       </div>
     </div>
@@ -13892,8 +13926,7 @@
           联系客服
         </button>
         <div class="recharge-contact-tip">
-          客服 Telegram:<span class="recharge-contact-handle">@your_service</span><br>
-          <span class="recharge-contact-tip-small">(占位,上线前替换为真实客服账号)</span>
+          客服 Telegram:<span class="recharge-contact-handle">@aapkkf</span>
         </div>
 
         <!-- 橙色警示(保留原文,防诈骗提醒) -->
@@ -14247,6 +14280,8 @@
           <svg class="silhouette" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 12a5 5 0 100-10 5 5 0 000 10zM12 14c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z"/>
           </svg>
+          <span class="profile-avatar-text" style="display:none;"></span>
+          <img class="profile-avatar-img" alt="" style="display:none;">
           <div class="profile-avatar-cam">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
@@ -35393,13 +35428,11 @@
   }
 
   // ⭐ F5(MVP 1) 充值页"联系客服"按钮
-  // 真实业务:跳转到俱乐部客服 Telegram(t.me/your_service)
-  // 现阶段:占位 toast,等上线前替换为真实客服账号
+  // 业务:跳转到俱乐部客服 Telegram(t.me/aapkkf)
   const rechargeContactBtn = document.getElementById('recharge-contact-btn');
   if (rechargeContactBtn) {
     rechargeContactBtn.addEventListener('click', () => {
-      // MVP 上线时把 @your_service 替换为真实客服 Telegram 用户名
-      const serviceHandle = '@your_service';
+      const serviceHandle = '@aapkkf';
       // 优先用 Telegram Mini App API 打开私聊(脱离 WebView 跳 Telegram 原生)
       if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
         window.Telegram.WebApp.openTelegramLink('https://t.me/' + serviceHandle.replace('@', ''));
@@ -35414,7 +35447,7 @@
   const withdrawContactBtn = document.getElementById('withdraw-contact-btn');
   if (withdrawContactBtn) {
     withdrawContactBtn.addEventListener('click', () => {
-      const serviceHandle = '@your_service';
+      const serviceHandle = '@aapkkf';
       if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
         window.Telegram.WebApp.openTelegramLink('https://t.me/' + serviceHandle.replace('@', ''));
       } else {
@@ -36655,15 +36688,40 @@
           mySeatNameChip.textContent = u.name;
         }
       }
-      // 2. 我的页:.me-name 昵称 + .me-avatar 头像字符 + .me-uid Telegram ID(如果有)
+      // 2. 我的页:.me-name 昵称 + .me-avatar 头像 + .me-uid Telegram ID
       document.querySelectorAll('.me-name').forEach(el => { el.textContent = u.name; });
+
+      // ⭐ F2 头像处理:有 photoUrl 用图片,没有用首字符
       document.querySelectorAll('.me-avatar').forEach(el => {
-        // 演示模式 'HB' 双字符,Telegram 用户首字符
-        if (u.source === 'telegram') {
-          el.textContent = u.avatar;
+        const textEl = el.querySelector('.me-avatar-text');
+        const imgEl = el.querySelector('.me-avatar-img');
+        if (u.photoUrl && imgEl) {
+          // Telegram 头像图片模式
+          imgEl.src = u.photoUrl;
+          imgEl.style.display = 'block';
+          if (textEl) textEl.style.display = 'none';
+          el.classList.add('has-img');
+          // 图片加载失败回退到首字符
+          imgEl.onerror = function() {
+            imgEl.style.display = 'none';
+            if (textEl) {
+              textEl.style.display = '';
+              textEl.textContent = u.avatar;
+            }
+            el.classList.remove('has-img');
+          };
+        } else if (textEl) {
+          // 首字符兜底
+          textEl.style.display = '';
+          if (imgEl) imgEl.style.display = 'none';
+          el.classList.remove('has-img');
+          // 演示模式保留 'HB' 写死,Telegram 用户首字符
+          if (u.source === 'telegram') {
+            textEl.textContent = u.avatar;
+          }
         }
-        // 演示模式保留原样('HB' 写死在 HTML)
       });
+
       // me-uid 文本"ID: 1001941" → Telegram 真实 ID(保留前缀 + 复制图标)
       if (u.source === 'telegram' && u.telegramId) {
         document.querySelectorAll('.me-uid').forEach(el => {
@@ -36677,9 +36735,49 @@
         const idEl = document.getElementById('profile-id-value');
         if (idEl) idEl.textContent = String(u.telegramId);
       }
+
+      // ⭐ F3 个人信息页"昵称"字段同步
+      const profileNickEl = document.getElementById('profile-nick-value');
+      if (profileNickEl) {
+        profileNickEl.textContent = u.name;
+      }
+
+      // ⭐ F2 个人信息页头像同步(同 me-avatar 双模式)
+      const profileAvatar = document.querySelector('.profile-avatar');
+      if (profileAvatar) {
+        const silhouette = profileAvatar.querySelector('svg.silhouette');
+        const textEl = profileAvatar.querySelector('.profile-avatar-text');
+        const imgEl = profileAvatar.querySelector('.profile-avatar-img');
+        if (u.photoUrl && imgEl) {
+          imgEl.src = u.photoUrl;
+          imgEl.style.display = 'block';
+          if (silhouette) silhouette.style.display = 'none';
+          if (textEl) textEl.style.display = 'none';
+          profileAvatar.classList.add('has-img');
+          imgEl.onerror = function() {
+            imgEl.style.display = 'none';
+            if (textEl) {
+              textEl.style.display = '';
+              textEl.textContent = u.avatar;
+            }
+            if (silhouette) silhouette.style.display = 'none';
+            profileAvatar.classList.remove('has-img');
+          };
+        } else if (u.source === 'telegram' && textEl) {
+          // Telegram 用户没头像:用首字符替代剪影 SVG
+          if (silhouette) silhouette.style.display = 'none';
+          if (imgEl) imgEl.style.display = 'none';
+          textEl.style.display = '';
+          textEl.textContent = u.avatar;
+          profileAvatar.classList.remove('has-img');
+        }
+        // 演示模式保留原剪影 SVG,不改
+      }
+
       // 3. 兜底全局变量(以后接入更多位置时用)
       window.MY_NAME = u.name;
       window.MY_AVATAR = u.avatar;
+      window.MY_PHOTO_URL = u.photoUrl;
     }
     // 立即同步一次
     syncCurrentUserToUI();

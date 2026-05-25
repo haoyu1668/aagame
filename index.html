@@ -12446,7 +12446,7 @@
             <div class="card red" data-suit="♦"><span class="rank">10</span><span class="suit">♦</span></div>
           </div>
         </div>
-        <div class="seat-name-chip">伯恩 ♥</div>
+        <div class="seat-name-chip">DEMO</div>
         <div class="seat-chips">1.4K</div>
       </div>
 
@@ -18600,7 +18600,7 @@
         { seatId: 's6', name: 'Breeze',    avatar: 'B', chips: 1470 },
         { seatId: 's7', name: 'Occan...',  avatar: 'O', chips: 950 },
         { seatId: 's8', name: '贝加岭',    avatar: '贝', chips: 1880 },
-        { seatId: 'my', name: '伯恩',     avatar: '伯', chips: 2000, isMe: true }
+        { seatId: 'my', name: 'DEMO',     avatar: 'D', chips: 2000, isMe: true }
       ];
 
 // ⭐ v2.28.3 新增:dealer 每手顺时针轮换(C2 决策)
@@ -27455,7 +27455,7 @@
     // ⭐ v2.28.58:'my' 改为从 window.currentUser 取(Telegram 用户真实身份 / 演示兜底"伯恩")
     if (seatId === 'my') {
       const u = window.currentUser || {};
-      return { name: u.name || '伯恩', avatar: u.avatar || '伯' };
+      return { name: u.name || 'DEMO', avatar: u.avatar || 'D' };
     }
     const lookup = window._historyPlayerLookup || {};
     return lookup[seatId] || { name: seatId, avatar: seatId.toUpperCase() };
@@ -36608,7 +36608,7 @@
   // ════════════════════════════════════════════════════════════════════════
   // 用途:把 initData 发到后端验签,拿 JWT token,后续接口带 Bearer
   // 流程:Telegram.WebApp.initData → POST /api/auth/telegram → {token, user} → localStorage
-  // 失败降级:网络/后端不通 → 保留 demo 兜底"伯恩"(本地 UI 仍可看)
+  // 失败降级:网络/后端不通 → 保留 demo 兜底"DEMO"(本地 UI 仍可看)
   // ════════════════════════════════════════════════════════════════════════
 
   // 后端域名(MVP 1 阶段硬编码;以后切多环境再做 hostname 探测)
@@ -36707,7 +36707,7 @@
   // ⭐ v2.28.58 / v2.28.68 改造:Telegram 用户身份接入
   //   - v2.28.58 旧版:读 initDataUnsafe.user(前端可伪造)直接渲染
   //   - v2.28.68 新版:把 initData 发后端验签 → 拿后端返回的 user(真实身份)
-  //   - 失败降级:网络错/后端不通/浏览器打开 → 保留默认"伯恩"兜底
+  //   - 失败降级:网络错/后端不通/浏览器打开 → 保留默认"DEMO"兜底
   //   - 异步流程:UI 先渲染 demo 兜底,登录成功后再 syncCurrentUserToUI() 覆盖
   // ════════════════════════════════════════════════════════════════════════
   (function setupAppScale() {
@@ -36733,17 +36733,17 @@
 
     // ⭐ v2.28.58 当前用户身份模块(currentUser 单例)
     //   - 任何需要显示"我"的名字/头像的地方,都从 window.currentUser 拿
-    //   - 默认值兜底:"伯恩 ♥"(浏览器演示场景)
+    //   - 默认值兜底:"DEMO"(浏览器演示场景)— v2.28.68 改:旧默认"伯恩 ♥"
     //   - Telegram 里打开:用真实 user 覆盖
     //   - 头像策略:Telegram 头像 URL 存到 photoUrl,但 my-seat 本来就没头像位置 → 仅用于以后扩展(如行动历史/玩家弹窗)
     window.currentUser = {
-      name: '伯恩',           // 显示名(seat-name-chip 文本)
-      avatar: '伯',            // 单字头像(座位列表/历史/玩家弹窗用)
-      avatarChar: '♥',         // 名字后的小符号(原"伯恩 ♥"那个红心)
+      name: 'DEMO',           // 显示名(seat-name-chip 文本)— v2.28.68 改:旧默认"伯恩"
+      avatar: 'D',             // 单字头像(座位列表/历史/玩家弹窗用)— v2.28.68 改:旧默认"伯"
+      avatarChar: '',          // 名字后的小符号 — v2.28.68 改:DEMO 不带符号,旧默认"♥"
       telegramId: null,        // Telegram 数字 ID
       username: null,          // Telegram @ 用户名
       photoUrl: null,          // Telegram 头像 URL(高清,80x80)
-      source: 'demo'           // 'demo' | 'telegram'(标记数据来源)
+      source: 'demo'           // 'demo' | 'telegram_verified'(标记数据来源)
     };
 
     // 尝试从 Telegram 拿真实身份(v2.28.68 改造:走后端验签)
@@ -36787,18 +36787,18 @@
           });
         }).catch(function(err) {
           // 验签失败:网络错/后端 401/后端 500
-          //   保留 demo 兜底"伯恩",用户仍能看 UI(降级策略)
+          //   保留 demo 兜底"DEMO",用户仍能看 UI(降级策略)
           //   清掉旧 token(可能是过期的)
           console.warn('[user] ⚠️ Telegram 后端验签失败,保留演示兜底:', err.message);
           window.tokenStore.clear();
         });
       } else {
         // Telegram 内打开但读不到 initData(老版本 / 非 Mini App 模式)
-        console.log('[user] Telegram 内打开但没有 initData,保留演示兜底"伯恩"');
+        console.log('[user] Telegram 内打开但没有 initData,保留演示兜底"DEMO"');
       }
     } else {
       // 浏览器里打开 → 完全降级到 demo,不调后端
-      console.log('[user] 浏览器打开(非 Telegram),保留演示兜底"伯恩"');
+      console.log('[user] 浏览器打开(非 Telegram),保留演示兜底"DEMO"');
     }
 
     // 同步到 UI:my-seat 的 seat-name-chip 文本 + 我的页 + 个人信息页
@@ -36808,8 +36808,9 @@
       // 1. my-seat 名字胶囊
       const mySeatNameChip = document.querySelector('.my-seat .seat-name-chip');
       if (mySeatNameChip) {
-        // 演示模式保留"伯恩 ♥"格式,Telegram 用户直接显示名字
-        if (u.source === 'demo') {
+        // v2.28.68:统一渲染逻辑 — 有 avatarChar(老 demo "伯恩 ♥" 格式)才拼接,否则只显示 name
+        // 新 demo 默认 "DEMO" 不带符号,Telegram 用户也不带 → 都走 mySeatNameChip.textContent = u.name
+        if (u.avatarChar) {
           mySeatNameChip.textContent = u.name + ' ' + u.avatarChar;
         } else {
           mySeatNameChip.textContent = u.name;

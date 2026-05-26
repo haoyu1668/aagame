@@ -12102,7 +12102,7 @@
       </div>
 
       <div class="join-club-page">
-        <input type="text" class="form-input" id="join-club-id" placeholder="输入俱乐部ID">
+        <input type="text" class="form-input" id="join-club-id" placeholder="输入邀请码" maxlength="16" autocapitalize="characters">
         <button class="btn-primary" id="btn-join-club">加入</button>
       </div>
     </div>
@@ -36607,56 +36607,112 @@
   }
 
   // ========== 加入俱乐部 ==========
-  // 模拟"全平台可加入的俱乐部"数据源(真实业务由后端 /api/club/lookup?id=xxx 返回)
+  // ════════════════════════════════════════════════════════════════════════
+  // ⭐ v2.28.74 N1:加入俱乐部接通后端(批次 4 第 3 颗子弹)
+  //   - Telegram 验证模式:输入 8 位邀请码 → POST /api/clubs/join
+  //   - demo 模式(浏览器):保留原 ALL_CLUBS_REGISTRY mock 5 位 ID 路径
+  //   - alreadyMember:true → toast"你已是成员"+ 跳俱乐部页
+  //   - 失败 → toast 显示后端 error
+  // ════════════════════════════════════════════════════════════════════════
+  // 模拟"全平台可加入的俱乐部"数据源(demo 模式专用 mock)
   // 当前已加入的 clubs (88888/94081/21104) 不在此列表(避免重复)
-  // 测试可加入 ID:12345 / 66666 / 77777
+  // demo 测试可加入 ID:12345 / 66666 / 77777
   const ALL_CLUBS_REGISTRY = {
     '12345': { id: '12345', name: '夜猫俱乐部',   coin: 0, rooms: 6,  members: 234, owner: false },
     '66666': { id: '66666', name: '黑桃A',         coin: 0, rooms: 12, members: 890, owner: false },
     '77777': { id: '77777', name: '新手训练营',   coin: 0, rooms: 4,  members: 156, owner: false }
-    // 真实业务:这个表由后端管理,前端通过 API 查
   };
 
   const joinBtn = document.getElementById('btn-join-club');
   const joinInput = document.getElementById('join-club-id');
   if (joinBtn && joinInput) {
-    joinBtn.addEventListener('click', () => {
-      const inputId = (joinInput.value || '').trim();
+    joinBtn.addEventListener('click', async () => {
+      const input = (joinInput.value || '').trim().toUpperCase();
 
-      // 1. 空校验
-      if (!inputId) {
-        showToast('请输入俱乐部 ID');
+      if (!input) {
+        showToast('请输入邀请码');
         return;
       }
 
-      // 2. 已加入校验
-      if (clubs.some(c => c.id === inputId)) {
-        showToast('你已加入该俱乐部');
+      // demo 模式:走原 ALL_CLUBS_REGISTRY mock 路径(浏览器演示场景)
+      const u = window.currentUser;
+      const isDemo = !u || u.source === 'demo' || !window.tokenStore || !window.tokenStore.get();
+      if (isDemo) {
+        // demo 模式接受 5 位俱乐部 ID(老 mock 数据)
+        if (clubs.some(c => c.id === input)) {
+          showToast('你已加入该俱乐部');
+          return;
+        }
+        const target = ALL_CLUBS_REGISTRY[input];
+        if (!target) {
+          showToast('俱乐部不存在');
+          return;
+        }
+        clubs.push({ ...target });
+        if (!clubRooms[input]) clubRooms[input] = [];
+        renderClubs();
+        joinInput.value = '';
+        showToast('加入成功');
+        showMainPage('club');
         return;
       }
 
-      // 3. 是否在全平台俱乐部库中
-      const target = ALL_CLUBS_REGISTRY[inputId];
-      if (!target) {
-        showToast('俱乐部不存在');
+      // Telegram 验证模式:走真后端 POST /api/clubs/join
+      // 弱校验:8 位 32 字符表(去 I/O/0/1),后端会再次强校验
+      if (!/^[A-HJ-NP-Z2-9]{8}$/.test(input)) {
+        showToast('邀请码格式不正确(8 位字母数字)');
         return;
       }
 
-      // 4. 加入成功
-      // 真实业务:这里要走"加入申请确认"流程(俱乐部如果开了申请确认开关,要等管理员审核)
-      // 现阶段简化:直接加入
-      clubs.push({ ...target });
-      // 同步建一个空 rooms 数组(房间数据等后端推)
-      if (!clubRooms[inputId]) clubRooms[inputId] = [];
-      renderClubs();
+      // 加载状态:禁用按钮 + 改文字
+      const origText = joinBtn.textContent;
+      joinBtn.disabled = true;
+      joinBtn.textContent = '加入中...';
+      joinBtn.style.opacity = '0.6';
 
-      // 清空输入框
-      joinInput.value = '';
+      try {
+        const resp = await window.apiClient.post('/api/clubs/join', { inviteCode: input });
+        const c = resp.club;
 
-      showToast('加入成功');
+        // 字段映射(同 F8/F10 规则)
+        const newClub = {
+          id: String(c.id),
+          name: c.name,
+          intro: '',                                  // join 接口不返 description
+          coin: 0,                                    // 等 B7 钱包接入
+          rooms: 0,                                   // 等 B8 牌桌
+          members: 1,                                 // 等"成员列表"接口
+          owner: c.myRole === 'admin'                 // 加入的人 role='member',这里通常 false
+        };
 
-      // 跳俱乐部主页(新加入的俱乐部会出现在列表)
-      showMainPage('club');
+        // 检查是否已在 clubs 数组(F10 刷新过的情况)
+        const existing = clubs.find(x => x.id === newClub.id);
+        if (!existing) {
+          clubs.push(newClub);
+          if (!clubRooms[newClub.id]) clubRooms[newClub.id] = [];
+        }
+        renderClubs();
+        joinInput.value = '';
+
+        if (resp.alreadyMember) {
+          showToast('你已是该俱乐部成员');
+          console.log('[N1] ⓘ 已是成员,未消耗邀请码');
+        } else {
+          showToast('加入成功:' + c.name);
+          console.log('[N1] ✅ 加入俱乐部成功:', c.name, 'id =', c.id);
+        }
+
+        showMainPage('club');
+      } catch (err) {
+        console.warn('[N1] ❌ 加入俱乐部失败:', err);
+        const msg = (err.data && err.data.error) || err.message || '加入失败,请重试';
+        showToast(msg);
+        // 不清输入框,让用户改完重试
+      } finally {
+        joinBtn.disabled = false;
+        joinBtn.textContent = origText;
+        joinBtn.style.opacity = '';
+      }
     });
   }
 

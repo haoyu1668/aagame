@@ -36505,38 +36505,101 @@
   });
 
   // ========== 点击"创建"按钮:新俱乐部入列表 ==========
+  // ════════════════════════════════════════════════════════════════════════
+  // ⭐ v2.28.73 F8:创建俱乐部接通后端
+  //   - demo 模式(浏览器打开/降级):保留原本地 mock 逻辑(向后兼容)
+  //   - Telegram 验证模式:调 apiClient.post('/api/clubs', {name, description})
+  //   - 失败:toast 提示,不清表单(用户可改完重试)
+  //   - 加载中:禁用按钮 + 改文字防双击
+  //   - 注意:logo 上传 MVP 1 不持久化(后端 schema 暂无 logo_url 字段,等 MVP 2)
+  // ════════════════════════════════════════════════════════════════════════
   const createBtn = document.getElementById('btn-create-club');
   if (createBtn) {
-    createBtn.addEventListener('click', () => {
+    createBtn.addEventListener('click', async () => {
       const name = (nameInput.value || '').trim();
       if (!name) {
         alert('请输入俱乐部名称');
         return;
       }
-      const newClubId = String(document.getElementById('club-id-value').textContent);
-      const newClub = {
-        id: newClubId,
-        name: name,
-        coin: 0,
-        rooms: 0,
-        members: 1,    // 自己一个
-        owner: true,
-        logo: logoBox && logoBox.classList.contains('has-image') ? logoPreview.src : null
-      };
-      clubs.push(newClub);
-      // 新俱乐部初始没有房间
-      clubRooms[newClubId] = [];
-      renderClubs();
+      const description = (descInput.value || '').trim();
 
-      // 清空表单
-      nameInput.value = '';
-      nameCount.textContent = '0';
-      descInput.value = '';
-      descCount.textContent = '0';
-      logoBox.classList.remove('has-image');
+      // demo 模式:直接走原 mock 路径(浏览器演示场景)
+      const u = window.currentUser;
+      const isDemo = !u || u.source === 'demo' || !window.tokenStore || !window.tokenStore.get();
+      if (isDemo) {
+        const newClubId = String(document.getElementById('club-id-value').textContent);
+        const newClub = {
+          id: newClubId,
+          name: name,
+          coin: 0,
+          rooms: 0,
+          members: 1,
+          owner: true,
+          logo: logoBox && logoBox.classList.contains('has-image') ? logoPreview.src : null
+        };
+        clubs.push(newClub);
+        clubRooms[newClubId] = [];
+        renderClubs();
 
-      // 返回俱乐部主页
-      showMainPage('club');
+        // 清表单 + 返回主页
+        nameInput.value = '';
+        nameCount.textContent = '0';
+        descInput.value = '';
+        descCount.textContent = '0';
+        logoBox.classList.remove('has-image');
+        showMainPage('club');
+        return;
+      }
+
+      // Telegram 验证模式:调后端 API
+      // 加载状态:禁用按钮 + 改文字
+      const origText = createBtn.textContent;
+      createBtn.disabled = true;
+      createBtn.textContent = '创建中...';
+      createBtn.style.opacity = '0.6';
+
+      try {
+        const resp = await window.apiClient.post('/api/clubs', {
+          name: name,
+          description: description || null
+        });
+
+        // 后端返回 {ok, club: {id, name, ownerId, description, myRole, createdAt, updatedAt}}
+        const c = resp.club;
+        const newClub = {
+          id: String(c.id),           // 后端 BIGSERIAL → 转字符串保持前端兼容
+          name: c.name,
+          intro: c.description,        // 数据库 description → 前端 intro
+          coin: 0,                     // 后端不返回(MVP 2 加)
+          rooms: 0,                    // 同上
+          members: 1,                  // 自己一个
+          owner: true,                 // 我创建的我就是 owner
+          logo: logoBox && logoBox.classList.contains('has-image') ? logoPreview.src : null  // 本地预览,不持久化
+        };
+        clubs.push(newClub);
+        clubRooms[String(c.id)] = [];
+        renderClubs();
+
+        // 清表单 + 返回主页
+        nameInput.value = '';
+        nameCount.textContent = '0';
+        descInput.value = '';
+        descCount.textContent = '0';
+        logoBox.classList.remove('has-image');
+        showMainPage('club');
+        console.log('[F8] ✅ 创建俱乐部成功,真实 id =', c.id);
+      } catch (err) {
+        console.warn('[F8] ❌ 创建俱乐部失败:', err);
+        // err.data 是后端 JSON,有 error 字段
+        const msg = (err.data && err.data.error) || err.message || '创建失败,请重试';
+        showToast(msg);
+        // 不清表单,让用户改完重试
+      } finally {
+        // 恢复按钮状态
+        createBtn.disabled = false;
+        createBtn.textContent = origText;
+        createBtn.style.opacity = '';
+      }
     });
   }
 

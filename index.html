@@ -32061,6 +32061,9 @@
   //   真实业务对接后:应改为 club.creatorUid + 比较 currentUser.uid
   //   重要:owner/creatorUid 一旦创建就锁死,永远不能动态修改
   //   (张三创建的俱乐部,张三永远是创建者,不能跳变成李四)
+  // ⭐ v2.28.73 F10:demo 模式兜底(浏览器打开 / 后端不通)
+  //   - Telegram 验证模式:启动后会异步调 GET /api/clubs 替换为真实数据(见 setupAppScale)
+  //   - demo / 失败兜底:保留这 3 个 mock 俱乐部,UI 不空
   let clubs = [
     { id: '88888', name: 'LobbyPlayersClub', coin: 10000,   rooms: 10, members: 1638, owner: false },
     { id: '94081', name: '昊泊',             coin: 0,       rooms: 15, members: 423,  owner: false },
@@ -36847,6 +36850,41 @@
             console.log('[user] ✅ /api/user/me 自检通过,鉴权链路全通:', meResp.user);
           }).catch(function(err) {
             console.error('[user] ❌ /api/user/me 自检失败:', err.message);
+          });
+          // ⭐ v2.28.73 F10:从后端拉真实俱乐部列表,替换 mock 数据
+          //   - 启动时 clubs 数组是 3 个 mock(LobbyPlayersClub/昊泊/地方),UI 先渲染兜底
+          //   - 这里异步调 GET /api/clubs 拿真实加入的俱乐部
+          //   - 成功 → 替换 clubs 数组 + 重新 renderClubs(刷新 UI)
+          //   - 失败 → 保留 mock 兜底(用户至少能看到东西)
+          //   - 字段映射:后端 description → 前端 intro;后端 myRole='admin' → owner:true
+          window.apiClient.get('/api/clubs').then(function(clubsResp) {
+            const backendClubs = clubsResp.clubs || [];
+            console.log('[F10] ✅ 拉到真实俱乐部列表,共 ' + backendClubs.length + ' 个');
+            // 字段映射:后端 → 前端
+            const mapped = backendClubs.map(function(c) {
+              return {
+                id: String(c.id),
+                name: c.name,
+                intro: c.description || '',
+                coin: 0,                                    // 等 B7 钱包真接入(F8.5 补)
+                rooms: 0,                                   // 等 B8 牌桌接入
+                members: 1,                                 // 等"成员列表"接口
+                owner: c.myRole === 'admin'                 // admin 角色显示"创建者"标签
+              };
+            });
+            // 替换 clubs 数组(in-place 修改,保留外部引用)
+            clubs.length = 0;
+            mapped.forEach(function(c) { clubs.push(c); });
+            // 真实俱乐部初始没房间(等 B8)
+            mapped.forEach(function(c) {
+              if (!clubRooms[c.id]) clubRooms[c.id] = [];
+            });
+            // 重新渲染列表(替换 UI 中 mock)
+            if (typeof renderClubs === 'function') {
+              renderClubs();
+            }
+          }).catch(function(err) {
+            console.warn('[F10] ⚠️ 拉俱乐部列表失败,保留 mock 兜底:', err.message);
           });
         }).catch(function(err) {
           // 验签失败:网络错/后端 401/后端 500

@@ -9127,12 +9127,98 @@
     color: var(--white);
   }
   .clubinfo-row:active { opacity: 0.7; }
+  .clubinfo-row.loading {
+    opacity: 0.5;
+    pointer-events: none;
+  }
   .clubinfo-row .arrow {
     color: var(--gray);
     font-size: 16px;
   }
   .clubinfo-row.first { border-radius: 10px 10px 0 0; }
   .clubinfo-row.last { border-radius: 0 0 10px 10px; }
+
+  /* ⭐ v2.28.75 N2:邀请码弹窗(批次 4 收官) */
+  .invite-modal-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 180;
+  }
+  .invite-modal-mask.show { display: flex; }
+  .invite-modal {
+    position: relative;
+    width: 280px;
+    background: linear-gradient(160deg, #232733 0%, #16181f 100%);
+    border-radius: 14px;
+    padding: 22px 18px 18px;
+    border: 1px solid rgba(77, 255, 77, 0.25);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.6);
+    text-align: center;
+    color: white;
+  }
+  .invite-modal-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    width: 24px;
+    height: 24px;
+    font-size: 22px;
+    line-height: 22px;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    user-select: none;
+  }
+  .invite-modal-close:active { opacity: 0.6; }
+  .invite-modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #4dff4d;
+    margin-bottom: 6px;
+  }
+  .invite-modal-subtitle {
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 16px;
+  }
+  .invite-code-box {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: #4dff4d;
+    background: rgba(77, 255, 77, 0.08);
+    border: 1px dashed rgba(77, 255, 77, 0.4);
+    border-radius: 10px;
+    padding: 14px 0;
+    margin-bottom: 14px;
+    user-select: all;
+  }
+  .invite-copy-btn {
+    width: 100%;
+    padding: 12px 0;
+    border-radius: 10px;
+    border: none;
+    background: #4dff4d;
+    color: #16181f;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+  .invite-copy-btn:active { transform: scale(0.97); }
+  .invite-copy-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .invite-expire-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.4;
+  }
 
   /* ===================================================
      ====== 俱乐部账户页 ======
@@ -13997,9 +14083,28 @@
           <span>俱乐部账户</span>
           <span class="arrow">›</span>
         </div>
+        <!-- ⭐ v2.28.75 N2:邀请码入口(批次 4 收官) -->
+        <div class="clubinfo-row" id="clubinfo-invite-btn">
+          <span>邀请码</span>
+          <span class="arrow">›</span>
+        </div>
         <div class="clubinfo-row last" id="clubinfo-manage-btn">
           <span>俱乐部管理</span>
           <span class="arrow">›</span>
+        </div>
+      </div>
+
+      <!-- ⭐ v2.28.75 N2:邀请码弹窗(批次 4 收官) -->
+      <!-- ID 加 club- 前缀避开老 #invite-modal-mask(那是"邀请玩家入牌局",不同业务) -->
+      <!-- 死皮 UI:布局先死,逻辑见 N2.3-N2.5 轮 -->
+      <div class="invite-modal-mask" id="club-invite-modal-mask">
+        <div class="invite-modal">
+          <div class="invite-modal-close" id="club-invite-modal-close" aria-label="关闭">×</div>
+          <div class="invite-modal-title">邀请码</div>
+          <div class="invite-modal-subtitle">分享给好友加入俱乐部</div>
+          <div class="invite-code-box" id="club-invite-code-box">--------</div>
+          <button class="invite-copy-btn" id="club-invite-copy-btn">复制邀请码</button>
+          <div class="invite-expire-hint" id="club-invite-expire-hint">30 天后过期</div>
         </div>
       </div>
     </div>
@@ -33019,6 +33124,148 @@
   if (clubInfoManageBtn) {
     clubInfoManageBtn.addEventListener('click', () => {
       openClubManage(currentClubInfoId);
+    });
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ⭐ v2.28.75 N2 邀请码管理(批次 4 收官子弹)
+  //   - Telegram 验证模式:调 POST /api/clubs/:id/invite-codes {expiresInDays:30}
+  //   - demo 模式(浏览器):本地随机生成 8 位假码 + 假过期时间
+  //   - 复制按钮:navigator.clipboard + execCommand fallback(复刻"复制ID"成熟实现)
+  //   - 关闭:× / 点遮罩
+  //   - ID 用 club-invite-* 前缀,避开老 #invite-modal-mask(那是"邀请玩家入牌局")
+  //
+  //   顺手清理(铁律 0.11 轻约束):无新发现旧残留
+  // ════════════════════════════════════════════════════════════════════════
+  const clubInfoInviteBtn = document.getElementById('clubinfo-invite-btn');
+  const inviteModalMask = document.getElementById('club-invite-modal-mask');
+  const inviteModalClose = document.getElementById('club-invite-modal-close');
+  const inviteCodeBox = document.getElementById('club-invite-code-box');
+  const inviteCopyBtn = document.getElementById('club-invite-copy-btn');
+  const inviteExpireHint = document.getElementById('club-invite-expire-hint');
+
+  // 邀请码字符表(跟后端 invite.js 严格一致:去 I/O/0/1)
+  const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  // demo 模式假码生成器(本地随机 8 位)
+  function genFakeInviteCode() {
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += INVITE_CODE_ALPHABET[Math.floor(Math.random() * 32)];
+    }
+    return code;
+  }
+
+  // 过期时间文案(后端返 ISO 字符串;demo 模式自己算 now+30d)
+  function formatExpireHint(expiresAtIso) {
+    try {
+      const d = new Date(expiresAtIso);
+      // 本地时区显示:YYYY-MM-DD HH:mm
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      return '30 天后过期 · ' + yyyy + '-' + mm + '-' + dd + ' ' + hh + ':' + mi;
+    } catch (e) {
+      return '30 天后过期';
+    }
+  }
+
+  // 渲染弹窗内容(成功态)
+  function showInviteModalWithCode(code, expiresAtIso) {
+    inviteCodeBox.textContent = code;
+    inviteExpireHint.textContent = formatExpireHint(expiresAtIso);
+    inviteCopyBtn.disabled = false;
+    inviteCopyBtn.textContent = '复制邀请码';
+    inviteModalMask.classList.add('show');
+  }
+
+  // 主流程:点"邀请码"行
+  if (clubInfoInviteBtn && inviteModalMask) {
+    clubInfoInviteBtn.addEventListener('click', async () => {
+      // 防双击:按钮变 disabled 状态
+      if (clubInfoInviteBtn.classList.contains('loading')) return;
+      clubInfoInviteBtn.classList.add('loading');
+
+      const u = window.currentUser;
+      const isDemo = !u || u.source === 'demo' || !window.tokenStore || !window.tokenStore.get();
+
+      if (isDemo) {
+        // demo 模式:本地随机假码,假过期时间 now+30d
+        const fakeCode = genFakeInviteCode();
+        const fakeExpire = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+        showInviteModalWithCode(fakeCode, fakeExpire);
+        if (typeof showToast === 'function') showToast('演示模式:本地生成假码');
+        console.log('[N2] demo 假码:', fakeCode);
+        clubInfoInviteBtn.classList.remove('loading');
+        return;
+      }
+
+      // Telegram 真后端模式
+      if (!currentClubInfoId) {
+        if (typeof showToast === 'function') showToast('俱乐部信息异常,请重进');
+        clubInfoInviteBtn.classList.remove('loading');
+        return;
+      }
+
+      try {
+        const resp = await window.apiClient.post(
+          '/api/clubs/' + currentClubInfoId + '/invite-codes',
+          { expiresInDays: 30 }
+        );
+        const ic = resp.inviteCode;
+        if (!ic || !ic.code) {
+          throw new Error('后端响应缺 inviteCode 字段');
+        }
+        showInviteModalWithCode(ic.code, ic.expiresAt);
+        console.log('[N2] ✅ 真码生成:', ic.code, '过期', ic.expiresAt);
+      } catch (err) {
+        console.warn('[N2] ❌ 生成邀请码失败:', err);
+        const msg = (err.data && err.data.error) || err.message || '生成失败,请重试';
+        if (typeof showToast === 'function') showToast(msg);
+      } finally {
+        clubInfoInviteBtn.classList.remove('loading');
+      }
+    });
+  }
+
+  // 关闭:×
+  if (inviteModalClose && inviteModalMask) {
+    inviteModalClose.addEventListener('click', () => {
+      inviteModalMask.classList.remove('show');
+    });
+  }
+  // 关闭:点遮罩(不点击卡片本身)
+  if (inviteModalMask) {
+    inviteModalMask.addEventListener('click', (e) => {
+      if (e.target === inviteModalMask) {
+        inviteModalMask.classList.remove('show');
+      }
+    });
+  }
+
+  // 复制按钮(复刻"复制ID"成熟实现:clipboard API + execCommand fallback)
+  if (inviteCopyBtn) {
+    inviteCopyBtn.addEventListener('click', () => {
+      const code = inviteCodeBox.textContent;
+      if (!code || code === '--------') return;
+      const doFallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).catch(doFallback);
+      } else {
+        doFallback();
+      }
+      if (typeof showToast === 'function') showToast('邀请码已复制');
     });
   }
 

@@ -1389,38 +1389,27 @@
     display: flex;
     gap: 14px;
   }
-  /* 圆形充/提币按钮 */
+  /* ⭐ v2.28.79 胶囊形"申请发放/申请回收"按钮(取代旧圆按钮+箭头+小字) */
   .lobby-coin-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
     cursor: pointer;
-    background: none;
     border: none;
-    padding: 0;
+    padding: 7px 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #000;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    transition: opacity 100ms ease, transform 100ms ease;
   }
-  .lobby-coin-btn:active { opacity: 0.7; }
-  .lobby-coin-btn .ic {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
+  .lobby-coin-btn:active {
+    opacity: 0.75;
+    transform: scale(0.95);
   }
-  .lobby-coin-btn.deposit .ic { background: #4dff4d; }
-  .lobby-coin-btn.deposit .ic svg { color: #000; }
-  .lobby-coin-btn.deposit { transform: translateX(-30px); }
-  .lobby-coin-btn.withdraw .ic { background: #f5a623; }
-  .lobby-coin-btn.withdraw .ic svg { color: #000; }
-  .lobby-coin-btn.withdraw { transform: translateX(-10px); }
-  .lobby-coin-btn .lbl {
-    font-size: 11px;
-    color: var(--gray-light);
-  }
-  .lobby-coin-btn .ic svg { width: 16px; height: 16px; }
+  .lobby-coin-btn.deposit  { background: #4dff4d; }  /* 申请发放:项目主绿 */
+  .lobby-coin-btn.withdraw { background: #f5a623; }  /* 申请回收:橙色 */
+
+  /* 两按钮之间间距由父容器 .lobby-usdt-actions 控制(已有 gap)*/
 
   /* 右上角 "..." 三点菜单 */
   .lobby-more-btn {
@@ -3278,6 +3267,68 @@
     0%   { box-shadow: 0 0 0 0 rgba(77, 255, 77, 0); }
     40%  { box-shadow: 0 0 8px 2px rgba(77, 255, 77, 0.6); }
     100% { box-shadow: 0 0 0 0 rgba(77, 255, 77, 0); }
+  }
+
+  /* ════════════════════════════════════════════════════════════════════
+     ⭐ v2.28.77 N9:admin 全局通知胶囊(批次 4.5 配套)
+     位置:phone-wrap 内顶部固定浮层,所有 page 通用
+     视觉:橘红底 + 绿描边 + 柔和呼吸闪光(1.5s 一循环)
+     交互:有 PENDING 申请才显示,点击跳俱乐部 Tab + 自动隐藏
+     ════════════════════════════════════════════════════════════════════ */
+  .admin-notify-chip {
+    position: absolute;          /* phone-wrap 相对定位,胶囊绝对在它内部右上 */
+    top: 100px;                  /* 你要求的 100-300 范围,默认偏上 */
+    right: 12px;
+    z-index: 200;                /* 高于普通 modal(180),低于错误浮窗 */
+    padding: 8px 14px;
+    background: #ff5722;         /* 橘红 */
+    border: 2px solid #4dff4d;   /* 项目主绿 */
+    border-radius: 20px;
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(255, 87, 34, 0.5);
+    cursor: pointer;
+    display: none;               /* 默认隐藏,N9.4 函数控制 */
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    animation: adminNotifyFlash 1.5s ease-in-out infinite;
+    transition: transform 100ms ease;
+    white-space: nowrap;
+  }
+  .admin-notify-chip.show { display: flex; }
+  .admin-notify-chip:active { transform: scale(0.95); }
+  .admin-notify-icon {
+    font-size: 14px;
+    line-height: 1;
+  }
+  .admin-notify-text {
+    line-height: 1;
+    letter-spacing: 0.3px;
+  }
+
+  /* 柔和呼吸闪光:阴影 + 边框颜色双重过渡,1.5s 一循环 */
+  @keyframes adminNotifyFlash {
+    0%, 100% {
+      box-shadow: 0 4px 12px rgba(255, 87, 34, 0.5);
+      border-color: #4dff4d;
+    }
+    50% {
+      box-shadow: 0 4px 20px rgba(77, 255, 77, 0.85);
+      border-color: #80ff80;
+    }
+  }
+
+  /* 牌桌页特殊处理:下移到 hash-chip 下方,避开冲突 */
+  /* hash-chip 通常位于 ~140-160px,下移到 220px 留约 60px 间距 */
+  #page-game.active ~ * .admin-notify-chip,
+  body:has(#page-game.active) .admin-notify-chip {
+    top: 220px;
+  }
+  /* fallback:如果 :has() 不支持,用 body class 同样生效 */
+  body.on-game-page .admin-notify-chip {
+    top: 220px;
   }
 
   /* 座位通用 */
@@ -9138,87 +9189,7 @@
   .clubinfo-row.first { border-radius: 10px 10px 0 0; }
   .clubinfo-row.last { border-radius: 0 0 10px 10px; }
 
-  /* ⭐ v2.28.75 N2:邀请码弹窗(批次 4 收官) */
-  .invite-modal-mask {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 180;
-  }
-  .invite-modal-mask.show { display: flex; }
-  .invite-modal {
-    position: relative;
-    width: 280px;
-    background: linear-gradient(160deg, #232733 0%, #16181f 100%);
-    border-radius: 14px;
-    padding: 22px 18px 18px;
-    border: 1px solid rgba(77, 255, 77, 0.25);
-    box-shadow: 0 8px 28px rgba(0,0,0,0.6);
-    text-align: center;
-    color: white;
-  }
-  .invite-modal-close {
-    position: absolute;
-    top: 8px;
-    right: 12px;
-    width: 24px;
-    height: 24px;
-    font-size: 22px;
-    line-height: 22px;
-    color: rgba(255,255,255,0.5);
-    cursor: pointer;
-    user-select: none;
-  }
-  .invite-modal-close:active { opacity: 0.6; }
-  .invite-modal-title {
-    font-size: 17px;
-    font-weight: 700;
-    color: #4dff4d;
-    margin-bottom: 6px;
-  }
-  .invite-modal-subtitle {
-    font-size: 12px;
-    color: rgba(255,255,255,0.55);
-    margin-bottom: 16px;
-  }
-  .invite-code-box {
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: 4px;
-    color: #4dff4d;
-    background: rgba(77, 255, 77, 0.08);
-    border: 1px dashed rgba(77, 255, 77, 0.4);
-    border-radius: 10px;
-    padding: 14px 0;
-    margin-bottom: 14px;
-    user-select: all;
-  }
-  .invite-copy-btn {
-    width: 100%;
-    padding: 12px 0;
-    border-radius: 10px;
-    border: none;
-    background: #4dff4d;
-    color: #16181f;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    margin-bottom: 10px;
-  }
-  .invite-copy-btn:active { transform: scale(0.97); }
-  .invite-copy-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .invite-expire-hint {
-    font-size: 11px;
-    color: rgba(255,255,255,0.5);
-    line-height: 1.4;
-  }
+  /* v2.28.76 N2.1:邀请码 CSS 已删除(原 N2,~80 行).clubinfo-row.loading 状态保留(N1 申请加入按钮也用) */
 
   /* ===================================================
      ====== 俱乐部账户页 ======
@@ -10803,9 +10774,288 @@
     font-weight: 600;
   }
 
-  /* ===================================================
+  /* ════════════════════════════════════════════════════════════════════════
+     ====== ⭐ v2.28.81 阶段 2 — 记分牌请求页(申请发放/回收审批) ======
+     ════════════════════════════════════════════════════════════════════════ */
+  #page-coin-requests {
+    background: var(--bg-main);
+    padding-bottom: 20px;
+    min-height: 100vh;
+  }
+  .coinreq-topbar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--divider);
+  }
+  .coinreq-back {
+    position: absolute;
+    left: 14px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-primary);
+  }
+  .coinreq-back svg {
+    width: 22px;
+    height: 22px;
+  }
+  .coinreq-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  /* "未处理"切换 — 右上角 checkbox */
+  .coinreq-toggle {
+    position: absolute;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .coinreq-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+  }
+  .coinreq-toggle-text {
+    font-size: 14px;
+    color: #ffa726;
+    font-weight: 500;
+  }
+  .coinreq-toggle-box {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1.5px solid #ffa726;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .coinreq-toggle input:checked + .coinreq-toggle-text + .coinreq-toggle-box {
+    background: #ffa726;
+  }
+  .coinreq-toggle-check {
+    width: 14px;
+    height: 14px;
+    color: #16181f;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .coinreq-toggle input:checked + .coinreq-toggle-text + .coinreq-toggle-box .coinreq-toggle-check {
+    opacity: 1;
+  }
+
+  /* 列表容器 */
+  .coinreq-list {
+    padding: 8px 0;
+  }
+
+  /* 列表 item */
+  .coinreq-item {
+    padding: 14px 16px;
+    background: var(--bg-card);
+    margin-bottom: 1px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .coinreq-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #2a2d3a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #6e7281;
+  }
+  .coinreq-avatar svg {
+    width: 28px;
+    height: 28px;
+  }
+  .coinreq-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .coinreq-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .coinreq-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+  }
+  /* 类型标签 — 发放(红橙) / 回收(绿) */
+  .coinreq-type {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .coinreq-type.grant {
+    background: rgba(255, 87, 34, 0.15);
+    color: #ff7043;
+  }
+  .coinreq-type.revoke {
+    background: rgba(77, 255, 77, 0.15);
+    color: #4dff4d;
+  }
+  .coinreq-id {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+  .coinreq-detail {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .coinreq-detail-amount {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .coinreq-detail-coin {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #4dff4d;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #16181f;
+    font-size: 9px;
+    font-weight: 900;
+    margin: 0 2px;
+  }
+
+  /* 操作按钮区(右侧)— ✗ ✓ */
+  .coinreq-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .coinreq-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 1.5px solid;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .coinreq-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .coinreq-btn.reject {
+    border-color: #6e7281;
+    color: #b0b3c0;
+  }
+  .coinreq-btn.reject:hover:not(:disabled) {
+    background: rgba(110, 114, 129, 0.15);
+  }
+  .coinreq-btn.approve {
+    border-color: #4dff4d;
+    color: #4dff4d;
+  }
+  .coinreq-btn.approve:hover:not(:disabled) {
+    background: rgba(77, 255, 77, 0.15);
+  }
+  .coinreq-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* 已处理状态标记(取消"未处理"勾选时显示)*/
+  .coinreq-status-tag {
+    align-self: center;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .coinreq-status-tag.approved {
+    background: rgba(77, 255, 77, 0.15);
+    color: #4dff4d;
+  }
+  .coinreq-status-tag.rejected {
+    background: rgba(255, 80, 80, 0.15);
+    color: #ff7070;
+  }
+
+  /* 空状态 */
+  .coinreq-empty {
+    padding: 80px 20px 0;
+    text-align: center;
+    color: var(--text-secondary);
+  }
+  .coinreq-empty svg {
+    width: 64px;
+    height: 64px;
+    opacity: 0.3;
+    margin-bottom: 12px;
+  }
+  .coinreq-empty-text {
+    font-size: 14px;
+  }
+
+  /* 加载占位 */
+  .coinreq-loading {
+    padding: 60px 20px 0;
+    text-align: center;
+    color: var(--text-secondary);
+  }
+  .coinreq-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 2.5px solid rgba(255,255,255,0.1);
+    border-top-color: #4dff4d;
+    border-radius: 50%;
+    margin: 0 auto 12px;
+    animation: coinreq-spin 0.8s linear infinite;
+  }
+  @keyframes coinreq-spin {
+    to { transform: rotate(360deg); }
+  }
+  .coinreq-loading-text {
+    font-size: 13px;
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
      ====== 俱乐部管理页 ======
-     =================================================== */
+     ════════════════════════════════════════════════════════════════════════ */
   #page-club-manage {
     background: var(--bg-main);
     padding-bottom: 20px;
@@ -11854,6 +12104,43 @@
 
 <div class="phone-wrap">
 
+  <!-- ⭐ v2.28.77 N9:admin 全局通知胶囊(批次 4.5 配套) -->
+  <!-- 位置:phone-wrap 内顶部,脱离 content,所有页面通用 -->
+  <!-- 显示规则:有 PENDING 申请才显示;牌桌页特殊下移避开 hash-chip -->
+  <!-- 点击:跳俱乐部 Tab(各俱乐部条目自己显示红点)+ 胶囊隐藏 -->
+  <div class="admin-notify-chip" id="admin-notify-chip">
+    <span class="admin-notify-icon">🔔</span>
+    <span class="admin-notify-text" id="admin-notify-text">待审申请 (0)</span>
+  </div>
+
+  <!-- ⭐ v2.28.77 N9 DEV 测试面板(批次 4.5 第 1 步临时,B17 接通后整顿期删) -->
+  <!-- 位置:左下角小浮窗,避开主功能区,不影响主流程截图 -->
+  <!-- 用途:不熟悉 F12 Console 的用户也能测试 N9 通知胶囊 -->
+  <div id="dev-n9-panel" style="
+       position: absolute; bottom: 100px; left: 8px; z-index: 250;
+       background: rgba(0,0,0,0.85); padding: 8px; border-radius: 8px;
+       border: 1px solid #4dff4d; font-size: 10px; color: white;
+       width: 130px; line-height: 1.4;">
+    <div style="color:#4dff4d; font-weight:700; margin-bottom:4px;">🛠 DEV 测试面板</div>
+    <div style="opacity:0.7; margin-bottom:6px;">N9 通知胶囊(临时)</div>
+    <button id="dev-n9-trigger" style="
+         width:100%; padding:6px 0; margin-bottom:4px; border:none; border-radius:4px;
+         background:#ff5722; color:white; font-size:11px; font-weight:700; cursor:pointer;">
+      ① 模拟新申请(+1)
+    </button>
+    <button id="dev-n9-clear" style="
+         width:100%; padding:6px 0; margin-bottom:4px; border:none; border-radius:4px;
+         background:#666; color:white; font-size:11px; font-weight:700; cursor:pointer;">
+      ② 清空申请
+    </button>
+    <button id="dev-n9-hide-panel" style="
+         width:100%; padding:6px 0; border:none; border-radius:4px;
+         background:transparent; color:#888; font-size:10px; cursor:pointer;
+         border:1px solid #444;">
+      隐藏此面板
+    </button>
+  </div>
+
   <!-- 内容 -->
   <div class="content">
 
@@ -12188,8 +12475,15 @@
       </div>
 
       <div class="join-club-page">
-        <input type="text" class="form-input" id="join-club-id" placeholder="输入邀请码" maxlength="16" autocapitalize="characters">
-        <button class="btn-primary" id="btn-join-club">加入</button>
+        <!-- v2.28.76 N2.1 改造:邀请码 → 俱乐部 ID(5 位数字 11111-99999) -->
+        <!-- inputmode=numeric 让移动端唤出数字键盘;pattern 限数字;maxlength=5 -->
+        <input type="text" class="form-input" id="join-club-id"
+               placeholder="输入俱乐部ID"
+               maxlength="5"
+               inputmode="numeric"
+               pattern="[0-9]*"
+               autocomplete="off">
+        <button class="btn-primary" id="btn-join-club">申请加入</button>
       </div>
     </div>
 
@@ -12264,22 +12558,11 @@
             </span>
           </div>
           <div class="lobby-usdt-actions">
-            <button class="lobby-coin-btn deposit" id="lobby-deposit-btn">
-              <span class="ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 5v14M5 12l7 7 7-7"/>
-                </svg>
-              </span>
-              <span class="lbl">充币</span>
-            </button>
-            <button class="lobby-coin-btn withdraw" id="lobby-withdraw-btn">
-              <span class="ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 19V5M5 12l7-7 7 7"/>
-                </svg>
-              </span>
-              <span class="lbl">提币</span>
-            </button>
+            <!-- ⭐ v2.28.78 决策 9:充币/提币 → 申请发放/申请回收(胶囊形) -->
+            <!-- ⭐ v2.28.79 视觉升级:删除圆按钮 + 箭头 + 小字,改"胶囊上直接显示文字" -->
+            <!-- 注意:不动 ID(lobby-deposit-btn / lobby-withdraw-btn),JS handler 仍能找到 -->
+            <button class="lobby-coin-btn deposit" id="lobby-deposit-btn">申请发放</button>
+            <button class="lobby-coin-btn withdraw" id="lobby-withdraw-btn">申请回收</button>
           </div>
         </div>
 
@@ -14083,30 +14366,24 @@
           <span>俱乐部账户</span>
           <span class="arrow">›</span>
         </div>
-        <!-- ⭐ v2.28.75 N2:邀请码入口(批次 4 收官) -->
-        <div class="clubinfo-row" id="clubinfo-invite-btn">
-          <span>邀请码</span>
+        <!-- v2.28.76 N2.1:删除邀请码入口,改成"加入俱乐部 = 输入 ID + admin 审批" -->
+        <!-- 旧 N2 邀请码 UI 在 v2.28.75 实施后用户反馈"裸字符码玩家不知道在哪里加入",改造路径见主文档 32.27.5 -->
+        <div class="clubinfo-row" id="clubinfo-manage-btn">
+          <span>俱乐部管理</span>
           <span class="arrow">›</span>
         </div>
-        <div class="clubinfo-row last" id="clubinfo-manage-btn">
-          <span>俱乐部管理</span>
+        <!-- ⭐ v2.28.81 阶段 2:记分牌请求入口 -->
+        <!-- 点击 → 跳 page-coin-requests 页(申请发放/回收审批页)-->
+        <!-- 用户反馈:文字用"记分牌请求"避免跟顶部"记分牌余额"混淆 -->
+        <div class="clubinfo-row last" id="clubinfo-coin-btn">
+          <span>记分牌请求</span>
           <span class="arrow">›</span>
         </div>
       </div>
 
-      <!-- ⭐ v2.28.75 N2:邀请码弹窗(批次 4 收官) -->
-      <!-- ID 加 club- 前缀避开老 #invite-modal-mask(那是"邀请玩家入牌局",不同业务) -->
-      <!-- 死皮 UI:布局先死,逻辑见 N2.3-N2.5 轮 -->
-      <div class="invite-modal-mask" id="club-invite-modal-mask">
-        <div class="invite-modal">
-          <div class="invite-modal-close" id="club-invite-modal-close" aria-label="关闭">×</div>
-          <div class="invite-modal-title">邀请码</div>
-          <div class="invite-modal-subtitle">分享给好友加入俱乐部</div>
-          <div class="invite-code-box" id="club-invite-code-box">--------</div>
-          <button class="invite-copy-btn" id="club-invite-copy-btn">复制邀请码</button>
-          <div class="invite-expire-hint" id="club-invite-expire-hint">30 天后过期</div>
-        </div>
-      </div>
+      <!-- v2.28.76 N2.1:删除 #club-invite-modal-mask 弹窗(原 N2 邀请码) -->
+      <!-- 改造原因:旧 N2 输出"8 位字符邀请码"被用户判定为"玩家拿到不知道在哪里加入" -->
+      <!-- 新路径:加入俱乐部由玩家输 ID + admin 审批承担(批次 4.5 规划见主文档) -->
     </div>
 
     <!-- ============ 子页面：编辑俱乐部信息(管理员) ============ -->
@@ -14510,6 +14787,54 @@
           <div class="settings-row-label">版本</div>
           <div class="settings-row-value" id="settings-version">v1.0.0000000000</div>
         </div>
+      </div>
+    </div>
+
+    <!-- ============ 子页面：记分牌请求(管理员审批申请发放/回收) ============ -->
+    <!-- ⭐ v2.28.81 批次 4.5 第 3 步阶段 2:申请发放/回收审批 UI                -->
+    <!--   入口 1:④ 俱乐部信息页 admin 视图"记分牌"按钮                       -->
+    <!--   入口 2:N9 通知胶囊点击                                             -->
+    <!--   接口:GET /api/clubs/:id/transfer-requests?status=pending          -->
+    <!--         POST .../approve / .../reject                                -->
+    <div class="page" id="page-coin-requests">
+      <!-- 顶部 -->
+      <div class="coinreq-topbar">
+        <div class="coinreq-back" id="coinreq-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </div>
+        <div class="coinreq-title">记分牌请求</div>
+        <!-- 未处理 / 已处理 切换 -->
+        <label class="coinreq-toggle" id="coinreq-toggle">
+          <input type="checkbox" id="coinreq-toggle-input" checked>
+          <span class="coinreq-toggle-text">未处理</span>
+          <span class="coinreq-toggle-box">
+            <svg class="coinreq-toggle-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
+          </span>
+        </label>
+      </div>
+
+      <!-- 列表容器 -->
+      <div class="coinreq-list" id="coinreq-list">
+        <!-- 渲染 by JS -->
+      </div>
+
+      <!-- 空状态(JS 控制显隐) -->
+      <div class="coinreq-empty" id="coinreq-empty" style="display:none;">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="12" y="12" width="40" height="40" rx="6"/>
+          <path d="M22 28h20M22 36h12"/>
+        </svg>
+        <div class="coinreq-empty-text">暂无待审申请</div>
+      </div>
+
+      <!-- 加载占位(JS 控制)-->
+      <div class="coinreq-loading" id="coinreq-loading" style="display:none;">
+        <div class="coinreq-loading-spinner"></div>
+        <div class="coinreq-loading-text">加载中...</div>
       </div>
     </div>
 
@@ -14962,23 +15287,25 @@
   </div>
 
   <!-- 申请发放/回收 弹窗 -->
+  <!-- ⭐ v2.28.78 决策 9:复活此弹窗,接通真后端(MVP 1 阶段先 mock) -->
+  <!-- ⭐ v2.28.78 顺手清理(铁律 0.11):"俱乐部币" → "记分牌"(铁律 0.10 锁死术语) -->
   <div class="request-mask" id="request-mask">
     <div class="request-modal">
       <div class="request-title" id="request-title">申请发放</div>
       <div class="request-balance-row">
-        <div class="request-balance-label">我的俱乐部币</div>
+        <div class="request-balance-label">我的记分牌</div>
         <div class="request-balance-amount">
           <span class="usdt-icon">₮</span>
           <span id="request-balance">0</span>
         </div>
       </div>
       <div class="request-input-row">
-        <div class="request-input-label">申请俱乐部币</div>
-        <input type="number" class="request-input" id="request-amount" placeholder="请输入发放数额">
+        <div class="request-input-label">申请记分牌</div>
+        <input type="number" class="request-input" id="request-amount" placeholder="请输入数额">
       </div>
       <div class="request-actions">
         <button class="request-btn reset" id="request-reset">重置</button>
-        <button class="request-btn confirm" id="request-confirm">确认选择</button>
+        <button class="request-btn confirm" id="request-confirm">确认提交</button>
       </div>
     </div>
   </div>
@@ -32844,23 +33171,160 @@
     // 这里将来对接后端时,用 dpState.start / dpState.end 过滤数据
   });
 
-  // ========== 大厅页 充币/提币 按钮 ==========
-  // 直接跳转到平台统一的充币页/提币页
-  // (业务方案B:全平台统一记分牌,删除原来的"申请发放/回收"机制)
+  // ========== 大厅页 申请发放 / 申请回收 按钮 ==========
+  // ⭐ v2.28.78 决策 9:充币/提币 → 申请发放/申请回收(俱乐部内部功能)
+  //   - 旧行为(v2.18.6 起):点充币/提币跳子页 showSubPage('recharge'/'withdraw')(F5/F6 联系客服)
+  //   - 新行为(v2.28.78):点申请发放/回收 → 弹 #request-mask 弹窗输金额提交
+  //   - ⭐ v2.28.81 阶段 EF:接通真后端 POST /api/clubs/:id/transfer-requests
+  //
+  //   流程:
+  //     1. 玩家点胶囊按钮 → 弹窗输金额(1-1,000,000)→ 点"确认提交"
+  //     2. 调 POST → 后端 INSERT pending(409 = 已有 pending,422 = 资产/余额不足)
+  //     3. 成功 → toast "已提交,等待审核" + 关弹窗 + 刷新 N9
+  //     4. 409 → toast "上次申请还在处理中,请联系客服"(铁律 0.10 锁死)+ 弹窗不关
+  //
+  //   旧 handler 跳"联系客服"子页面在"我的"页面顶部按钮处仍保留(F5/F6 占位)
+  //   俱乐部内部不再走那条路径
   const lobbyDepositBtn = document.getElementById('lobby-deposit-btn');
   const lobbyWithdrawBtn = document.getElementById('lobby-withdraw-btn');
+  const requestMask = document.getElementById('request-mask');
+  const requestTitle = document.getElementById('request-title');
+  const requestAmountInput = document.getElementById('request-amount');
+  const requestBalanceEl = document.getElementById('request-balance');
+  const requestResetBtn = document.getElementById('request-reset');
+  const requestConfirmBtn = document.getElementById('request-confirm');
+
+  // 当前弹窗的"申请类型":发放 or 回收
+  let currentRequestType = 'grant'; // 'grant' = 申请发放, 'revoke' = 申请回收
+
+  function openRequestModal(type) {
+    if (!requestMask) return;
+    currentRequestType = type;
+    if (requestTitle) {
+      requestTitle.textContent = (type === 'grant') ? '申请发放' : '申请回收';
+    }
+    // ⭐ v2.28.81 阶段 EF:从真后端拉钱包余额
+    //   失败降级:用 clubs 数组的 coin(可能是 0,但不影响提交)
+    const currentClub = clubs.find(c => c.id === currentClubInfoId) || clubs[0];
+    if (requestBalanceEl) {
+      // 先用本地数据兜底
+      requestBalanceEl.textContent = String((currentClub && currentClub.coin) || 0);
+      // 异步拉真余额
+      if (currentClub && window.apiClient) {
+        window.apiClient.get('/api/clubs/' + currentClub.id + '/wallet')
+          .then(function(resp) {
+            if (resp && resp.wallet && typeof resp.wallet.balance !== 'undefined') {
+              requestBalanceEl.textContent = String(resp.wallet.balance);
+            }
+          })
+          .catch(function(err) {
+            console.warn('[transfer.balance] 拉钱包余额失败:', err);
+          });
+      }
+    }
+    if (requestAmountInput) {
+      requestAmountInput.value = '';
+      requestAmountInput.placeholder = (type === 'grant') ? '请输入发放数额' : '请输入回收数额';
+    }
+    requestMask.classList.add('show');
+  }
+
+  function closeRequestModal() {
+    if (requestMask) requestMask.classList.remove('show');
+  }
+
   if (lobbyDepositBtn) {
     lobbyDepositBtn.addEventListener('click', () => {
-      // ⭐ v2.18.6 记录来源:从俱乐部大厅进入,返回时回俱乐部大厅
-      window.rechargeEntryFrom = 'lobby';
-      showSubPage('recharge');
-      // 触发二维码绘制
-      setTimeout(drawFakeQR, 50);
+      openRequestModal('grant');
     });
   }
   if (lobbyWithdrawBtn) {
     lobbyWithdrawBtn.addEventListener('click', () => {
-      showSubPage('withdraw');
+      openRequestModal('revoke');
+    });
+  }
+  if (requestResetBtn) {
+    requestResetBtn.addEventListener('click', () => {
+      if (requestAmountInput) requestAmountInput.value = '';
+    });
+  }
+  if (requestConfirmBtn) {
+    requestConfirmBtn.addEventListener('click', async () => {
+      const amount = parseInt((requestAmountInput && requestAmountInput.value) || '0', 10);
+      if (!amount || amount < 1) {
+        if (typeof showToast === 'function') showToast('请输入有效金额');
+        return;
+      }
+      if (amount > 1000000) {
+        if (typeof showToast === 'function') showToast('单次最多 1,000,000 记分牌');
+        return;
+      }
+
+      // ⭐ v2.28.81 阶段 EF 接通真后端
+      //   - POST /api/clubs/:id/transfer-requests body {type, amount}
+      //   - 409 → toast 锁死文案 "上次申请还在处理中,请联系客服"(铁律 0.10)
+      //   - 422 → toast 后端 error(资产不足/余额不足)
+      //   - 200 → toast "已提交,等待审核" + 关弹窗 + 立刻刷新一次 N9(给自己 admin 视角)
+      const currentClub = clubs.find(c => c.id === currentClubInfoId) || clubs[0];
+      if (!currentClub) {
+        if (typeof showToast === 'function') showToast('未找到俱乐部');
+        return;
+      }
+
+      // 防双击
+      requestConfirmBtn.disabled = true;
+      const originalText = requestConfirmBtn.textContent;
+      requestConfirmBtn.textContent = '提交中...';
+
+      try {
+        await window.apiClient.post('/api/clubs/' + currentClub.id + '/transfer-requests', {
+          type: currentRequestType,
+          amount: amount
+        });
+
+        // 成功
+        if (typeof showToast === 'function') {
+          showToast(currentRequestType === 'grant' ? '已提交发放申请,等待审核' : '已提交回收申请,等待审核');
+        }
+        closeRequestModal();
+
+        // 立刻刷新 N9(玩家若同时是 admin,会自己看到 +1)
+        if (typeof refreshAdminNotify === 'function') {
+          refreshAdminNotify();
+        }
+      } catch (err) {
+        console.warn('[transfer.submit] 失败:', err);
+
+        // ⭐ 409 锁死文案(铁律 0.10):"上次申请还在处理中,请联系客服"
+        //   前端写死覆盖后端 error 字段(可能后端文案略不同)
+        if (err && err.status === 409) {
+          if (typeof showToast === 'function') {
+            showToast('上次申请还在处理中,请联系客服');
+          }
+        } else if (err && err.status === 422) {
+          // 资产/余额不足,用后端文案
+          const msg = (err.data && err.data.error) || '余额不足';
+          if (typeof showToast === 'function') showToast(msg);
+        } else if (err && err.status === 403) {
+          if (typeof showToast === 'function') showToast('你不是该俱乐部成员');
+        } else if (err && err.status === 401) {
+          if (typeof showToast === 'function') showToast('请先登录');
+        } else {
+          // 其他 + 网络错误
+          const msg = (err && err.data && err.data.error) || (err && err.message) || '提交失败,请稍后再试';
+          if (typeof showToast === 'function') showToast(msg);
+        }
+      } finally {
+        // 还原按钮
+        requestConfirmBtn.disabled = false;
+        requestConfirmBtn.textContent = originalText;
+      }
+    });
+  }
+  // 点击遮罩关闭
+  if (requestMask) {
+    requestMask.addEventListener('click', (e) => {
+      if (e.target === requestMask) closeRequestModal();
     });
   }
 
@@ -33116,6 +33580,7 @@
   // 俱乐部账户/管理(下次做)
   const clubInfoAccountBtn = document.getElementById('clubinfo-account-btn');
   const clubInfoManageBtn = document.getElementById('clubinfo-manage-btn');
+  const clubInfoCoinBtn = document.getElementById('clubinfo-coin-btn');
   if (clubInfoAccountBtn) {
     clubInfoAccountBtn.addEventListener('click', () => {
       openClubAccount(currentClubInfoId);
@@ -33126,148 +33591,301 @@
       openClubManage(currentClubInfoId);
     });
   }
+  // ⭐ v2.28.81 阶段 2:记分牌按钮 → 跳记分牌请求页
+  if (clubInfoCoinBtn) {
+    clubInfoCoinBtn.addEventListener('click', () => {
+      window.openCoinRequestsPage(currentClubInfoId);
+    });
+  }
 
   // ════════════════════════════════════════════════════════════════════════
-  // ⭐ v2.28.75 N2 邀请码管理(批次 4 收官子弹)
-  //   - Telegram 验证模式:调 POST /api/clubs/:id/invite-codes {expiresInDays:30}
-  //   - demo 模式(浏览器):本地随机生成 8 位假码 + 假过期时间
-  //   - 复制按钮:navigator.clipboard + execCommand fallback(复刻"复制ID"成熟实现)
-  //   - 关闭:× / 点遮罩
-  //   - ID 用 club-invite-* 前缀,避开老 #invite-modal-mask(那是"邀请玩家入牌局")
+  // ⭐ v2.28.81 阶段 2:记分牌请求页(申请发放/回收审批)
   //
-  //   顺手清理(铁律 0.11 轻约束):无新发现旧残留
+  //   入口 1:④ 俱乐部信息页 → 点"记分牌"按钮
+  //   入口 2:N9 通知胶囊点击(在 N9 区域改 handler)
+  //
+  //   状态机:
+  //     - 默认"未处理"勾选 → 显示 pending 列表(可通过/拒绝)
+  //     - 取消"未处理"勾选 → 显示 approved + rejected 历史(只读)
+  //
+  //   接口:
+  //     GET /api/clubs/:id/transfer-requests?status=pending
+  //     GET /api/clubs/:id/transfer-requests?status=approved
+  //     GET /api/clubs/:id/transfer-requests?status=rejected
+  //     POST .../:rid/approve
+  //     POST .../:rid/reject
+  //
+  //   每次操作完成后调 refreshAdminNotify() 同步 N9 胶囊
   // ════════════════════════════════════════════════════════════════════════
-  const clubInfoInviteBtn = document.getElementById('clubinfo-invite-btn');
-  const inviteModalMask = document.getElementById('club-invite-modal-mask');
-  const inviteModalClose = document.getElementById('club-invite-modal-close');
-  const inviteCodeBox = document.getElementById('club-invite-code-box');
-  const inviteCopyBtn = document.getElementById('club-invite-copy-btn');
-  const inviteExpireHint = document.getElementById('club-invite-expire-hint');
+  let currentCoinReqClubId = null;
+  let currentCoinReqShowPending = true; // true=未处理列表, false=已处理列表
 
-  // 邀请码字符表(跟后端 invite.js 严格一致:去 I/O/0/1)
-  const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const coinReqBack = document.getElementById('coinreq-back');
+  const coinReqToggleInput = document.getElementById('coinreq-toggle-input');
+  const coinReqList = document.getElementById('coinreq-list');
+  const coinReqEmpty = document.getElementById('coinreq-empty');
+  const coinReqLoading = document.getElementById('coinreq-loading');
 
-  // demo 模式假码生成器(本地随机 8 位)
-  function genFakeInviteCode() {
-    let code = '';
-    for (let i = 0; i < 8; i++) {
-      code += INVITE_CODE_ALPHABET[Math.floor(Math.random() * 32)];
-    }
-    return code;
+  // 返回 → 关页面,回 ④ 俱乐部信息页
+  if (coinReqBack) {
+    coinReqBack.addEventListener('click', () => {
+      document.getElementById('page-coin-requests').classList.remove('active');
+      const clubInfoPage = document.getElementById('page-club-info');
+      if (clubInfoPage) clubInfoPage.classList.add('active');
+    });
   }
 
-  // 过期时间文案(后端返 ISO 字符串;demo 模式自己算 now+30d)
-  function formatExpireHint(expiresAtIso) {
+  // 未处理 / 已处理 切换
+  if (coinReqToggleInput) {
+    coinReqToggleInput.addEventListener('change', () => {
+      currentCoinReqShowPending = coinReqToggleInput.checked;
+      loadCoinRequests();
+    });
+  }
+
+  // 打开记分牌请求页(对外暴露,N9 胶囊也调用)
+  window.openCoinRequestsPage = function(clubId) {
+    if (!clubId) {
+      // N9 入口可能没传 clubId,默认用 currentClubInfoId 或第一个 admin 俱乐部
+      clubId = currentClubInfoId
+        || (clubs.find(c => c.owner) && clubs.find(c => c.owner).id)
+        || (clubs[0] && clubs[0].id);
+    }
+    if (!clubId) {
+      if (typeof showToast === 'function') showToast('未找到俱乐部');
+      return;
+    }
+    currentCoinReqClubId = clubId;
+    currentCoinReqShowPending = true; // 重置为"未处理"
+    if (coinReqToggleInput) coinReqToggleInput.checked = true;
+
+    // 切页
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-coin-requests').classList.add('active');
+
+    // 加载列表
+    loadCoinRequests();
+  };
+
+  // 加载列表(根据当前 status 切换)
+  async function loadCoinRequests() {
+    if (!currentCoinReqClubId) return;
+    if (!coinReqList || !coinReqEmpty || !coinReqLoading) return;
+
+    // UI 状态:隐藏列表 + 空状态,显示加载
+    coinReqList.innerHTML = '';
+    coinReqEmpty.style.display = 'none';
+    coinReqLoading.style.display = 'block';
+
+    if (!window.apiClient) {
+      coinReqLoading.style.display = 'none';
+      coinReqEmpty.style.display = 'block';
+      coinReqEmpty.querySelector('.coinreq-empty-text').textContent = '请先登录';
+      return;
+    }
+
     try {
-      const d = new Date(expiresAtIso);
-      // 本地时区显示:YYYY-MM-DD HH:mm
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mi = String(d.getMinutes()).padStart(2, '0');
-      return '30 天后过期 · ' + yyyy + '-' + mm + '-' + dd + ' ' + hh + ':' + mi;
-    } catch (e) {
-      return '30 天后过期';
+      let items = [];
+      if (currentCoinReqShowPending) {
+        // 未处理 = status=pending
+        const resp = await window.apiClient.get(
+          '/api/clubs/' + currentCoinReqClubId + '/transfer-requests?status=pending&limit=200'
+        );
+        items = (resp && resp.requests) || [];
+      } else {
+        // 已处理 = approved + rejected,分两次拉再合并
+        const [respA, respR] = await Promise.all([
+          window.apiClient.get('/api/clubs/' + currentCoinReqClubId + '/transfer-requests?status=approved&limit=100'),
+          window.apiClient.get('/api/clubs/' + currentCoinReqClubId + '/transfer-requests?status=rejected&limit=100')
+        ]);
+        const arrA = (respA && respA.requests) || [];
+        const arrR = (respR && respR.requests) || [];
+        items = arrA.concat(arrR);
+        // 按 processed_at 倒序(没有则用 createdAt)
+        items.sort((a, b) => {
+          const ta = new Date(a.processedAt || a.createdAt).getTime();
+          const tb = new Date(b.processedAt || b.createdAt).getTime();
+          return tb - ta;
+        });
+      }
+
+      coinReqLoading.style.display = 'none';
+
+      if (items.length === 0) {
+        coinReqEmpty.style.display = 'block';
+        coinReqEmpty.querySelector('.coinreq-empty-text').textContent =
+          currentCoinReqShowPending ? '暂无待审申请' : '暂无历史记录';
+        return;
+      }
+
+      // 渲染
+      coinReqEmpty.style.display = 'none';
+      coinReqList.innerHTML = items.map(renderCoinReqItem).join('');
+      // 绑事件
+      bindCoinReqButtons();
+    } catch (err) {
+      console.warn('[coinreq.load] 失败:', err);
+      coinReqLoading.style.display = 'none';
+      coinReqEmpty.style.display = 'block';
+      const msg = (err && err.status === 403) ? '你不是该俱乐部 admin'
+                : (err && err.status === 401) ? '请先登录'
+                : '加载失败,请稍后再试';
+      coinReqEmpty.querySelector('.coinreq-empty-text').textContent = msg;
     }
   }
 
-  // 渲染弹窗内容(成功态)
-  function showInviteModalWithCode(code, expiresAtIso) {
-    inviteCodeBox.textContent = code;
-    inviteExpireHint.textContent = formatExpireHint(expiresAtIso);
-    inviteCopyBtn.disabled = false;
-    inviteCopyBtn.textContent = '复制邀请码';
-    inviteModalMask.classList.add('show');
+  // 渲染单条
+  function renderCoinReqItem(req) {
+    const isPending = req.status === 'pending';
+    const typeLabel = (req.type === 'grant') ? '发放' : '回收';
+    const typeClass = (req.type === 'grant') ? 'grant' : 'revoke';
+    const actionVerb = (req.type === 'grant') ? '申请发放' : '申请回收';
+
+    // 玩家显示名(优先 first_name + last_name, 兜底 username, 兜底 ID)
+    let displayName = '';
+    if (req.userFirstName) {
+      displayName = req.userFirstName + (req.userLastName ? ' ' + req.userLastName : '');
+    } else if (req.userUsername) {
+      displayName = '@' + req.userUsername;
+    } else {
+      displayName = '玩家 ' + req.userId;
+    }
+    // 安全转义
+    displayName = escapeHtml(displayName);
+
+    // 操作区:pending 显示 ✗ ✓,历史显示状态标签
+    let actionHtml = '';
+    if (isPending) {
+      actionHtml =
+        '<div class="coinreq-actions">' +
+          '<button class="coinreq-btn reject" data-coinreq-action="reject" data-coinreq-id="' + req.id + '" aria-label="拒绝">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+          '</button>' +
+          '<button class="coinreq-btn approve" data-coinreq-action="approve" data-coinreq-id="' + req.id + '" aria-label="通过">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>' +
+          '</button>' +
+        '</div>';
+    } else {
+      const statusClass = (req.status === 'approved') ? 'approved' : 'rejected';
+      const statusText = (req.status === 'approved') ? '已通过' : '已拒绝';
+      actionHtml = '<span class="coinreq-status-tag ' + statusClass + '">' + statusText + '</span>';
+    }
+
+    return (
+      '<div class="coinreq-item" data-coinreq-id="' + req.id + '">' +
+        '<div class="coinreq-avatar">' +
+          '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 22a8 8 0 0116 0z"/></svg>' +
+        '</div>' +
+        '<div class="coinreq-body">' +
+          '<div class="coinreq-name-row">' +
+            '<span class="coinreq-name">' + displayName + '</span>' +
+            '<span class="coinreq-type ' + typeClass + '">' + typeLabel + '</span>' +
+          '</div>' +
+          '<div class="coinreq-id">ID:' + req.userId + '</div>' +
+          '<div class="coinreq-detail">' +
+            actionVerb +
+            '<span class="coinreq-detail-coin">T</span>' +
+            '<span class="coinreq-detail-amount">' + req.amount + '</span>' +
+            ' 记分牌' +
+          '</div>' +
+        '</div>' +
+        actionHtml +
+      '</div>'
+    );
   }
 
-  // 主流程:点"邀请码"行
-  if (clubInfoInviteBtn && inviteModalMask) {
-    clubInfoInviteBtn.addEventListener('click', async () => {
-      // 防双击:按钮变 disabled 状态
-      if (clubInfoInviteBtn.classList.contains('loading')) return;
-      clubInfoInviteBtn.classList.add('loading');
+  // 简单 HTML 转义(防 XSS)
+  function escapeHtml(s) {
+    if (typeof s !== 'string') return String(s);
+    return s.replace(/[&<>"']/g, function(m) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m];
+    });
+  }
 
-      const u = window.currentUser;
-      const isDemo = !u || u.source === 'demo' || !window.tokenStore || !window.tokenStore.get();
+  // 绑定 ✗ ✓ 按钮(每次重新渲染都重新绑)
+  function bindCoinReqButtons() {
+    const btns = coinReqList.querySelectorAll('.coinreq-btn[data-coinreq-action]');
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-coinreq-action');
+        const reqId = btn.getAttribute('data-coinreq-id');
+        if (!reqId) return;
+        handleCoinReqAction(action, reqId, btn);
+      });
+    });
+  }
 
-      if (isDemo) {
-        // demo 模式:本地随机假码,假过期时间 now+30d
-        const fakeCode = genFakeInviteCode();
-        const fakeExpire = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
-        showInviteModalWithCode(fakeCode, fakeExpire);
-        if (typeof showToast === 'function') showToast('演示模式:本地生成假码');
-        console.log('[N2] demo 假码:', fakeCode);
-        clubInfoInviteBtn.classList.remove('loading');
-        return;
+  // 通过 / 拒绝
+  async function handleCoinReqAction(action, reqId, clickedBtn) {
+    if (!currentCoinReqClubId) return;
+    if (!window.apiClient) {
+      if (typeof showToast === 'function') showToast('请先登录');
+      return;
+    }
+
+    // 防双击:把同一 item 的两个按钮都 disable
+    const itemEl = clickedBtn.closest('.coinreq-item');
+    const allBtns = itemEl ? itemEl.querySelectorAll('.coinreq-btn') : [clickedBtn];
+    allBtns.forEach(b => { b.disabled = true; });
+
+    try {
+      const endpoint = '/api/clubs/' + currentCoinReqClubId + '/transfer-requests/' + reqId + '/' + action;
+      await window.apiClient.post(endpoint, {});
+
+      // 成功 toast
+      if (typeof showToast === 'function') {
+        showToast(action === 'approve' ? '已通过' : '已拒绝');
       }
 
-      // Telegram 真后端模式
-      if (!currentClubInfoId) {
-        if (typeof showToast === 'function') showToast('俱乐部信息异常,请重进');
-        clubInfoInviteBtn.classList.remove('loading');
-        return;
+      // 从列表移除这条(平滑过渡)
+      if (itemEl) {
+        itemEl.style.transition = 'opacity 0.2s, transform 0.2s';
+        itemEl.style.opacity = '0';
+        itemEl.style.transform = 'translateX(20px)';
+        setTimeout(() => {
+          // 如果列表空了,重新调 loadCoinRequests 让空状态生效
+          if (coinReqList.children.length <= 1) {
+            loadCoinRequests();
+          } else {
+            itemEl.remove();
+          }
+        }, 200);
       }
 
-      try {
-        const resp = await window.apiClient.post(
-          '/api/clubs/' + currentClubInfoId + '/invite-codes',
-          { expiresInDays: 30 }
-        );
-        const ic = resp.inviteCode;
-        if (!ic || !ic.code) {
-          throw new Error('后端响应缺 inviteCode 字段');
-        }
-        showInviteModalWithCode(ic.code, ic.expiresAt);
-        console.log('[N2] ✅ 真码生成:', ic.code, '过期', ic.expiresAt);
-      } catch (err) {
-        console.warn('[N2] ❌ 生成邀请码失败:', err);
-        const msg = (err.data && err.data.error) || err.message || '生成失败,请重试';
+      // 触发 N9 刷新(同步胶囊)
+      if (typeof window.refreshAdminNotify === 'function') {
+        window.refreshAdminNotify();
+      }
+    } catch (err) {
+      console.warn('[coinreq.action] 失败:', err);
+      // 还原按钮
+      allBtns.forEach(b => { b.disabled = false; });
+
+      if (err && err.status === 409) {
+        // 申请已被别人处理过了
+        if (typeof showToast === 'function') showToast('该申请已被处理');
+        loadCoinRequests(); // 刷新列表
+      } else if (err && err.status === 422) {
+        const msg = (err.data && err.data.error) || '余额不足';
         if (typeof showToast === 'function') showToast(msg);
-      } finally {
-        clubInfoInviteBtn.classList.remove('loading');
-      }
-    });
-  }
-
-  // 关闭:×
-  if (inviteModalClose && inviteModalMask) {
-    inviteModalClose.addEventListener('click', () => {
-      inviteModalMask.classList.remove('show');
-    });
-  }
-  // 关闭:点遮罩(不点击卡片本身)
-  if (inviteModalMask) {
-    inviteModalMask.addEventListener('click', (e) => {
-      if (e.target === inviteModalMask) {
-        inviteModalMask.classList.remove('show');
-      }
-    });
-  }
-
-  // 复制按钮(复刻"复制ID"成熟实现:clipboard API + execCommand fallback)
-  if (inviteCopyBtn) {
-    inviteCopyBtn.addEventListener('click', () => {
-      const code = inviteCodeBox.textContent;
-      if (!code || code === '--------') return;
-      const doFallback = () => {
-        const ta = document.createElement('textarea');
-        ta.value = code;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); } catch (e) {}
-        document.body.removeChild(ta);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code).catch(doFallback);
+      } else if (err && err.status === 403) {
+        if (typeof showToast === 'function') showToast('权限不足');
+      } else if (err && err.status === 404) {
+        if (typeof showToast === 'function') showToast('申请不存在');
+        loadCoinRequests();
       } else {
-        doFallback();
+        const msg = (err && err.data && err.data.error) || (err && err.message) || '操作失败,请稍后再试';
+        if (typeof showToast === 'function') showToast(msg);
       }
-      if (typeof showToast === 'function') showToast('邀请码已复制');
-    });
+    }
   }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // v2.28.76 N2.1:邀请码 handler 已删除(原 N2,~140 行)
+  //   原因:用户反馈"裸字符邀请码玩家不知道在哪里加入"
+  //   新路径:加入俱乐部 = 玩家输 5 位俱乐部 ID + admin 审批(B17 + N1 改造 + N7)
+  //   详见主文档 32.27.5 "批次 4.5 加入申请模式 改造规划"
+  // ════════════════════════════════════════════════════════════════════════
 
   // ========== 俱乐部账户页 ==========
   let currentClubAccountId = null;
@@ -35536,14 +36154,32 @@
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     targetPage.classList.add('active');
     const csBtn = document.querySelector('.floating-cs');
-    // 隐藏底部Tab
+    // ⭐ v2.28.78 决策 8:club-lobby 加入"准主页"白名单,显示底部 5 Tab
+    //   原因:玩家启动后默认进 ③ 大厅,5 Tab 必须可见才能切其他 Tab
+    //   未来如果有其他"准主页"(比如 MVP 2 的多俱乐部场景),加进这个白名单
+    const SUB_PAGES_WITH_TABBAR = ['club-lobby'];
     const tabbarWrap = document.querySelector('.tabbar-wrap');
-    if (tabbarWrap) tabbarWrap.style.display = 'none';
+    if (tabbarWrap) {
+      if (SUB_PAGES_WITH_TABBAR.indexOf(pageId) >= 0) {
+        tabbarWrap.style.display = 'block';
+        // 同步底部 Tab 选中态:club-lobby 视为"俱乐部"Tab 选中
+        document.querySelectorAll('.tab-item').forEach(t => {
+          t.classList.toggle('active', t.dataset.page === 'club');
+        });
+      } else {
+        tabbarWrap.style.display = 'none';
+      }
+    }
     // 客服按钮:大厅类页面显示且下移到屏幕右下,表单类隐藏
     if (csBtn) {
       if (subPagesWithCS.includes(pageId)) {
         csBtn.style.display = 'flex';
-        csBtn.classList.add('no-tabbar');
+        // 准主页(显示 Tab)时,客服按钮不加 no-tabbar(因为底部有 Tab)
+        if (SUB_PAGES_WITH_TABBAR.indexOf(pageId) >= 0) {
+          csBtn.classList.remove('no-tabbar');
+        } else {
+          csBtn.classList.add('no-tabbar');
+        }
       } else {
         csBtn.style.display = 'none';
       }
@@ -36855,111 +37491,337 @@
 
   // ========== 加入俱乐部 ==========
   // ════════════════════════════════════════════════════════════════════════
-  // ⭐ v2.28.74 N1:加入俱乐部接通后端(批次 4 第 3 颗子弹)
-  //   - Telegram 验证模式:输入 8 位邀请码 → POST /api/clubs/join
-  //   - demo 模式(浏览器):保留原 ALL_CLUBS_REGISTRY mock 5 位 ID 路径
-  //   - alreadyMember:true → toast"你已是成员"+ 跳俱乐部页
-  //   - 失败 → toast 显示后端 error
+  // ⭐ v2.28.76 N2.1:加入俱乐部 — 输入俱乐部 ID + admin 审批模式(批次 4.5 第 1 步)
+  //
+  // 改造历史:
+  //   v2.28.74 N1:8 位字符邀请码 → 直接加入(已废弃)
+  //   v2.28.75 N2:admin 端邀请码生成 UI(已废弃,因为"裸字符码玩家不知道在哪用")
+  //   v2.28.76 N2.1:输 5 位俱乐部 ID → 提交申请 → admin 审批 → 通过才入会
+  //
+  // 流程(玩家视角):
+  //   1. 输 ID → 点"申请加入" → 后端创建 PENDING 申请
+  //   2. toast "已申请" → 等待
+  //   3. 再次输同 ID(admin 还没处理)→ 后端识别已有 PENDING → toast "审核中"
+  //   4. admin 通过 → 玩家成员表写入,再次输 ID → toast "你已经是该俱乐部成员"
+  //   5. admin 拒绝 → 旧记录标 REJECTED,玩家可再次输 ID → 走步骤 1(新申请)
+  //
+  // 当前阶段(N2.1 mock):
+  //   - 后端 B17 加入申请服务还没做,前端走全本地 mock
+  //   - 用 window.__demoJoinRequests 数组模拟"申请已提交"状态
+  //   - demo 测试可申请 ID:12345 / 66666 / 77777(沿用旧 ALL_CLUBS_REGISTRY 数据)
+  //   - 后端到位后(下一对话),改成 apiClient.post('/api/clubs/join', { clubId })
   // ════════════════════════════════════════════════════════════════════════
-  // 模拟"全平台可加入的俱乐部"数据源(demo 模式专用 mock)
-  // 当前已加入的 clubs (88888/94081/21104) 不在此列表(避免重复)
-  // demo 测试可加入 ID:12345 / 66666 / 77777
+
+  // demo "全平台俱乐部"数据源(没真后端时用,模拟"存在的俱乐部 ID")
+  // ⚠️ 真后端到位后这段会删
   const ALL_CLUBS_REGISTRY = {
     '12345': { id: '12345', name: '夜猫俱乐部',   coin: 0, rooms: 6,  members: 234, owner: false },
     '66666': { id: '66666', name: '黑桃A',         coin: 0, rooms: 12, members: 890, owner: false },
     '77777': { id: '77777', name: '新手训练营',   coin: 0, rooms: 4,  members: 156, owner: false }
   };
 
+  // demo 申请记录(mock 数据库 club_join_requests 表)
+  //   每条 { clubId, status: 'pending'|'approved'|'rejected', createdAt }
+  //   存在 window 上方便 DEV 调试(F12 控制台可 inspect)
+  window.__demoJoinRequests = window.__demoJoinRequests || [];
+
   const joinBtn = document.getElementById('btn-join-club');
   const joinInput = document.getElementById('join-club-id');
   if (joinBtn && joinInput) {
     joinBtn.addEventListener('click', async () => {
-      const input = (joinInput.value || '').trim().toUpperCase();
+      const input = (joinInput.value || '').trim();
 
+      // 1. 空校验
       if (!input) {
-        showToast('请输入邀请码');
+        showToast('请输入俱乐部ID');
         return;
       }
 
-      // demo 模式:走原 ALL_CLUBS_REGISTRY mock 路径(浏览器演示场景)
-      const u = window.currentUser;
-      const isDemo = !u || u.source === 'demo' || !window.tokenStore || !window.tokenStore.get();
-      if (isDemo) {
-        // demo 模式接受 5 位俱乐部 ID(老 mock 数据)
-        if (clubs.some(c => c.id === input)) {
-          showToast('你已加入该俱乐部');
-          return;
-        }
-        const target = ALL_CLUBS_REGISTRY[input];
-        if (!target) {
-          showToast('俱乐部不存在');
-          return;
-        }
-        clubs.push({ ...target });
-        if (!clubRooms[input]) clubRooms[input] = [];
-        renderClubs();
-        joinInput.value = '';
-        showToast('加入成功');
-        showMainPage('club');
+      // 2. 格式校验:5 位数字 11111-99999
+      if (!/^[1-9][0-9]{4}$/.test(input)) {
+        showToast('俱乐部ID格式不正确(5位数字)');
         return;
       }
 
-      // Telegram 验证模式:走真后端 POST /api/clubs/join
-      // 弱校验:8 位 32 字符表(去 I/O/0/1),后端会再次强校验
-      if (!/^[A-HJ-NP-Z2-9]{8}$/.test(input)) {
-        showToast('邀请码格式不正确(8 位字母数字)');
-        return;
-      }
-
-      // 加载状态:禁用按钮 + 改文字
+      // 3. 加载状态防双击
       const origText = joinBtn.textContent;
       joinBtn.disabled = true;
-      joinBtn.textContent = '加入中...';
+      joinBtn.textContent = '提交中...';
       joinBtn.style.opacity = '0.6';
 
-      try {
-        const resp = await window.apiClient.post('/api/clubs/join', { inviteCode: input });
-        const c = resp.club;
+      // 模拟后端响应延迟 300ms(让按钮变化能被人眼看到,真实感)
+      setTimeout(() => {
+        try {
+          // === 状态机判断(模拟后端 B17 + B6 改造逻辑)===
 
-        // 字段映射(同 F8/F10 规则)
-        const newClub = {
-          id: String(c.id),
-          name: c.name,
-          intro: '',                                  // join 接口不返 description
-          coin: 0,                                    // 等 B7 钱包接入
-          rooms: 0,                                   // 等 B8 牌桌
-          members: 1,                                 // 等"成员列表"接口
-          owner: c.myRole === 'admin'                 // 加入的人 role='member',这里通常 false
-        };
+          // 状态 A:玩家已是该俱乐部成员 → "你已经是该俱乐部成员"
+          if (clubs.some(c => c.id === input)) {
+            showToast('你已经是该俱乐部成员');
+            return;
+          }
 
-        // 检查是否已在 clubs 数组(F10 刷新过的情况)
-        const existing = clubs.find(x => x.id === newClub.id);
-        if (!existing) {
-          clubs.push(newClub);
-          if (!clubRooms[newClub.id]) clubRooms[newClub.id] = [];
+          // 状态 B:已有 PENDING 申请,admin 还没处理 → "审核中"
+          const existingPending = window.__demoJoinRequests.find(
+            r => r.clubId === input && r.status === 'pending'
+          );
+          if (existingPending) {
+            showToast('审核中');
+            return;
+          }
+
+          // 状态 C:俱乐部 ID 不存在 → "该俱乐部不存在"
+          //   demo 范围:除了 ALL_CLUBS_REGISTRY 里的,还包括用户已加入但因为别的原因没显示的
+          //   真后端到位后会改用后端校验
+          if (!ALL_CLUBS_REGISTRY[input]) {
+            showToast('该俱乐部不存在');
+            return;
+          }
+
+          // 状态 D:可以新建申请(无 pending,可能有旧 rejected,根据决策 Q2-A 保留旧记录创建新条)
+          window.__demoJoinRequests.push({
+            clubId: input,
+            status: 'pending',
+            createdAt: new Date().toISOString()
+          });
+          showToast('已申请');
+          joinInput.value = '';  // 清空输入框,体感更好
+          console.log('[N2.1 demo] 已创建 PENDING 申请:', input,
+                      '当前申请池:', window.__demoJoinRequests);
+
+        } finally {
+          // 恢复按钮
+          joinBtn.disabled = false;
+          joinBtn.textContent = origText;
+          joinBtn.style.opacity = '';
         }
-        renderClubs();
-        joinInput.value = '';
+      }, 300);
+    });
+  }
 
-        if (resp.alreadyMember) {
-          showToast('你已是该俱乐部成员');
-          console.log('[N1] ⓘ 已是成员,未消耗邀请码');
+  // ════════════════════════════════════════════════════════════════════════
+  // ⭐ v2.28.77 N9:admin 全局通知胶囊 — JS 行为(批次 4.5 配套)
+  //
+  // 设计:
+  //   - 暴露 window.updateAdminNotify(count) 函数,数字 0 → 隐藏,>0 → 显示
+  //   - hookSwitchTab 切 Tab 时刷新一次(MVP 1 阶段没 WS,靠切 Tab 触发)
+  //   - 牌桌页特殊处理:body 加 .on-game-page class 让 CSS top 偏移到 220px
+  //   - 点击胶囊 → 跳俱乐部 Tab + 调用 updateAdminNotify(0) 隐藏自己
+  //   - mock 触发器:window.__demoAddRequest(clubId) 可在 Console 模拟"新申请到达"
+  //
+  // ⭐ v2.28.81 阶段 EF 接通:
+  //   - refreshAdminNotify() 调 GET /api/admin/pending-count 拿真数
+  //   - 启动 + 切 Tab + 玩家提交申请 + 每隔 30 秒 都触发刷新
+  //   - dev-n9-panel + __demoAddRequest 保留(大整顿时一起删)
+  // ════════════════════════════════════════════════════════════════════════
+
+  // 取 DOM 引用(IIFE 在 </body> 之前调用,DOM 已就绪)
+  const adminNotifyChip = document.getElementById('admin-notify-chip');
+  const adminNotifyText = document.getElementById('admin-notify-text');
+
+  // 当前 admin 待审申请总数(全局状态)
+  window.__adminPendingCount = 0;
+
+  // 更新通知胶囊(0 → 隐藏,>0 → 显示)
+  window.updateAdminNotify = function(count) {
+    const n = Math.max(0, parseInt(count, 10) || 0);
+    window.__adminPendingCount = n;
+    if (!adminNotifyChip || !adminNotifyText) return;
+    if (n > 0) {
+      adminNotifyText.textContent = '待审申请 (' + n + ')';
+      adminNotifyChip.classList.add('show');
+    } else {
+      adminNotifyChip.classList.remove('show');
+    }
+  };
+
+  // 是否当前用户是任何俱乐部的 admin
+  function isAnyClubAdmin() {
+    return Array.isArray(clubs) && clubs.some(function(c) { return c.owner === true; });
+  }
+
+  // ⭐ v2.28.81 阶段 EF:调真后端 GET /api/admin/pending-count
+  //   - 任何登录用户都能调,后端只返回"自己管辖的"
+  //   - 不是 admin → 后端返 count: 0(SQL 自然返回 0)
+  //   - 失败:console.warn,不显示 toast(避免骚扰)
+  //   - 防止重入:同时只 1 个请求,新的等旧的完成
+  let __adminNotifyInflight = false;
+  window.refreshAdminNotify = async function() {
+    if (__adminNotifyInflight) return;
+    if (!window.apiClient) {
+      window.updateAdminNotify(0);
+      return;
+    }
+    __adminNotifyInflight = true;
+    try {
+      const resp = await window.apiClient.get('/api/admin/pending-count');
+      const count = (resp && typeof resp.count !== 'undefined') ? resp.count : 0;
+      window.updateAdminNotify(count);
+    } catch (err) {
+      console.warn('[N9.refresh] 拉 pending-count 失败(忽略):', err && err.message);
+      // 失败时保留旧值,不重置为 0(避免闪烁)
+    } finally {
+      __adminNotifyInflight = false;
+    }
+  };
+
+  // demo 版(墓碑保留 — dev-n9-panel 还在用)
+  //   __demoJoinRequests 是 N2.1 的"加入申请"mock(MVP 2 才接通真后端),不是 transfer
+  function refreshAdminNotifyFromDemo() {
+    // 非 admin 永远不显示
+    if (!isAnyClubAdmin()) {
+      window.updateAdminNotify(0);
+      return;
+    }
+    // 统计 demo 申请池里 PENDING 数量,仅算"我是 admin 的俱乐部"
+    const myAdminClubIds = clubs.filter(function(c) { return c.owner; })
+                                .map(function(c) { return String(c.id); });
+    const pending = (window.__demoJoinRequests || []).filter(function(r) {
+      return r.status === 'pending' && myAdminClubIds.indexOf(String(r.clubId)) >= 0;
+    });
+    window.updateAdminNotify(pending.length);
+  }
+
+  // 切 Tab 时刷新(N9.4 核心钩子)
+  //   项目实际 class 是 .tab-item(底部 5 个 Tab),含 data-page 标识
+  document.querySelectorAll('.tab-item').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      // 短延迟让 page 切换完成后再判断当前是否游戏页(用于 CSS top 偏移)
+      setTimeout(function() {
+        const gamePage = document.getElementById('page-game');
+        const onGame = gamePage && gamePage.classList.contains('active');
+        document.body.classList.toggle('on-game-page', !!onGame);
+        // ⭐ v2.28.81:调真后端
+        if (typeof window.refreshAdminNotify === 'function') {
+          window.refreshAdminNotify();
+        }
+      }, 50);
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ⭐ v2.28.78 决策 7+8:启动跳转到 ③【俱乐部内部牌桌大厅】
+  //   - 折中方案:MVP 1 阶段只 1 个俱乐部,玩家自动进大厅
+  //   - 取 clubs 数组第一个俱乐部(后端真模式:只有 1 个就用它;demo 模式:用 mock 第一个)
+  //   - 兜底:如果 clubs 数组为空(从未加入任何俱乐部),保持默认 page-game(避免空白页)
+  //   - 必须在 N9 启动 setTimeout 之前,因为 N9 依赖当前 active page 判断 on-game-page
+  // ════════════════════════════════════════════════════════════════════════
+  setTimeout(function() {
+    try {
+      if (Array.isArray(clubs) && clubs.length > 0 && typeof showSubPage === 'function') {
+        // 设置当前俱乐部 ID(俱乐部大厅依赖 currentClubInfoId / 类似变量)
+        const firstClub = clubs[0];
+        if (typeof currentClubInfoId !== 'undefined') {
+          // 用 try/catch 防止变量不存在的环境报错
+          try { currentClubInfoId = firstClub.id; } catch (e) {}
+        }
+        // 直接跳转到 ③ 大厅(showSubPage 已加白名单允许显示 5 Tab)
+        if (typeof window.openClubLobby === 'function') {
+          window.openClubLobby(firstClub.id);
         } else {
-          showToast('加入成功:' + c.name);
-          console.log('[N1] ✅ 加入俱乐部成功:', c.name, 'id =', c.id);
+          // fallback:直接 showSubPage
+          showSubPage('club-lobby');
         }
-
-        showMainPage('club');
-      } catch (err) {
-        console.warn('[N1] ❌ 加入俱乐部失败:', err);
-        const msg = (err.data && err.data.error) || err.message || '加入失败,请重试';
-        showToast(msg);
-        // 不清输入框,让用户改完重试
-      } finally {
-        joinBtn.disabled = false;
-        joinBtn.textContent = origText;
-        joinBtn.style.opacity = '';
+        console.log('[v2.28.78 决策 7] 启动跳转到 ③ 大厅,俱乐部:', firstClub.id, firstClub.name);
+      } else {
+        console.log('[v2.28.78 决策 7] clubs 为空,保持默认 page-game(玩家未加入任何俱乐部)');
       }
+    } catch (err) {
+      console.warn('[v2.28.78 决策 7] 启动跳转失败,保持默认页:', err);
+    }
+  }, 300);
+
+  // Mini App 启动时也查一次(N9.4 启动钩子)
+  //   delay 500ms 等其他初始化完成(在跳转之后,确保 N9 看到正确的 active page)
+  setTimeout(function() {
+    const gamePage = document.getElementById('page-game');
+    const onGame = gamePage && gamePage.classList.contains('active');
+    document.body.classList.toggle('on-game-page', !!onGame);
+    // ⭐ v2.28.81:调真后端
+    if (typeof window.refreshAdminNotify === 'function') {
+      window.refreshAdminNotify();
+    }
+  }, 500);
+
+  // ⭐ v2.28.81 阶段 EF:每 30 秒轮询一次 pending-count
+  //   - MVP 1 阶段没 WebSocket,靠轻量轮询模拟"即时通知"
+  //   - 30 秒间隔:admin 最多等 30 秒能看到 N9 +1,流量可接受
+  //   - 失败不重置(refreshAdminNotify 内部已处理)
+  setInterval(function() {
+    if (typeof window.refreshAdminNotify === 'function') {
+      window.refreshAdminNotify();
+    }
+  }, 30000);
+
+  // 点击胶囊:跳记分牌请求页(N9.5)
+  //   ⭐ v2.28.81 阶段 2:不再跳俱乐部 Tab,改成直达"记分牌请求"审批页
+  //     - 因为 admin 看到 N9 一定是要审批,直达审批页最快
+  //     - 落地页默认"未处理"勾选,显示 pending 列表
+  //     - 处理完 → 触发 refreshAdminNotify 同步 N9
+  if (adminNotifyChip) {
+    adminNotifyChip.addEventListener('click', function() {
+      // 牌桌切走了,移除 body class
+      document.body.classList.remove('on-game-page');
+      // 直达记分牌请求页(自动选第一个 admin 俱乐部)
+      if (typeof window.openCoinRequestsPage === 'function') {
+        window.openCoinRequestsPage(null); // 传 null 让函数自己挑 admin 俱乐部
+      }
+    });
+  }
+
+  // DEV 触发器:模拟"新申请到达"(F12 Console 可用)
+  //   用法:window.__demoAddRequest('12345')
+  //   效果:demo 申请池加一条 PENDING,胶囊立刻显示
+  //   注意:仅当 clubs 数组里有 id='12345' 且 owner=true 的俱乐部才会触发显示
+  //   (因为非 admin 不显示通知,这是产品逻辑)
+  window.__demoAddRequest = function(clubId) {
+    if (!window.__demoJoinRequests) window.__demoJoinRequests = [];
+    window.__demoJoinRequests.push({
+      clubId: String(clubId),
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      requesterName: 'DEMO_REQUESTER_' + Math.floor(Math.random() * 1000)
+    });
+    refreshAdminNotifyFromDemo();
+    console.log('[N9 DEV] 模拟新申请加入 clubId=' + clubId + ',当前申请池:', window.__demoJoinRequests);
+  };
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ⭐ v2.28.77 N9 DEV 测试面板 — 按钮交互(临时,B17 接通后删)
+  //
+  // 为什么有这块:
+  //   - 不熟悉 F12 Console 的用户也要能测试 N9 通知胶囊
+  //   - 点①按钮 = 自动把第一个俱乐部设为 admin + 模拟新申请到达
+  //   - 点②按钮 = 清空申请池 + 隐藏胶囊
+  //   - 点"隐藏此面板"= DEV 面板自己消失(不影响主流程截图)
+  // ════════════════════════════════════════════════════════════════════════
+  const devN9Panel = document.getElementById('dev-n9-panel');
+  const devN9Trigger = document.getElementById('dev-n9-trigger');
+  const devN9Clear = document.getElementById('dev-n9-clear');
+  const devN9HidePanel = document.getElementById('dev-n9-hide-panel');
+
+  if (devN9Trigger) {
+    devN9Trigger.addEventListener('click', function() {
+      // 确保 clubs 数组有内容
+      if (!Array.isArray(clubs) || clubs.length === 0) {
+        alert('当前没有任何俱乐部,请先创建一个');
+        return;
+      }
+      // 把第一个俱乐部强制设为 admin(让通知胶囊可见的前提条件)
+      clubs[0].owner = true;
+      // 模拟新申请到达
+      window.__demoAddRequest(clubs[0].id);
+    });
+  }
+  if (devN9Clear) {
+    devN9Clear.addEventListener('click', function() {
+      window.__demoJoinRequests = [];
+      refreshAdminNotifyFromDemo();
+      console.log('[N9 DEV] 申请池已清空');
+    });
+  }
+  if (devN9HidePanel) {
+    devN9HidePanel.addEventListener('click', function() {
+      if (devN9Panel) devN9Panel.style.display = 'none';
     });
   }
 

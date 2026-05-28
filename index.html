@@ -16967,22 +16967,29 @@
       }
     }
 
-    // ⭐ B8.5(2026-05-29):真后端离座(DELETE /api/tables/:id/seats/:seatNo)
-    //   触发条件:入座时已存了 _myRealSeatNo + _myRealTableId(POST 成功后才存)
-    //   失败:console.warn 但仍走动画 + 返大厅(不阻塞用户)
-    //   demo 模式(无这俩 window 变量)→ 跳过,直接走动画
-    if (window._myRealTableId && window._myRealSeatNo) {
+    // ⭐ B8.5(2026-05-29):真后端离座 —— 改用更稳健的 my-seat 路由
+    //   原方式依赖前端 _myRealTableId/_myRealSeatNo,有"sit/leave 之间切版本就丢失"的 bug
+    //   新方式:用 currentTableRoom.id + DELETE /api/tables/:id/my-seat,后端自动找座位
+    //   兜底:如果 currentTableRoom.id 也丢失,试用 _myRealTableId
+    //   demo 模式(浏览器/无 token)→ 跳过
+    var leaveTableId = null;
+    if (currentTableRoom && Number.isInteger(Number(currentTableRoom.id))) {
+      leaveTableId = Number(currentTableRoom.id);
+    } else if (window._myRealTableId) {
+      leaveTableId = window._myRealTableId;
+    }
+    if (leaveTableId && window.apiClient && window.tokenStore && window.tokenStore.get()) {
       try {
-        const resp = await window.apiClient.del(
-          '/api/tables/' + window._myRealTableId + '/seats/' + window._myRealSeatNo
-        );
+        const resp = await window.apiClient.del('/api/tables/' + leaveTableId + '/my-seat');
         console.log('[B8.5] ✅ 离座成功,后端返:', resp);
-        // 用后端返的 returnedChips 覆盖 toast 数额(更准)
         if (resp && typeof resp.returnedChips === 'number') {
           returnedAmount = resp.returnedChips;
         }
       } catch (err) {
-        console.warn('[B8.5] ⚠️ 离座调后端失败,前端仍返大厅:', err);
+        // 404 = 后端没找到我的座位(可能已离 / 没入座过)→ 不重要,继续返大厅
+        if (err && err.status !== 404) {
+          console.warn('[B8.5] ⚠️ 离座调后端失败,前端仍返大厅:', err);
+        }
       }
       window._myRealTableId = null;
       window._myRealSeatNo = null;

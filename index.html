@@ -33264,6 +33264,53 @@
     });
   }
 
+  // ⭐ N3 阶段 2(2026-05-28):从真后端拉俱乐部成员列表 → 替换 clubMembersData mock
+  //   入口:成员页 / 俱乐部管理→成员管理 进入时调一次
+  //   返回:Promise<members[] | null>(null = demo 模式或失败 → 调用方保留 mock)
+  //   字段映射:
+  //     backend.role 'admin'|'member' → frontend.role 'admin'|'player'(mock 用 'player')
+  //     backend.userId(真 users.id)→ frontend.uid(原 mock 是假 '1001xxx')
+  //     backend.firstName+lastName → frontend.name
+  //     backend.userId === ownerId → frontend.owner(创建者标签)
+  //   ⚠️ 关键:之前 mock uid 跟真后端 users.id 对不上,导致 N3 阶段 1 封号按钮 patch 后端 404,
+  //          这就是为啥要拆"阶段 2"的根本原因。
+  function fetchClubMembersAndRefresh(clubId) {
+    if (!window.apiClient || !window.tokenStore || !window.tokenStore.get()) {
+      return Promise.resolve(null);
+    }
+    return window.apiClient.get('/api/clubs/' + clubId + '/members').then(function(resp) {
+      var backendMembers = (resp && resp.members) || [];
+      var ownerId = (resp && resp.ownerId) || null;
+      console.log('[N3阶段2] ✅ 拉到俱乐部 ' + clubId + ' 成员 ' + backendMembers.length + ' 个');
+      var mapped = backendMembers.map(function(m) {
+        var fullName = ((m.firstName || '') + ' ' + (m.lastName || '')).trim();
+        if (!fullName) fullName = m.username ? '@' + m.username : ('User' + m.userId);
+        return {
+          uid: String(m.userId),                                      // 真 users.id
+          name: fullName,
+          owner: Number(m.userId) === Number(ownerId),
+          role: m.role === 'admin' ? 'admin' : 'player',             // 'member' → 'player'(mock 约定)
+          blacklist: !!m.blacklist,
+          avatar: m.photoUrl || null,
+          lastOnline: Date.now(),                                     // 占位,等"在线状态"接口
+          joinDate: (function(iso) {
+            if (!iso) return '';
+            var d = new Date(iso);
+            return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+          })(m.joinedAt),
+          adminType: m.role === 'admin' ? '管理员' : null,
+          adminSetAt: m.role === 'admin' ? new Date(m.joinedAt).getTime() : null
+        };
+      });
+      clubMembersData.length = 0;
+      mapped.forEach(function(c) { clubMembersData.push(c); });
+      return mapped;
+    }).catch(function(err) {
+      console.warn('[N3阶段2] ⚠️ 拉成员列表失败,保留 mock:', err.message);
+      return null;
+    });
+  }
+
   // 大厅页 记分牌 显示/隐藏切换
   const eyeToggle = document.getElementById('lobby-eye-toggle');
   if (eyeToggle) {
@@ -33399,10 +33446,16 @@
       // 清空搜索框
       const searchInput = document.getElementById('members-search-input');
       searchInput.value = '';
-      // 渲染
+      // 先用 mock/cache 立刻渲染
       renderMembers(currentClubIdForMembers, '');
       // 跳转
       showSubPage('members');
+      // ⭐ N3 阶段 2:异步拉真后端,成功后覆盖 mock + 重渲染
+      if (typeof fetchClubMembersAndRefresh === 'function') {
+        fetchClubMembersAndRefresh(currentClubIdForMembers).then(function(members) {
+          if (members) renderMembers(currentClubIdForMembers, searchInput.value || '');
+        });
+      }
     });
   }
 
@@ -35306,9 +35359,18 @@
     if (searchInput) searchInput.value = '';
     // 更新统计
     updateMembersStats();
-    // 渲染列表
+    // 渲染列表(先 mock/cache 立刻显示)
     renderMembersList();
     showSubPage('club-members-mng');
+    // ⭐ N3 阶段 2:异步拉真后端,成功后覆盖 + 重渲染
+    if (typeof fetchClubMembersAndRefresh === 'function') {
+      fetchClubMembersAndRefresh(clubId).then(function(members) {
+        if (members) {
+          updateMembersStats();
+          renderMembersList();
+        }
+      });
+    }
   }
 
   // 更新顶部统计(排除黑名单)
@@ -35677,20 +35739,51 @@
       closeAlert();
       return;
     }
-    if (currentAlertAction === 'freeze') {
-      // 冻结操作:加入黑名单
-      currentAlertMember.blacklist = true;
-      showToast(`已将 ${currentAlertMember.name} 加入黑名单`);
-      // 刷新成员页
-      updateMembersStats();
-      renderMembersList();
-    } else if (currentAlertAction === 'unfreeze') {
-      // 解封操作
-      currentAlertMember.blacklist = false;
-      showToast(`已解封 ${currentAlertMember.name}`);
-      // 刷新黑名单列表
-      renderBlacklistList();
-    } else if (currentAlertAction === 'cancel-admin') {
+    if (currentAlertAction === 'freeze' || currentAlertAction === 'unfreeze') {
+      // ⭐ N3 阶段 2(2026-05-28):接通真后端 PATCH /api/clubs/:id/members/:uid/blacklist
+      //   N3 阶段 1 已建后端路由,本阶段把这两处 mutation 改成真调
+      //   demo 模式(无 token)→ 退化为原 mock mutation(保留 demo 体验)
+      const targetMember = currentAlertMember;
+      const willBlacklist = (currentAlertAction === 'freeze');
+      const verb = willBlacklist ? '加入黑名单' : '解封';
+      const refreshAfter = function() {
+        targetMember.blacklist = willBlacklist;
+        showToast((willBlacklist ? '已将 ' : '已') + targetMember.name + (willBlacklist ? ' 加入黑名单' : ''));
+        if (willBlacklist) {
+          updateMembersStats();
+          renderMembersList();
+        } else {
+          renderBlacklistList();
+        }
+      };
+      // demo 兜底:无 token 直接 mock mutation
+      if (!window.apiClient || !window.tokenStore || !window.tokenStore.get()) {
+        refreshAfter();
+        closeAlert();
+        return;
+      }
+      // 真后端
+      const clubId = currentClubManageId;
+      const userId = targetMember.uid;
+      if (!clubId || !userId) {
+        showToast('无法定位俱乐部或成员');
+        closeAlert();
+        return;
+      }
+      closeAlert();   // 立刻关弹窗,网络期间不阻塞用户
+      window.apiClient.patch(
+        '/api/clubs/' + clubId + '/members/' + userId + '/blacklist',
+        { blacklist: willBlacklist }
+      ).then(function() {
+        console.log('[N3阶段2] ✅ ' + verb + ' 成功 user=' + userId);
+        refreshAfter();
+      }).catch(function(err) {
+        console.warn('[N3阶段2] ❌ ' + verb + ' 失败:', err);
+        showToast(verb + '失败:' + (err && err.message ? err.message : '未知错误'));
+      });
+      return;
+    }
+    if (currentAlertAction === 'cancel-admin') {
       // 取消管理员
       currentAlertMember.role = 'player';
       delete currentAlertMember.adminType;

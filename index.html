@@ -3206,11 +3206,31 @@
 
   /* ⭐ 2026-05-29:真后端桌(俱乐部 tab → N4 真桌 → page-table)隐藏 demo/DEV 元素
      - body 上 class `on-real-table`(由 JS 在 lobby 点真桌时加,doReturnToLobby 时移)
-     - demo 桌(游戏 tab mock 房间 / browser)保留全部 DEV 工具,以备调试
-     - 隐藏:DEV-1/DEV-2 切换器 / DEMO mode 标签 / 一手演示按钮 / 新一轮按钮 */
+     - demo 桌(游戏 tab mock 房间 / browser)保留全部 DEV 工具 + demo 数据,以备调试
+     - 隐藏:DEV-1/DEV-2 切换器 / DEMO mode 标签 / 一手演示按钮 / 新一轮按钮
+     - 还隐藏:demo 底池数字 / 共牌(等 B11 发牌)/ 自己手牌 / 所有座位 bet
+     - 保留显示:N4 真设置(blinds/stoploss/桌名)+ 座位玩家信息 */
   body.on-real-table .dev-state-switcher,
   body.on-real-table .dev-quick-demo,
   body.on-real-table #mode-indicator { display: none !important; }
+  body.on-real-table .table-center .pot-chips,
+  body.on-real-table .table-center .pot-label,
+  body.on-real-table #pot-list,
+  body.on-real-table #community-cards,
+  body.on-real-table .my-seat .my-cards,
+  body.on-real-table .my-seat .seat-bet,
+  body.on-real-table .seat .seat-bet,
+  body.on-real-table #table-hand-no,
+  body.on-real-table #table-timer { display: none !important; }
+  /* 真桌中央"等待开局"占位文字(JS 不动 DOM,纯 CSS 用 ::before 加上) */
+  body.on-real-table .table-center::before {
+    content: '等待开局...';
+    display: block;
+    text-align: center;
+    color: rgba(255,255,255,0.4);
+    font-size: 14px;
+    padding: 12px 0 4px;
+  }
   .dev-quick-demo-btn .dqd-icon {
     font-size: 10px;
     letter-spacing: -1px;

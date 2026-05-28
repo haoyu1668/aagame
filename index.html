@@ -38855,17 +38855,35 @@
     }
   }, 500);
 
-  // ⭐ v2.28.81 阶段 EF + 2026-05-29 fix:每 10 秒轮询一次 pending-count
+  // ⭐ v2.28.81 阶段 EF + 2026-05-29 fix:每 5 秒轮询(30s → 10s → 5s,激进档)
   //   - MVP 1 阶段没 WebSocket,靠轻量轮询模拟"即时通知"
-  //   - 原 30 秒 → 改 10 秒:admin 等待时间从最多 30 → 10 秒
-  //     (Telegram WebApp 后台可能会节流到 60s+,但前台 10s 体验已很好)
+  //   - 5 秒间隔:admin 前台等待 ≤5s
+  //   - 顺手刷大厅 wallet 余额:啊勇 等账号收到发放后不用退出俱乐部重进也能看到
+  //   - Telegram WebApp 后台可能仍节流,前台体验已基本即时
   //   - B10 真 WebSocket 接入后此 setInterval 删掉
-  //   - 失败不重置(refreshAdminNotify 内部已处理)
   setInterval(function() {
     if (typeof window.refreshAdminNotify === 'function') {
       window.refreshAdminNotify();
     }
-  }, 10000);
+    // 顺手刷大厅 wallet 余额(仅当用户当前在大厅 + 有 lobby-id + 有 token)
+    if (window.apiClient && window.tokenStore && window.tokenStore.get()) {
+      var lobbyIdEl = document.getElementById('lobby-id');
+      var clubLobbyPage = document.getElementById('page-club-lobby');
+      var onLobby = clubLobbyPage && clubLobbyPage.classList.contains('active');
+      if (onLobby && lobbyIdEl && lobbyIdEl.textContent) {
+        var clubId = lobbyIdEl.textContent.trim();
+        window.apiClient.get('/api/clubs/' + clubId + '/wallet').then(function(resp) {
+          if (resp && resp.wallet && typeof resp.wallet.balance !== 'undefined') {
+            userPlatformBalance = Number(resp.wallet.balance) || 0;
+            var usdtEl = document.getElementById('lobby-usdt');
+            if (usdtEl && usdtEl.dataset.hidden !== '1') {
+              usdtEl.textContent = String(userPlatformBalance);
+            }
+          }
+        }).catch(function() { /* 静默 */ });
+      }
+    }
+  }, 5000);
 
   // 点击胶囊:跳记分牌请求页(N9.5)
   //   ⭐ v2.28.81 阶段 2:不再跳俱乐部 Tab,改成直达"记分牌请求"审批页

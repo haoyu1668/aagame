@@ -38022,11 +38022,24 @@
           //   - 成功 → 替换 clubs 数组 + 重新 renderClubs(刷新 UI)
           //   - 失败 → 保留 mock 兜底(用户至少能看到东西)
           //   - 字段映射:后端 description → 前端 intro;后端 myRole='admin' → owner:true
-          window.apiClient.get('/api/clubs').then(function(clubsResp) {
-            const backendClubs = clubsResp.clubs || [];
+          // bug 1 修复:用裸 fetch 替代 apiClient.get
+          //   apiClient 在 [37059] 强制 data.ok===true,否则即使 HTTP 200 也抛错走 catch
+          //   →  /api/clubs 哪怕成功返了真数据,只要 shape 不带 ok,前端就当失败 → mock 永远不被替换
+          //   现改裸 fetch,兼容 3 种 shape:{ok:true,clubs:[...]} | {clubs:[...]} | [...]
+          //   只要 HTTP 2xx + 能解析出 clubs 数组就接管 UI
+          var _f10Token = (window.tokenStore && window.tokenStore.get()) || null;
+          var _f10Headers = { 'Content-Type': 'application/json' };
+          if (_f10Token) _f10Headers['Authorization'] = 'Bearer ' + _f10Token;
+          fetch(window.API_BASE_URL + '/api/clubs', { headers: _f10Headers }).then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          }).then(function(raw) {
+            // 兼容 3 种响应 shape
+            var backendClubs = Array.isArray(raw) ? raw
+                             : (raw && Array.isArray(raw.clubs) ? raw.clubs : []);
             console.log('[F10] ✅ 拉到真实俱乐部列表,共 ' + backendClubs.length + ' 个');
             // 字段映射:后端 → 前端
-            const mapped = backendClubs.map(function(c) {
+            var mapped = backendClubs.map(function(c) {
               return {
                 id: String(c.id),
                 name: c.name,

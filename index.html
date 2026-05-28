@@ -3226,8 +3226,8 @@
   body.on-real-table #hash-chip,
   body.on-real-table #ws-mock-start-btn,
   body.on-real-table .seat .seat-cards-back { display: none !important; }
-  /* my-seat 默认隐藏,真坐下(.seated)才显示 */
-  body.on-real-table .my-seat:not(.seated) { display: none !important; }
+  /* 真桌未入座时:my-seat 容器保留(让你看见"我的位置"),但藏假筹码 1.4K */
+  body.on-real-table .my-seat:not(.seated) .seat-chips { display: none !important; }
   /* 真桌未入座时,顶部 rebuy/余额(补码)控件也隐藏 — 真坐下后才有意义 */
   body.on-real-table:not(:has(.my-seat.seated)) #topbar-rebuy { display: none !important; }
   /* 真桌中央"等待开局"占位文字(JS 不动 DOM,纯 CSS 用 ::before 加上) */

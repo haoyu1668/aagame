@@ -38912,14 +38912,29 @@
       }
     } catch (e) {}
 
+    // 取当前 phone-wrap scale(电脑端可能 1.5-2,手机端 1)
+    function _chipGetScale() {
+      var v = getComputedStyle(document.documentElement).getPropertyValue('--app-scale');
+      var s = parseFloat(v);
+      return (s && s > 0) ? s : 1;
+    }
+    // 取 phone-wrap CSS 像素尺寸(scale 前)
+    function _chipGetPhoneCssDim() {
+      var hv = getComputedStyle(document.documentElement).getPropertyValue('--phone-h');
+      var h = parseFloat(hv);
+      return { w: 390, h: (h && h > 0) ? h : 844 };
+    }
+
     adminNotifyChip.addEventListener('pointerdown', function(e) {
       _chipDragState.dragging = true;
       _chipDragState.didDrag = false;
       _chipDragState.sx = e.clientX;
       _chipDragState.sy = e.clientY;
+      // offset 转 CSS 像素(viewport 减 chip 左上后除 scale)
+      var s = _chipGetScale();
       var r = adminNotifyChip.getBoundingClientRect();
-      _chipDragState.ox = e.clientX - r.left;
-      _chipDragState.oy = e.clientY - r.top;
+      _chipDragState.ox = (e.clientX - r.left) / s;
+      _chipDragState.oy = (e.clientY - r.top) / s;
       try { adminNotifyChip.setPointerCapture(e.pointerId); } catch (_) {}
     });
 
@@ -38931,13 +38946,19 @@
         _chipDragState.didDrag = true;
       }
       if (!_chipDragState.didDrag) return;
+      // 关键:viewport 坐标 → CSS 坐标(除 scale)
+      var s = _chipGetScale();
       var wrapR = _chipWrap.getBoundingClientRect();
-      var chipR = adminNotifyChip.getBoundingClientRect();
-      var newLeft = e.clientX - wrapR.left - _chipDragState.ox;
-      var newTop  = e.clientY - wrapR.top  - _chipDragState.oy;
-      // 边界:不能拖出 phone-wrap
-      newLeft = Math.max(0, Math.min(newLeft, wrapR.width  - chipR.width));
-      newTop  = Math.max(0, Math.min(newTop,  wrapR.height - chipR.height));
+      var phone = _chipGetPhoneCssDim();
+      var cssX = (e.clientX - wrapR.left) / s;
+      var cssY = (e.clientY - wrapR.top)  / s;
+      var newLeft = cssX - _chipDragState.ox;
+      var newTop  = cssY - _chipDragState.oy;
+      // 边界用 CSS 尺寸(390 × phone-h),chip 用 offsetWidth/Height(CSS 像素)
+      var chipW = adminNotifyChip.offsetWidth;
+      var chipH = adminNotifyChip.offsetHeight;
+      newLeft = Math.max(0, Math.min(newLeft, phone.w - chipW));
+      newTop  = Math.max(0, Math.min(newTop,  phone.h - chipH));
       adminNotifyChip.style.left  = newLeft + 'px';
       adminNotifyChip.style.top   = newTop + 'px';
       adminNotifyChip.style.right = 'auto';

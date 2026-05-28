@@ -38019,103 +38019,66 @@
           // ⭐ v2.28.73 F10:从后端拉真实俱乐部列表,替换 mock 数据
           //   - 启动时 clubs 数组是 3 个 mock(LobbyPlayersClub/昊泊/地方),UI 先渲染兜底
           //   - 这里异步调 GET /api/clubs 拿真实加入的俱乐部
-          //   - 成功 → 替换 clubs 数组 + 重新 renderClubs(刷新 UI)
-          //   - 失败 → 保留 mock 兜底(用户至少能看到东西)
+          //   - 成功 → 替换 clubs 数组 + 重新 renderClubs(刷新列表 UI)+ 把内部大厅 UI 也刷成真俱乐部(见下方"bug 1 修复")
+          //   - 失败 → 保留 mock 兜底(用户至少能看到东西,auto-enter 进 mock 是降级体验)
           //   - 字段映射:后端 description → 前端 intro;后端 myRole='admin' → owner:true
-          // ⚠️⚠️⚠️ bug 1 诊断版(临时,定位完成后整段恢复为生产版,见本块底部注释)
-          //   用裸 fetch 调 /api/clubs,把全流程关键信息收集到 dbg 对象,
-          //   无论成败最后只弹一次 alert(屏幕诊断,Telegram Desktop 看不到 F12 控制台)。
-          //   - 用 r.text() → JSON.parse 分两步:即使 4xx/5xx 返非 JSON,body 也可预览
-          //   - 兼容 3 种响应 shape:{ok:true,clubs:[...]} | {clubs:[...]} | [...]
-          //   - token 只显示长度(不泄露内容)
-          (function f10Diag() {
-            var _f10Token = (window.tokenStore && window.tokenStore.get()) || '';
-            var _f10Url = window.API_BASE_URL + '/api/clubs';
-            var dbg = {
-              tokenLen: _f10Token ? _f10Token.length : 0,
-              url: _f10Url,
-              httpStatus: null,
-              httpOk: null,
-              bodyPreview: null,
-              parsedShape: null,
-              clubsCount: null,
-              replaced: false,
-              error: null,
-              errorStatus: null
-            };
-            function fmt() {
-              return '[F10 诊断]\n'
-                + '──────────\n'
-                + 'token 长度: ' + dbg.tokenLen + (dbg.tokenLen ? '' : '  ← 没拿到!') + '\n'
-                + 'URL: ' + dbg.url + '\n'
-                + '──────────\n'
-                + 'HTTP 状态: ' + (dbg.httpStatus != null ? dbg.httpStatus : '(请求未到)') + '\n'
-                + 'HTTP ok: '   + (dbg.httpOk     != null ? dbg.httpOk     : '(请求未到)') + '\n'
-                + '响应前200字:\n' + (dbg.bodyPreview != null ? dbg.bodyPreview : '(无)') + '\n'
-                + '──────────\n'
-                + '解析 shape: ' + (dbg.parsedShape || '(未解析)') + '\n'
-                + 'clubs 个数: ' + (dbg.clubsCount != null ? dbg.clubsCount : '(未解析)') + '\n'
-                + 'mock 已替换: ' + dbg.replaced + '\n'
-                + '──────────\n'
-                + '错误: '       + (dbg.error || '(无)') + '\n'
-                + '错误 status: ' + (dbg.errorStatus != null ? dbg.errorStatus : '(无)');
+          //
+          // bug 1 修复(伯恩号诊断后定位,2026-05-28):
+          //   - 现象:伯恩启动后看到 mock 88888 LobbyPlayersClub 大厅,而非真实 11111。
+          //   - 根因:F10 数据替换本身没问题,但 v2.28.78 [37708] 的 300ms setTimeout
+          //     在 F10 完成前就用 mock clubs[0]='88888' 调了 openClubLobby,
+          //     把内部大厅 UI(lobby-name/lobby-id/房间列表)设置成了 mock 88888。
+          //     F10 后来只刷新了"列表"(用户根本不在列表页),没刷"内部大厅"。
+          //   - 修复:F10 success 后再 openClubLobby(真 clubs[0].id) 一次,
+          //     同时更新 currentClubInfoId(其它页面 [33208/33268/33439/...] 依赖此变量)。
+          //   - 副作用:用户启动后会看到 mock 大厅一闪即过(<1-2s),然后切到真大厅。可接受。
+          //   - demo 模式(浏览器/无 Telegram)不走 F10 链,300ms 进 mock 大厅是正常体验。
+          //
+          // 用裸 fetch 替代 apiClient.get,因为 apiClient [37059] 强制 data.ok===true 否则抛错。
+          // 兼容 3 种响应 shape:{ok:true,clubs:[...]} | {clubs:[...]} | [...]
+          var _f10Token = (window.tokenStore && window.tokenStore.get()) || null;
+          var _f10Headers = { 'Content-Type': 'application/json' };
+          if (_f10Token) _f10Headers['Authorization'] = 'Bearer ' + _f10Token;
+          fetch(window.API_BASE_URL + '/api/clubs', { headers: _f10Headers }).then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          }).then(function(raw) {
+            var backendClubs = Array.isArray(raw) ? raw
+                             : (raw && Array.isArray(raw.clubs) ? raw.clubs : []);
+            console.log('[F10] ✅ 拉到真实俱乐部列表,共 ' + backendClubs.length + ' 个');
+            // 字段映射:后端 → 前端
+            var mapped = backendClubs.map(function(c) {
+              return {
+                id: String(c.id),
+                name: c.name,
+                intro: c.description || '',
+                coin: 0,                                    // 等 B7 钱包真接入(F8.5 补)
+                rooms: 0,                                   // 等 B8 牌桌接入
+                members: 1,                                 // 等"成员列表"接口
+                owner: c.myRole === 'admin'                 // admin 角色显示"创建者"标签
+              };
+            });
+            // 替换 clubs 数组(in-place 修改,保留外部引用)
+            clubs.length = 0;
+            mapped.forEach(function(c) { clubs.push(c); });
+            // 真实俱乐部初始没房间(等 B8)
+            mapped.forEach(function(c) {
+              if (!clubRooms[c.id]) clubRooms[c.id] = [];
+            });
+            // 重新渲染列表(替换 UI 中 mock)
+            if (typeof renderClubs === 'function') {
+              renderClubs();
             }
-            var _f10Headers = { 'Content-Type': 'application/json' };
-            if (_f10Token) _f10Headers['Authorization'] = 'Bearer ' + _f10Token;
-            fetch(_f10Url, { headers: _f10Headers })
-              .then(function(r) {
-                dbg.httpStatus = r.status;
-                dbg.httpOk     = r.ok;
-                return r.text();                          // 先读纯文本,任何 shape 都能预览
-              })
-              .then(function(text) {
-                dbg.bodyPreview = (text || '').slice(0, 200);
-                if (dbg.httpOk === false) throw new Error('HTTP ' + dbg.httpStatus);
-                var raw;
-                try { raw = JSON.parse(text); }
-                catch (e) { throw new Error('JSON 解析失败: ' + e.message); }
-                var backendClubs;
-                if (Array.isArray(raw))                     { backendClubs = raw;       dbg.parsedShape = '裸数组 [...]'; }
-                else if (raw && Array.isArray(raw.clubs))   { backendClubs = raw.clubs; dbg.parsedShape = '{clubs:[...]}'; }
-                else                                        { backendClubs = [];        dbg.parsedShape = '未知/无clubs字段'; }
-                dbg.clubsCount = backendClubs.length;
-                console.log('[F10] ✅ 拉到真实俱乐部列表,共 ' + backendClubs.length + ' 个');
-                // 字段映射:后端 → 前端
-                var mapped = backendClubs.map(function(c) {
-                  return {
-                    id: String(c.id),
-                    name: c.name,
-                    intro: c.description || '',
-                    coin: 0,                                  // 等 B7 钱包真接入(F8.5 补)
-                    rooms: 0,                                 // 等 B8 牌桌接入
-                    members: 1,                               // 等"成员列表"接口
-                    owner: c.myRole === 'admin'               // admin 角色显示"创建者"标签
-                  };
-                });
-                // 替换 clubs 数组(in-place 修改,保留外部引用)
-                clubs.length = 0;
-                mapped.forEach(function(c) { clubs.push(c); });
-                // 真实俱乐部初始没房间(等 B8)
-                mapped.forEach(function(c) {
-                  if (!clubRooms[c.id]) clubRooms[c.id] = [];
-                });
-                // 重新渲染列表(替换 UI 中 mock)
-                if (typeof renderClubs === 'function') {
-                  renderClubs();
-                }
-                dbg.replaced = true;
-                alert(fmt());
-              })
-              .catch(function(err) {
-                dbg.error       = (err && err.message) || String(err);
-                dbg.errorStatus = err && err.status;
-                console.warn('[F10] ⚠️ 拉俱乐部列表失败,保留 mock 兜底:', dbg.error);
-                alert(fmt());
-              });
-          })();
-          // 生产版恢复指引(bug 1 定位后用本块替换上面整段 IIFE):
-          //   - 去掉 IIFE 包装、dbg 对象、fmt 函数、两处 alert(fmt())
-          //   - 保留:裸 fetch + 3-shape 兼容解析 + 字段映射 + clubs/clubRooms 替换 + renderClubs + console.warn
+            // bug 1 修复:重新打开内部大厅 UI 到真俱乐部
+            //   300ms auto-enter 已基于 mock 进了 88888 大厅,现在用真数据覆盖。
+            //   currentClubInfoId 必须同步更新,否则成员页/充提币/俱乐部信息页等还指向 88888。
+            if (clubs.length > 0 && typeof window.openClubLobby === 'function') {
+              try { currentClubInfoId = clubs[0].id; } catch (e) {}
+              window.openClubLobby(clubs[0].id);
+            }
+          }).catch(function(err) {
+            console.warn('[F10] ⚠️ 拉俱乐部列表失败,保留 mock 兜底:', err.message);
+          });
         }).catch(function(err) {
           // 验签失败:网络错/后端 401/后端 500
           //   保留 demo 兜底"DEMO",用户仍能看 UI(降级策略)

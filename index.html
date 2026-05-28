@@ -3203,6 +3203,14 @@
     transition: transform 100ms;
   }
   .dev-quick-demo-btn:active { transform: scale(0.95); }
+
+  /* ⭐ 2026-05-29:真后端桌(俱乐部 tab → N4 真桌 → page-table)隐藏 demo/DEV 元素
+     - body 上 class `on-real-table`(由 JS 在 lobby 点真桌时加,doReturnToLobby 时移)
+     - demo 桌(游戏 tab mock 房间 / browser)保留全部 DEV 工具,以备调试
+     - 隐藏:DEV-1/DEV-2 切换器 / DEMO mode 标签 / 一手演示按钮 / 新一轮按钮 */
+  body.on-real-table .dev-state-switcher,
+  body.on-real-table .dev-quick-demo,
+  body.on-real-table #mode-indicator { display: none !important; }
   .dev-quick-demo-btn .dqd-icon {
     font-size: 10px;
     letter-spacing: -1px;
@@ -17059,6 +17067,8 @@
 
   // 真正返回大厅(根据来源跳转)
   function doReturnToLobby() {
+    // ⭐ 2026-05-29:离表清 on-real-table class,DEV/DEMO 元素恢复显示
+    document.body.classList.remove('on-real-table');
     if (tableEntryFrom === 'lobby') {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       const clubLobby = document.getElementById('page-club-lobby');
@@ -33315,6 +33325,10 @@
         if (currentTableRoom && Number.isInteger(Number(currentTableRoom.id))
             && typeof startTableSeatsPolling === 'function') {
           startTableSeatsPolling(Number(currentTableRoom.id));
+        }
+        // ⭐ 2026-05-29:真后端桌进入 → 加 body class → CSS 自动隐藏 DEV/DEMO 元素
+        if (currentTableRoom && Number.isInteger(Number(currentTableRoom.id))) {
+          document.body.classList.add('on-real-table');
         }
       });
     });

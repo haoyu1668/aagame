@@ -33304,6 +33304,11 @@
         currentTableRoom = rs[idx];
         fillTableCenter(currentTableRoom);
         showSubPage('table');
+        // ⭐ B8.5(2026-05-29):真后端桌 → 启动 5s 轮询拉座位(看见其他玩家)
+        if (currentTableRoom && Number.isInteger(Number(currentTableRoom.id))
+            && typeof startTableSeatsPolling === 'function') {
+          startTableSeatsPolling(Number(currentTableRoom.id));
+        }
       });
     });
   }
@@ -33344,6 +33349,77 @@
       console.warn('[B8] ⚠️ 拉牌桌列表失败,保留 cache/mock:', err.message);
     });
   }
+
+  // ⭐ B8.5(2026-05-29):拉真后端的牌桌座位状态 → 渲染 page-table
+  //   demo 模式(无 token / mock 桌 id 非数字)→ 直接 return,保留 demo 流程
+  //   把 backend seats 数组映射到 occupiedSeats:
+  //     - userId === currentUser.userId → key 'my'(my-seat 视角)
+  //     - 其他 → key 's' + seatNo(对应 s1-s8 元素)
+  //   失败(403 非成员 / 网络)→ console.warn,不动现有显示
+  function fetchAndRenderTableSeats(tableId) {
+    if (!window.apiClient || !window.tokenStore || !window.tokenStore.get()) return Promise.resolve(null);
+    var numericId = Number(tableId);
+    if (!Number.isInteger(numericId) || numericId <= 0) return Promise.resolve(null);
+    return window.apiClient.get('/api/tables/' + numericId + '/seats').then(function(resp) {
+      var seats = (resp && resp.seats) || [];
+      var newOccupied = {};
+      var myUserId = (window.currentUser && Number(window.currentUser.userId)) || null;
+      seats.forEach(function(s) {
+        var fullName = ((s.firstName || '') + ' ' + (s.lastName || '')).trim();
+        if (!fullName) fullName = (s.username ? '@' + s.username : 'User' + s.userId);
+        var player = {
+          name:   fullName,
+          avatar: (fullName.charAt(0) || '?'),
+          chips:  String(s.chips),
+          bet:    0
+        };
+        if (myUserId !== null && Number(s.userId) === myUserId) {
+          player.isMe = true;
+          newOccupied['my'] = player;
+        } else {
+          newOccupied['s' + s.seatNo] = player;
+        }
+      });
+      // 同步到 currentTableRoom + 重渲(只有当还在同一张桌时才生效)
+      if (currentTableRoom && Number(currentTableRoom.id) === numericId) {
+        currentTableRoom.occupiedSeats = newOccupied;
+        currentTableRoom.seats = seats.length;
+        if (typeof renderSeats === 'function') {
+          renderSeats(currentTableRoom);
+        }
+      }
+      return newOccupied;
+    }).catch(function(err) {
+      console.warn('[B8.5 座位拉取失败]', err && err.message);
+      return null;
+    });
+  }
+  window.fetchAndRenderTableSeats = fetchAndRenderTableSeats;
+
+  // 5s 轮询 page-table 座位(用户在桌上时启动,离桌停)
+  //   B10 真 WebSocket 接入后此轮询删
+  var _tableSeatsPollTimer = null;
+  function startTableSeatsPolling(tableId) {
+    stopTableSeatsPolling();
+    fetchAndRenderTableSeats(tableId); // 立即拉一次
+    _tableSeatsPollTimer = setInterval(function() {
+      var pageTable = document.getElementById('page-table');
+      if (!pageTable || !pageTable.classList.contains('active')) {
+        stopTableSeatsPolling();
+        return;
+      }
+      if (!currentTableRoom || Number(currentTableRoom.id) !== Number(tableId)) {
+        stopTableSeatsPolling();
+        return;
+      }
+      fetchAndRenderTableSeats(tableId);
+    }, 5000);
+  }
+  function stopTableSeatsPolling() {
+    if (_tableSeatsPollTimer) { clearInterval(_tableSeatsPollTimer); _tableSeatsPollTimer = null; }
+  }
+  window.startTableSeatsPolling = startTableSeatsPolling;
+  window.stopTableSeatsPolling = stopTableSeatsPolling;
 
   // ⭐ N3 阶段 2(2026-05-28):从真后端拉俱乐部成员列表 → 替换 clubMembersData mock
   //   入口:成员页 / 俱乐部管理→成员管理 进入时调一次

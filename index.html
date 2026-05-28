@@ -16856,11 +16856,16 @@
       }
 
       // ⭐ v2.28.44:玩家自己的数据(my-seat 视角)
+      // ⭐ 2026-05-29 fix:原本硬编码 "伯恩 / 伯",换账号(啊勇/飘雪)入座也显示"伯恩",
+      //   导致身份混乱。改用当前登录用户的 currentUser(name/avatar 已由 apiLogin 后端验签塞入)。
+      //   demo 兜底:无 currentUser 则回退 'DEMO/D'(老 demo 不受影响)
       const autoRebuyCheckbox = document.getElementById('buyin-autorebuy');
       const autoRebuyEnabled = !!(autoRebuyCheckbox && autoRebuyCheckbox.checked);
+      const _meName   = (window.currentUser && window.currentUser.name)   || 'DEMO';
+      const _meAvatar = (window.currentUser && window.currentUser.avatar) || 'D';
       const newPlayer = {
-        name: '伯恩',
-        avatar: '伯',
+        name: _meName,
+        avatar: _meAvatar,
         chips: formatAmount(amount),
         bet: 0,
         autoRebuy: autoRebuyEnabled,
@@ -38850,15 +38855,17 @@
     }
   }, 500);
 
-  // ⭐ v2.28.81 阶段 EF:每 30 秒轮询一次 pending-count
+  // ⭐ v2.28.81 阶段 EF + 2026-05-29 fix:每 10 秒轮询一次 pending-count
   //   - MVP 1 阶段没 WebSocket,靠轻量轮询模拟"即时通知"
-  //   - 30 秒间隔:admin 最多等 30 秒能看到 N9 +1,流量可接受
+  //   - 原 30 秒 → 改 10 秒:admin 等待时间从最多 30 → 10 秒
+  //     (Telegram WebApp 后台可能会节流到 60s+,但前台 10s 体验已很好)
+  //   - B10 真 WebSocket 接入后此 setInterval 删掉
   //   - 失败不重置(refreshAdminNotify 内部已处理)
   setInterval(function() {
     if (typeof window.refreshAdminNotify === 'function') {
       window.refreshAdminNotify();
     }
-  }, 30000);
+  }, 10000);
 
   // 点击胶囊:跳记分牌请求页(N9.5)
   //   ⭐ v2.28.81 阶段 2:不再跳俱乐部 Tab,改成直达"记分牌请求"审批页

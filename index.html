@@ -32287,11 +32287,12 @@
       }
     });
     observer.observe(actionArea, { attributes: true, attributeFilter: ['data-state'] });
-    // 初始如果是 P 组,启动一次
-    if (isMyTurnState(actionArea.dataset.state)) {
-      startTimer(TURN_DURATION_MS);
-    }
-  }
+    // ⚠️ 2026-05-28 修复:不再在初始化时 auto-start timer
+    //   原代码:if (isMyTurnState(actionArea.dataset.state)) startTimer(TURN_DURATION_MS);
+    //   问题:line 13227 HTML 默认 data-state="p1"(demo 残留),导致用户启动 Mini App
+    //         没进游戏页也会后台跑 15s 倒计时,≤5s 时每秒 'tick' 一下 → 用户听"嘟嘟嘟"。
+    //   修法:删掉 init 调用。MutationObserver 仍保留,真实 state 变化(B9-B15 引擎推送)
+    //         时仍会自动启动 timer,demo 也可以手动触发 state 变化激活 timer。
 
   // 真实业务:新一轮(turn:newRound 推送)时重置 addTimeUsedThisRound = false 并解除冷却
   // 这里给个 DEV 入口让你能手动测试"每轮 1 次"

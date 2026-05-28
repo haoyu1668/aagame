@@ -34938,17 +34938,39 @@
     document.querySelectorAll('.clubacc-tab').forEach(t => {
       t.classList.toggle('active', t.dataset.clubaccTab === '资产');
     });
+    // 进页面时先清缓存,先用 mock 0 渲染
+    window._clubAccountBalance = null;
     renderClubAccountTab('资产');
 
     showSubPage('club-account');
+
+    // ⭐ 2026-05-29 接通后端 GET /api/clubs/:id 拉三池真余额(treasury/vault/jackpot)
+    //   原版整个 balanceMap 都硬编码 0,作者注释里写了 TODO 但一直没接
+    //   demo 模式无 token → 跳过,保留 0
+    if (window.apiClient && window.tokenStore && window.tokenStore.get()) {
+      window.apiClient.get('/api/clubs/' + clubId).then(function(resp) {
+        const c = resp && resp.club;
+        if (!c) return;
+        // 缓存 + 重渲当前 tab
+        window._clubAccountBalance = {
+          '资产':    Number(c.treasuryBalance) || 0,
+          '金库':    Number(c.vaultBalance)    || 0,
+          'Jackpot': Number(c.jackpotBalance)  || 0
+        };
+        console.log('[club-account] ✅ 拉到三池余额:', window._clubAccountBalance);
+        renderClubAccountTab(currentClubAccountTab);
+      }).catch(function(err) {
+        console.warn('[club-account] ⚠️ 拉三池余额失败,保留显示 0:', err && err.message);
+      });
+    }
   }
 
   // 渲染对应Tab内容
   function renderClubAccountTab(tab) {
     const content = document.getElementById('clubacc-content');
     // 三个 Tab 结构相同, 只是标签和余额数据源不同
-    // 真实业务: 余额从后端 /api/club/{id}/balance 获取
-    const balanceMap = {
+    // 优先用 openClubAccount 异步拉的真值,兜底 mock 0
+    const balanceMap = window._clubAccountBalance || {
       '资产': 0,
       '金库': 0,
       'Jackpot': 0

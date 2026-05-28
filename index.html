@@ -16889,13 +16889,19 @@
   //   5. 真实业务:发送 CLIENT_LEAVE → 后端校验(不在牌局中,或盲注前)→ 返还筹码
   // ════════════════════════════════════════════════════════════════════════
   function startLeaveTableFlow() {
-    const myEl = document.querySelector('#page-table .my-seat');
-    // 情况 1:未入座 → 直接返回大厅
-    if (!myEl) {
+    // ⚠️ 2026-05-28 修复:.my-seat 是静态 HTML(line 13010),DOM 检查永远 truthy →
+    //   导致永远走"已入座"分支 → openLeaveSeatModal 因为没 occupiedSeats 而静默 return →
+    //   退出房间按钮看似没反应。
+    // 正确判断:看数据(currentTableRoom.occupiedSeats['my']),不是 DOM。
+    const seatedAsMy = currentTableRoom
+                    && currentTableRoom.occupiedSeats
+                    && currentTableRoom.occupiedSeats['my'];
+    // 情况 1:未入座(N4 真桌还没 B9 入座流程,所以现在都走这条)→ 直接返大厅
+    if (!seatedAsMy) {
       doReturnToLobby();
       return;
     }
-    // 情况 2:已入座 → 弹离座确认弹窗
+    // 情况 2:已入座(demo 场景里 fillTableCenter 会塞 occupiedSeats['my'])→ 弹离座确认
     if (typeof openLeaveSeatModal === 'function') {
       openLeaveSeatModal('my');
     } else {

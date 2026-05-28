@@ -3226,35 +3226,30 @@
   body.on-real-table #hash-chip,
   body.on-real-table #ws-mock-start-btn,
   body.on-real-table .seat .seat-cards-back { display: none !important; }
-  /* 真桌未入座时:my-seat 变成"+ 坐下"占位(底部清晰可见,可点),
+  /* 真桌未入座时:my-seat 变成"+ 坐下"占位(尺寸 48px 跟外围 8 座一致)
      点击 = 触发第一个空外围座位的入座流程
      真坐下后(.seated 由 JS 加)→ 恢复正常 my-seat 显示带真后端数据 */
   body.on-real-table .my-seat:not(.seated) > * { display: none !important; }
   body.on-real-table .my-seat:not(.seated) {
     cursor: pointer;
     text-align: center;
-    padding-top: 8px;
   }
   body.on-real-table .my-seat:not(.seated)::before {
-    content: '+';
+    content: '+\A坐下';
+    white-space: pre;
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 60px;
-    height: 60px;
-    border: 2px dashed rgba(255,255,255,0.4);
+    gap: 1px;
+    width: 48px;
+    height: 48px;
+    border: 2px dashed rgba(255,255,255,0.35);
     border-radius: 50%;
-    font-size: 32px;
+    font-size: 11px;
     color: rgba(255,255,255,0.5);
     font-weight: 300;
     line-height: 1;
-  }
-  body.on-real-table .my-seat:not(.seated)::after {
-    content: '坐下';
-    display: block;
-    font-size: 12px;
-    color: rgba(255,255,255,0.5);
-    margin-top: 4px;
   }
   body.on-real-table .my-seat:not(.seated):active::before {
     transform: scale(0.95);
@@ -33492,6 +33487,17 @@
         var mySeatEl = document.querySelector('#page-table .my-seat');
         if (mySeatEl) {
           mySeatEl.classList.toggle('seated', !!newOccupied['my']);
+          // 入座后注入头像(static HTML 的 my-seat 没 .seat-avatar,这里补)
+          if (newOccupied['my']) {
+            var myP = newOccupied['my'];
+            var avatarEl = mySeatEl.querySelector('.seat-avatar');
+            if (!avatarEl) {
+              avatarEl = document.createElement('div');
+              avatarEl.className = 'seat-avatar';
+              mySeatEl.insertBefore(avatarEl, mySeatEl.firstChild);
+            }
+            avatarEl.textContent = (myP.avatar || (myP.name || '?').charAt(0));
+          }
         }
       }
       return newOccupied;

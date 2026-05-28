@@ -1283,6 +1283,203 @@
   .btn-primary:active { opacity: 0.7; }
 
   /* ===================================================
+     ====== N4 v2 创建牌桌表单(2026-05-28)======
+     20+ 个 toggle/segmented/select 组件,移动端原生 + 自定义
+     =================================================== */
+  .ct-form { padding: 12px 16px 100px; }
+  /* 游戏类型 tabs(德州 / 短牌) */
+  .ct-section-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .ct-tab-card {
+    flex: 1;
+    background: #1a1d24;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    padding: 16px 12px 22px;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .ct-tab-card.active {
+    border-color: var(--green-main);
+    background: #0f2417;
+  }
+  .ct-tab-card-label { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+  .ct-tab-card-icon  { font-size: 12px; color: #888; }
+  .ct-tab-card-check {
+    position: absolute;
+    bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #444; color: #888;
+    font-size: 11px; line-height: 18px;
+    text-align: center;
+  }
+  .ct-tab-card.active .ct-tab-card-check { background: var(--green-main); color: #000; }
+  /* 牌桌名输入 */
+  .ct-name-card {
+    background: #1a1d24;
+    border-radius: 10px;
+    padding: 4px 16px;
+    margin-bottom: 4px;
+  }
+  .ct-name-input {
+    width: 100%;
+    height: 48px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 15px;
+    text-align: center;
+    outline: none;
+    font-family: inherit;
+  }
+  /* 行(label 左,控件右) */
+  .ct-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .ct-row-label { font-size: 14px; color: #ccc; }
+  .ct-sub {
+    padding: 0 0 8px;
+    /* sub 块上层 toggle 关时 JS 加 .ct-hidden 隐藏 */
+  }
+  .ct-hidden { display: none !important; }
+  /* 自定义 toggle 开关 */
+  .ct-toggle {
+    position: relative;
+    display: inline-block;
+    width: 44px; height: 24px;
+    flex-shrink: 0;
+  }
+  .ct-toggle input { opacity: 0; width: 0; height: 0; }
+  .ct-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #444;
+    border-radius: 24px;
+    transition: 0.2s;
+  }
+  .ct-toggle-slider:before {
+    content: '';
+    position: absolute;
+    height: 18px; width: 18px;
+    left: 3px; bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+  .ct-toggle input:checked + .ct-toggle-slider { background: var(--green-main); }
+  .ct-toggle input:checked + .ct-toggle-slider:before { transform: translateX(20px); }
+  /* 行内 select(灰底圆角)*/
+  .ct-inline-select {
+    background: #0d0f14;
+    border: 1px solid var(--divider);
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    outline: none;
+    font-family: inherit;
+    min-width: 90px;
+  }
+  /* 行内数字框 */
+  .ct-num-input {
+    width: 70px;
+    height: 36px;
+    background: #0d0f14;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    text-align: center;
+    outline: none;
+    font-family: inherit;
+  }
+  .ct-inline-num { display: flex; align-items: center; gap: 6px; color: #888; font-size: 13px; }
+  .ct-buyin-row .ct-buyin-inputs { display: flex; align-items: center; gap: 8px; }
+  .ct-dash { color: #888; }
+  /* 数字步进器(- 7 +)*/
+  .ct-stepper {
+    display: flex;
+    align-items: center;
+    background: #0d0f14;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .ct-stepper-btn {
+    width: 36px; height: 36px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .ct-stepper-btn:active { background: rgba(255,255,255,0.08); }
+  .ct-stepper-value { min-width: 50px; text-align: center; color: #fff; font-size: 14px; }
+  /* 段选按钮组(BB/类型/人数)*/
+  .ct-segment {
+    display: flex;
+    background: #0d0f14;
+    border-radius: 8px;
+    padding: 3px;
+    margin: 6px 0 12px;
+  }
+  .ct-segment-btn {
+    flex: 1;
+    text-align: center;
+    padding: 8px 0;
+    font-size: 13px;
+    color: #888;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .ct-segment-btn.active { background: #1a1d24; color: #fff; }
+  .ct-segment-big .ct-segment-btn { padding: 12px 0; font-size: 14px; }
+  /* 底部"创建自动开局任务"+ 提交 */
+  .ct-footer-strip {
+    margin: 20px 0 10px;
+    padding: 12px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .ct-check-row {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer;
+    color: #ccc;
+    font-size: 14px;
+  }
+  .ct-check-row input { display: none; }
+  .ct-check-box {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #444; position: relative; flex-shrink: 0;
+  }
+  .ct-check-row input:checked + .ct-check-box {
+    background: var(--green-main);
+  }
+  .ct-check-row input:checked + .ct-check-box:after {
+    content: '✓';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #000;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .ct-submit { margin-top: 8px !important; }
+
+  /* ===================================================
      ====== 加入俱乐部页 ======
      =================================================== */
   .join-club-page { padding: 24px 20px; }
@@ -14473,62 +14670,265 @@
         <div class="sub-title">建立牌桌</div>
       </div>
 
-      <div class="create-club-page">
-        <!-- 牌桌名称 -->
-        <div class="form-group">
-          <div class="form-label-row">
-            <div class="form-label">牌桌名称</div>
-            <div class="form-counter"><span id="ct-name-count">0</span>/32</div>
+      <!-- N4 v2 (2026-05-28) 完整版表单,~30 字段,对应 5 张设计图 -->
+      <div class="create-club-page ct-form">
+        <!-- 游戏类型 tabs:德州 / 短牌 -->
+        <div class="ct-section-tabs">
+          <div class="ct-tab-card active" data-game-type="NLH_long">
+            <div class="ct-tab-card-label">德州</div>
+            <div class="ct-tab-card-icon">A♠ K♥</div>
+            <div class="ct-tab-card-check">✓</div>
           </div>
-          <input type="text" class="form-input" id="ct-name-input" maxlength="32" placeholder="例:永旺娱乐 01">
+          <div class="ct-tab-card" data-game-type="SHORT_DECK">
+            <div class="ct-tab-card-label">短牌</div>
+            <div class="ct-tab-card-icon">6 - A</div>
+            <div class="ct-tab-card-check">✓</div>
+          </div>
         </div>
 
-        <!-- 游戏类型 -->
-        <div class="form-group">
-          <div class="form-label">游戏类型</div>
-          <select class="form-input" id="ct-game-type">
-            <option value="NLH_long">长牌(NLH 52 张,最多 9 座)</option>
-            <option value="SHORT_DECK">短牌(去除 2-5,共 36 张,最多 6 座)</option>
+        <!-- 牌桌名 -->
+        <div class="ct-name-card">
+          <input type="text" class="ct-name-input" id="ct-name-input" maxlength="32" placeholder="AA娱乐01">
+        </div>
+
+        <!-- 显示牌局编号 -->
+        <div class="ct-row">
+          <span class="ct-row-label">显示牌局编号</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-show-room-code" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+
+        <!-- 盲注 -->
+        <div class="ct-row">
+          <span class="ct-row-label">盲注</span>
+          <select class="ct-inline-select" id="ct-blinds">
+            <option value="1/2" selected>1/2</option>
+            <option value="2/5">2/5</option>
+            <option value="5/10">5/10</option>
+            <option value="10/20">10/20</option>
+            <option value="20/50">20/50</option>
+            <option value="50/100">50/100</option>
+            <option value="100/200">100/200</option>
+            <option value="200/500">200/500</option>
+            <option value="500/1000">500/1000</option>
+            <option value="1000/2000">1000/2000</option>
+            <option value="2000/5000">2000/5000</option>
+            <option value="5000/10000">5000/10000</option>
           </select>
         </div>
 
-        <!-- 小盲 -->
-        <div class="form-group">
-          <div class="form-label">小盲(SB)</div>
-          <input type="number" class="form-input" id="ct-sb" min="1" max="1000000" value="1">
+        <!-- 买入 min / max (BB 倍数) -->
+        <div class="ct-row ct-buyin-row">
+          <span class="ct-row-label">买入 (BB)</span>
+          <div class="ct-buyin-inputs">
+            <input type="number" class="ct-num-input" id="ct-min-buyin" min="1" max="10000" value="50">
+            <span class="ct-dash">-</span>
+            <input type="number" class="ct-num-input" id="ct-max-buyin" min="1" max="10000" value="300">
+          </div>
         </div>
 
-        <!-- 大盲 -->
-        <div class="form-group">
-          <div class="form-label">大盲(BB,必须 ≥ 小盲)</div>
-          <input type="number" class="form-input" id="ct-bb" min="1" max="1000000" value="2">
+        <!-- 补码上限 toggle -->
+        <div class="ct-row">
+          <span class="ct-row-label">补码上限</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-rebuy-enabled" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-row ct-sub" id="ct-rebuy-mult-row">
+          <span class="ct-row-label">补码上限设置</span>
+          <select class="ct-inline-select" id="ct-rebuy-mult">
+            <option value="2">2倍</option>
+            <option value="3" selected>3倍</option>
+            <option value="5">5倍</option>
+            <option value="10">10倍</option>
+            <option value="999">无限</option>
+          </select>
         </div>
 
-        <!-- 前注 -->
-        <div class="form-group">
-          <div class="form-label">前注(Ante,0 = 无前注)</div>
-          <input type="number" class="form-input" id="ct-ante" min="0" max="1000000" value="0">
+        <!-- 止损上限 -->
+        <div class="ct-row">
+          <span class="ct-row-label">止损上限</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-stoploss-enabled" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-row ct-sub" id="ct-stoploss-mult-row">
+          <span class="ct-row-label">止损上限设置</span>
+          <select class="ct-inline-select" id="ct-stoploss-mult">
+            <option value="3">3倍</option>
+            <option value="5" selected>5倍</option>
+            <option value="10">10倍</option>
+          </select>
         </div>
 
-        <!-- 最大座位 -->
-        <div class="form-group">
-          <div class="form-label">最大座位(2-9,短牌最大 6)</div>
-          <input type="number" class="form-input" id="ct-max-seats" min="2" max="9" value="9">
+        <!-- 前注 (ante) toggle + BB 段选 -->
+        <div class="ct-row">
+          <span class="ct-row-label">前注</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-ante-enabled" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-sub" id="ct-ante-bb-row">
+          <div class="ct-segment" data-target="ct-ante-bb">
+            <div class="ct-segment-btn active" data-value="1">1BB</div>
+            <div class="ct-segment-btn" data-value="2">2BB</div>
+            <div class="ct-segment-btn" data-value="3">3BB</div>
+            <div class="ct-segment-btn" data-value="5">5BB</div>
+            <div class="ct-segment-btn" data-value="10">10BB</div>
+          </div>
         </div>
 
-        <!-- 最小买入 -->
-        <div class="form-group">
-          <div class="form-label">最小买入(BB 倍数,行业默认 40)</div>
-          <input type="number" class="form-input" id="ct-min-buyin" min="1" max="10000" value="40">
+        <!-- 座位数 -->
+        <div class="ct-row">
+          <span class="ct-row-label">座位数</span>
+          <div class="ct-stepper">
+            <button type="button" class="ct-stepper-btn" id="ct-seats-minus">−</button>
+            <span class="ct-stepper-value" id="ct-seats-value">7</span>
+            <button type="button" class="ct-stepper-btn" id="ct-seats-plus">+</button>
+          </div>
         </div>
 
-        <!-- 最大买入 -->
-        <div class="form-group">
-          <div class="form-label">最大买入(BB 倍数,留空 = 不限)</div>
-          <input type="number" class="form-input" id="ct-max-buyin" min="1" max="10000" value="100">
+        <!-- 牌局时长 -->
+        <div class="ct-row">
+          <span class="ct-row-label">牌局时长</span>
+          <select class="ct-inline-select" id="ct-duration">
+            <option value="1" selected>1h</option>
+            <option value="2">2h</option>
+            <option value="4">4h</option>
+            <option value="6">6h</option>
+            <option value="12">12h</option>
+            <option value="24">24h</option>
+          </select>
         </div>
 
-        <button class="btn-primary" id="btn-create-table">创建</button>
+        <!-- 抓头 / 入池率限制 -->
+        <div class="ct-row">
+          <span class="ct-row-label">抓头</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-straddle" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-row">
+          <span class="ct-row-label">入池率限制</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-pflr-limit"><span class="ct-toggle-slider"></span></label>
+        </div>
+
+        <!-- 抽水主开关 -->
+        <div class="ct-row">
+          <span class="ct-row-label">抽水</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-rake-enabled" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-sub" id="ct-rake-detail-block">
+          <!-- 抽水类型 tab -->
+          <div class="ct-segment ct-segment-big" data-target="ct-rake-type">
+            <div class="ct-segment-btn" data-value="buyin">买入抽</div>
+            <div class="ct-segment-btn" data-value="round">局抽</div>
+            <div class="ct-segment-btn active" data-value="pot">把抽</div>
+          </div>
+          <!-- 抽水百分比 -->
+          <div class="ct-row">
+            <span class="ct-row-label">抽水百分比</span>
+            <div class="ct-inline-num">
+              <input type="number" class="ct-num-input" id="ct-rake-percent" min="0" max="100" step="0.1" value="3">
+              <span>%</span>
+            </div>
+          </div>
+          <div class="ct-row">
+            <span class="ct-row-label">小于X人减半</span>
+            <label class="ct-toggle"><input type="checkbox" id="ct-rake-half-on-few"><span class="ct-toggle-slider"></span></label>
+          </div>
+          <div class="ct-row">
+            <span class="ct-row-label">触发抽水底池(BB)</span>
+            <input type="number" class="ct-num-input" id="ct-rake-min-pot" min="0" max="10000" value="1" style="width:90px">
+          </div>
+          <div class="ct-row">
+            <span class="ct-row-label">每手抽水封顶</span>
+            <input type="number" class="ct-num-input" id="ct-rake-cap" min="0" max="100000" value="100" style="width:90px">
+          </div>
+        </div>
+
+        <!-- 离桌留座时间(秒)-->
+        <div class="ct-row">
+          <span class="ct-row-label">离桌留座时间</span>
+          <div class="ct-stepper">
+            <button type="button" class="ct-stepper-btn" id="ct-afk-minus">−</button>
+            <span class="ct-stepper-value" id="ct-afk-value">180S</span>
+            <button type="button" class="ct-stepper-btn" id="ct-afk-plus">+</button>
+          </div>
+        </div>
+
+        <!-- 付费看公牌 -->
+        <div class="ct-row">
+          <span class="ct-row-label">付费看公牌</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-pay-board" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+
+        <!-- 付费看手牌 + BB segment -->
+        <div class="ct-row">
+          <span class="ct-row-label">付费看手牌</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-pay-hole-enabled" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-sub" id="ct-pay-hole-bb-row">
+          <div class="ct-segment" data-target="ct-pay-hole-bb">
+            <div class="ct-segment-btn active" data-value="0.5">0.5BB</div>
+            <div class="ct-segment-btn" data-value="1">1BB</div>
+            <div class="ct-segment-btn" data-value="1.5">1.5BB</div>
+            <div class="ct-segment-btn" data-value="2">2BB</div>
+          </div>
+        </div>
+
+        <!-- 付费切牌 -->
+        <div class="ct-row">
+          <span class="ct-row-label">付费切牌</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-pay-cut-enabled" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-sub" id="ct-pay-cut-bb-row">
+          <div class="ct-segment" data-target="ct-pay-cut-bb">
+            <div class="ct-segment-btn active" data-value="0.5">0.5BB</div>
+            <div class="ct-segment-btn" data-value="1">1BB</div>
+            <div class="ct-segment-btn" data-value="1.5">1.5BB</div>
+            <div class="ct-segment-btn" data-value="2">2BB</div>
+          </div>
+        </div>
+
+        <!-- 延迟看牌 -->
+        <div class="ct-row">
+          <span class="ct-row-label">延迟看牌</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-delayed-reveal" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+
+        <!-- 自动开局人数 -->
+        <div class="ct-row">
+          <span class="ct-row-label">自动开局人数</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-autostart-enabled" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-sub" id="ct-autostart-row">
+          <div class="ct-segment ct-segment-icons" data-target="ct-autostart-min">
+            <div class="ct-segment-btn active" data-value="2">● 2 👤</div>
+            <div class="ct-segment-btn" data-value="3">3 👤</div>
+            <div class="ct-segment-btn" data-value="4">4 👤</div>
+            <div class="ct-segment-btn" data-value="5">5 👤</div>
+          </div>
+        </div>
+
+        <!-- 抽签入座 / 观众禁言 / 保险 / 无限注 -->
+        <div class="ct-row">
+          <span class="ct-row-label">抽签入座</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-lottery-seat" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-row">
+          <span class="ct-row-label">观众禁言</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-mute-spec" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-row">
+          <span class="ct-row-label">保险</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-insurance" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-row">
+          <span class="ct-row-label">无限注</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-no-limit" checked><span class="ct-toggle-slider"></span></label>
+        </div>
+
+        <!-- 底部"创建自动开局任务"+提交 -->
+        <div class="ct-footer-strip">
+          <label class="ct-check-row">
+            <input type="checkbox" id="ct-auto-task" checked>
+            <span class="ct-check-box"></span>
+            <span class="ct-check-label">创建自动开局任务</span>
+          </label>
+        </div>
+        <button class="btn-primary ct-submit" id="btn-create-table">创建</button>
       </div>
     </div>
 
@@ -33490,47 +33890,198 @@
     });
   }
 
-  // ========== N4 建立牌桌(admin)==========
-  // 2026-05-28:对应后端 B8 minimum slice POST /api/clubs/:clubId/tables
+  // ========== N4 v2 建立牌桌(admin,完整 30+ 字段)==========
+  // 2026-05-28:对应后端 B8 + N4(tables.settings JSONB)
   //   入口:club-info admin actions 里"建立牌桌"行
-  //   流程:点击 → 重置表单到默认 → showSubPage('create-table')
-  //        填表 → 点"创建" → 前端校验 → POST → 成功回大厅 + fetchClubTablesAndRender
-  //   字段校验同步 backend table.js:
-  //     - name 1-32(后端是 1-64,前端更严是为了 UI 美观)
-  //     - sb >=1, bb >= sb
-  //     - max_seats 2-9(短牌时强制 ≤6)
-  //     - min_buyin 1-10000, max_buyin null 或 >= min_buyin
-  //     - ante >= 0
+  //   核心字段:name / game_type / blinds_sb / blinds_bb / max_seats / min_buyin / max_buyin / ante
+  //   settings(JSONB)字段:showRoomCode / rebuyLimitEnabled+Multiplier / stoplossEnabled+Multiplier /
+  //     anteEnabled / durationHours / straddleEnabled / pflrLimitEnabled / rakeEnabled+Type+Percent+...
+  //     payToSeeBoardEnabled / payToSeeHoleEnabled+Bb / payToCutEnabled+Bb / delayedRevealEnabled /
+  //     autoStartEnabled+MinPlayers / lotterySeatingEnabled / muteSpectatorsEnabled /
+  //     insuranceEnabled / noLimitEnabled / createAutoStartTask
   const clubinfoCreateTableBtn = document.getElementById('clubinfo-create-table-btn');
-  const ctNameInput   = document.getElementById('ct-name-input');
-  const ctNameCount   = document.getElementById('ct-name-count');
-  const ctGameType    = document.getElementById('ct-game-type');
-  const ctSb          = document.getElementById('ct-sb');
-  const ctBb          = document.getElementById('ct-bb');
-  const ctAnte        = document.getElementById('ct-ante');
-  const ctMaxSeats    = document.getElementById('ct-max-seats');
-  const ctMinBuyin    = document.getElementById('ct-min-buyin');
-  const ctMaxBuyin    = document.getElementById('ct-max-buyin');
-  const btnCreateTable = document.getElementById('btn-create-table');
-  const createTableBack = document.getElementById('create-table-back');
+  const createTableBack       = document.getElementById('create-table-back');
+  const btnCreateTable         = document.getElementById('btn-create-table');
 
-  // 入口:重置表单 + 进子页
+  // 默认值表(进入子页时全部重置)
+  const N4_DEFAULTS = {
+    name: '',
+    gameType: 'NLH_long',
+    showRoomCode: true,
+    blinds: '1/2',
+    minBuyin: 50, maxBuyin: 300,
+    rebuyLimitEnabled: true,  rebuyLimitMultiplier: 3,
+    stoplossEnabled:   true,  stoplossMultiplier:   5,
+    anteEnabled:       true,  anteBb:               1,
+    maxSeats:          7,
+    durationHours:     1,
+    straddleEnabled:   true,
+    pflrLimitEnabled:  false,
+    rakeEnabled:       true,
+    rakeType:          'pot',
+    rakePercent:       3,
+    rakeHalfOnFew:     false,
+    rakeMinPot:        1,
+    rakeCap:           100,
+    afkSeatHoldSec:    180,
+    payToSeeBoardEnabled: true,
+    payToSeeHoleEnabled:  true,  payToSeeHoleBb: 0.5,
+    payToCutEnabled:      true,  payToCutBb:     0.5,
+    delayedRevealEnabled: true,
+    autoStartEnabled:     true,  autoStartMinPlayers: 2,
+    lotterySeatingEnabled: true,
+    muteSpectatorsEnabled: true,
+    insuranceEnabled:     true,
+    noLimitEnabled:       true,
+    createAutoStartTask:  true
+  };
+
+  // -------- helper:游戏类型选中(tab card)+ 短牌强制 max_seats ≤6 --------
+  function n4SelectGameType(type) {
+    document.querySelectorAll('.ct-tab-card').forEach(c => {
+      c.classList.toggle('active', c.dataset.gameType === type);
+    });
+    if (type === 'SHORT_DECK') {
+      const sv = document.getElementById('ct-seats-value');
+      if (sv && parseInt(sv.textContent, 10) > 6) sv.textContent = '6';
+    }
+  }
+  document.querySelectorAll('.ct-tab-card').forEach(card => {
+    card.addEventListener('click', () => n4SelectGameType(card.dataset.gameType));
+  });
+  function n4GetGameType() {
+    const active = document.querySelector('.ct-tab-card.active');
+    return active ? active.dataset.gameType : 'NLH_long';
+  }
+
+  // -------- helper:segmented button group(BB / 类型 / 人数)--------
+  //   存值在 group 的 data-current,active class 视觉同步
+  function n4SetSegment(target, value) {
+    const group = document.querySelector('.ct-segment[data-target="' + target + '"]');
+    if (!group) return;
+    group.dataset.current = String(value);
+    group.querySelectorAll('.ct-segment-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.value === String(value));
+    });
+  }
+  function n4GetSegment(target, defaultValue) {
+    const group = document.querySelector('.ct-segment[data-target="' + target + '"]');
+    if (!group) return defaultValue;
+    if (group.dataset.current !== undefined) return group.dataset.current;
+    const active = group.querySelector('.ct-segment-btn.active');
+    return active ? active.dataset.value : defaultValue;
+  }
+  document.querySelectorAll('.ct-segment').forEach(group => {
+    group.addEventListener('click', e => {
+      const btn = e.target.closest('.ct-segment-btn');
+      if (!btn) return;
+      n4SetSegment(group.dataset.target, btn.dataset.value);
+    });
+  });
+
+  // -------- helper:stepper(座位数 / 离桌时间)--------
+  function n4Stepper(minusId, plusId, valueId, opts) {
+    const minus = document.getElementById(minusId);
+    const plus  = document.getElementById(plusId);
+    const val   = document.getElementById(valueId);
+    if (!val) return;
+    const parse = () => parseInt(String(val.textContent).replace(/[^\d-]/g, ''), 10) || 0;
+    const format = n => (opts.suffix ? (n + opts.suffix) : String(n));
+    const apply  = n => {
+      const min = opts.min || 1;
+      const max = (opts.maxFn ? opts.maxFn() : (opts.max || 9999));
+      if (n < min) n = min;
+      if (n > max) n = max;
+      val.textContent = format(n);
+    };
+    if (minus) minus.addEventListener('click', () => apply(parse() - (opts.step || 1)));
+    if (plus)  plus.addEventListener('click',  () => apply(parse() + (opts.step || 1)));
+  }
+  n4Stepper('ct-seats-minus', 'ct-seats-plus', 'ct-seats-value', {
+    min: 2,
+    maxFn: () => (n4GetGameType() === 'SHORT_DECK' ? 6 : 9),
+    step: 1
+  });
+  n4Stepper('ct-afk-minus', 'ct-afk-plus', 'ct-afk-value', {
+    min: 30, max: 600, step: 30, suffix: 'S'
+  });
+
+  // -------- helper:toggle 联动隐藏 / 显示 sub 块 --------
+  // 配对:[parent checkbox id, sub block id]
+  const N4_TOGGLE_SUBS = [
+    ['ct-rebuy-enabled',    'ct-rebuy-mult-row'],
+    ['ct-stoploss-enabled', 'ct-stoploss-mult-row'],
+    ['ct-ante-enabled',     'ct-ante-bb-row'],
+    ['ct-rake-enabled',     'ct-rake-detail-block'],
+    ['ct-pay-hole-enabled', 'ct-pay-hole-bb-row'],
+    ['ct-pay-cut-enabled',  'ct-pay-cut-bb-row'],
+    ['ct-autostart-enabled','ct-autostart-row']
+  ];
+  function n4SyncToggleSubs() {
+    N4_TOGGLE_SUBS.forEach(pair => {
+      const chk = document.getElementById(pair[0]);
+      const sub = document.getElementById(pair[1]);
+      if (chk && sub) sub.classList.toggle('ct-hidden', !chk.checked);
+    });
+  }
+  N4_TOGGLE_SUBS.forEach(pair => {
+    const chk = document.getElementById(pair[0]);
+    if (chk) chk.addEventListener('change', n4SyncToggleSubs);
+  });
+
+  // -------- 重置表单到默认 --------
+  function n4ResetForm() {
+    const D = N4_DEFAULTS;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+    set('ct-name-input', D.name);
+    n4SelectGameType(D.gameType);
+    chk('ct-show-room-code', D.showRoomCode);
+    set('ct-blinds', D.blinds);
+    set('ct-min-buyin', D.minBuyin);
+    set('ct-max-buyin', D.maxBuyin);
+    chk('ct-rebuy-enabled', D.rebuyLimitEnabled);
+    set('ct-rebuy-mult', D.rebuyLimitMultiplier);
+    chk('ct-stoploss-enabled', D.stoplossEnabled);
+    set('ct-stoploss-mult', D.stoplossMultiplier);
+    chk('ct-ante-enabled', D.anteEnabled);
+    n4SetSegment('ct-ante-bb', D.anteBb);
+    const sv = document.getElementById('ct-seats-value'); if (sv) sv.textContent = String(D.maxSeats);
+    set('ct-duration', D.durationHours);
+    chk('ct-straddle', D.straddleEnabled);
+    chk('ct-pflr-limit', D.pflrLimitEnabled);
+    chk('ct-rake-enabled', D.rakeEnabled);
+    n4SetSegment('ct-rake-type', D.rakeType);
+    set('ct-rake-percent', D.rakePercent);
+    chk('ct-rake-half-on-few', D.rakeHalfOnFew);
+    set('ct-rake-min-pot', D.rakeMinPot);
+    set('ct-rake-cap', D.rakeCap);
+    const afk = document.getElementById('ct-afk-value'); if (afk) afk.textContent = D.afkSeatHoldSec + 'S';
+    chk('ct-pay-board', D.payToSeeBoardEnabled);
+    chk('ct-pay-hole-enabled', D.payToSeeHoleEnabled);
+    n4SetSegment('ct-pay-hole-bb', D.payToSeeHoleBb);
+    chk('ct-pay-cut-enabled', D.payToCutEnabled);
+    n4SetSegment('ct-pay-cut-bb', D.payToCutBb);
+    chk('ct-delayed-reveal', D.delayedRevealEnabled);
+    chk('ct-autostart-enabled', D.autoStartEnabled);
+    n4SetSegment('ct-autostart-min', D.autoStartMinPlayers);
+    chk('ct-lottery-seat', D.lotterySeatingEnabled);
+    chk('ct-mute-spec', D.muteSpectatorsEnabled);
+    chk('ct-insurance', D.insuranceEnabled);
+    chk('ct-no-limit', D.noLimitEnabled);
+    chk('ct-auto-task', D.createAutoStartTask);
+    n4SyncToggleSubs();
+  }
+
+  // -------- 入口:重置 + showSubPage --------
   if (clubinfoCreateTableBtn) {
     clubinfoCreateTableBtn.addEventListener('click', () => {
-      if (ctNameInput) ctNameInput.value = '';
-      if (ctNameCount) ctNameCount.textContent = '0';
-      if (ctGameType) ctGameType.value = 'NLH_long';
-      if (ctSb) ctSb.value = '1';
-      if (ctBb) ctBb.value = '2';
-      if (ctAnte) ctAnte.value = '0';
-      if (ctMaxSeats) { ctMaxSeats.value = '9'; ctMaxSeats.max = '9'; }
-      if (ctMinBuyin) ctMinBuyin.value = '40';
-      if (ctMaxBuyin) ctMaxBuyin.value = '100';
+      n4ResetForm();
       showSubPage('create-table');
     });
   }
 
-  // 返回按钮 → 回俱乐部信息页
+  // -------- 返回 → 回俱乐部信息页 --------
   if (createTableBack) {
     createTableBack.addEventListener('click', () => {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -33539,79 +34090,89 @@
     });
   }
 
-  // 牌桌名字符计数
-  if (ctNameInput && ctNameCount) {
-    ctNameInput.addEventListener('input', () => {
-      ctNameCount.textContent = String(ctNameInput.value.length);
-    });
-  }
-
-  // 游戏类型切换 → 短牌时座位 max 改为 6
-  if (ctGameType && ctMaxSeats) {
-    ctGameType.addEventListener('change', () => {
-      const isShort = ctGameType.value === 'SHORT_DECK';
-      ctMaxSeats.max = isShort ? '6' : '9';
-      if (isShort && parseInt(ctMaxSeats.value, 10) > 6) {
-        ctMaxSeats.value = '6';
-      }
-    });
-  }
-
-  // 提交按钮
+  // -------- 提交:收集全部字段 → POST --------
   if (btnCreateTable) {
     btnCreateTable.addEventListener('click', async () => {
-      const name = (ctNameInput && ctNameInput.value || '').trim();
-      const gameType = ctGameType ? ctGameType.value : 'NLH_long';
-      const sb = parseInt((ctSb && ctSb.value) || '0', 10);
-      const bb = parseInt((ctBb && ctBb.value) || '0', 10);
-      const ante = parseInt((ctAnte && ctAnte.value) || '0', 10) || 0;
-      const maxSeats = parseInt((ctMaxSeats && ctMaxSeats.value) || '0', 10);
-      const minBuyin = parseInt((ctMinBuyin && ctMinBuyin.value) || '0', 10);
-      const maxBuyinRaw = (ctMaxBuyin && ctMaxBuyin.value || '').trim();
+      const nameEl = document.getElementById('ct-name-input');
+      const name = (nameEl && nameEl.value || '').trim();
+      const gameType = n4GetGameType();
+      const blindsStr = document.getElementById('ct-blinds').value;
+      const blindsParts = blindsStr.split('/');
+      const sb = parseFloat(blindsParts[0]);
+      const bb = parseFloat(blindsParts[1]);
+      // 后端 schema 期望 int,小盲带小数(如 0.5)按 0 处理 → 这里用 Math.round * 10 标准化?
+      // 简化:盲注预设档全是整数(1/2 起),不会有 0.x。直接 parseInt 即可。
+      const sbI = parseInt(blindsParts[0], 10);
+      const bbI = parseInt(blindsParts[1], 10);
+      const maxSeats = parseInt(document.getElementById('ct-seats-value').textContent, 10);
+      const minBuyin = parseInt(document.getElementById('ct-min-buyin').value, 10);
+      const maxBuyinRaw = (document.getElementById('ct-max-buyin').value || '').trim();
       const maxBuyin = maxBuyinRaw === '' ? null : parseInt(maxBuyinRaw, 10);
+      const anteEnabled = document.getElementById('ct-ante-enabled').checked;
+      const anteBb = parseInt(n4GetSegment('ct-ante-bb', '1'), 10);
+      const ante = anteEnabled ? Math.max(0, anteBb * bbI) : 0;   // 转换:N BB = N * bb 筹码
 
       // 前端 fail-fast 校验
       if (!name || name.length < 1 || name.length > 32) {
-        if (typeof showToast === 'function') showToast('牌桌名长度需 1-32');
-        return;
+        return showToast('牌桌名长度需 1-32');
       }
-      if (!Number.isInteger(sb) || sb < 1) {
-        if (typeof showToast === 'function') showToast('小盲必须是正整数');
-        return;
+      if (!Number.isInteger(sbI) || sbI < 1) {
+        return showToast('盲注解析失败');
       }
-      if (!Number.isInteger(bb) || bb < sb) {
-        if (typeof showToast === 'function') showToast('大盲必须 ≥ 小盲');
-        return;
+      if (!Number.isInteger(bbI) || bbI < sbI) {
+        return showToast('盲注解析失败:大盲 < 小盲');
       }
       if (!Number.isInteger(maxSeats) || maxSeats < 2 || maxSeats > 9) {
-        if (typeof showToast === 'function') showToast('座位数必须 2-9');
-        return;
+        return showToast('座位数必须 2-9');
       }
       if (gameType === 'SHORT_DECK' && maxSeats > 6) {
-        if (typeof showToast === 'function') showToast('短牌最大 6 座');
-        return;
+        return showToast('短牌最大 6 座');
       }
       if (!Number.isInteger(minBuyin) || minBuyin < 1 || minBuyin > 10000) {
-        if (typeof showToast === 'function') showToast('最小买入必须 1-10000');
-        return;
+        return showToast('最小买入必须 1-10000');
       }
-      if (maxBuyin !== null) {
-        if (!Number.isInteger(maxBuyin) || maxBuyin < minBuyin || maxBuyin > 10000) {
-          if (typeof showToast === 'function') showToast('最大买入必须 ≥ 最小买入 且 ≤ 10000');
-          return;
-        }
+      if (maxBuyin !== null && (!Number.isInteger(maxBuyin) || maxBuyin < minBuyin || maxBuyin > 10000)) {
+        return showToast('最大买入必须 ≥ 最小买入 且 ≤ 10000');
       }
-      if (!Number.isInteger(ante) || ante < 0) {
-        if (typeof showToast === 'function') showToast('前注必须 ≥ 0');
-        return;
-      }
+
+      // settings JSONB
+      const afkVal = document.getElementById('ct-afk-value').textContent;
+      const settings = {
+        showRoomCode:          document.getElementById('ct-show-room-code').checked,
+        rebuyLimitEnabled:     document.getElementById('ct-rebuy-enabled').checked,
+        rebuyLimitMultiplier:  parseInt(document.getElementById('ct-rebuy-mult').value, 10),
+        stoplossEnabled:       document.getElementById('ct-stoploss-enabled').checked,
+        stoplossMultiplier:    parseInt(document.getElementById('ct-stoploss-mult').value, 10),
+        anteEnabled:           anteEnabled,
+        anteBb:                anteBb,
+        durationHours:         parseInt(document.getElementById('ct-duration').value, 10),
+        straddleEnabled:       document.getElementById('ct-straddle').checked,
+        pflrLimitEnabled:      document.getElementById('ct-pflr-limit').checked,
+        rakeEnabled:           document.getElementById('ct-rake-enabled').checked,
+        rakeType:              n4GetSegment('ct-rake-type', 'pot'),
+        rakePercent:           parseFloat(document.getElementById('ct-rake-percent').value),
+        rakeHalfOnFew:         document.getElementById('ct-rake-half-on-few').checked,
+        rakeMinPot:            parseInt(document.getElementById('ct-rake-min-pot').value, 10),
+        rakeCap:               parseInt(document.getElementById('ct-rake-cap').value, 10),
+        afkSeatHoldSec:        parseInt(String(afkVal).replace(/\D/g, ''), 10),
+        payToSeeBoardEnabled:  document.getElementById('ct-pay-board').checked,
+        payToSeeHoleEnabled:   document.getElementById('ct-pay-hole-enabled').checked,
+        payToSeeHoleBb:        parseFloat(n4GetSegment('ct-pay-hole-bb', '0.5')),
+        payToCutEnabled:       document.getElementById('ct-pay-cut-enabled').checked,
+        payToCutBb:            parseFloat(n4GetSegment('ct-pay-cut-bb', '0.5')),
+        delayedRevealEnabled:  document.getElementById('ct-delayed-reveal').checked,
+        autoStartEnabled:      document.getElementById('ct-autostart-enabled').checked,
+        autoStartMinPlayers:   parseInt(n4GetSegment('ct-autostart-min', '2'), 10),
+        lotterySeatingEnabled: document.getElementById('ct-lottery-seat').checked,
+        muteSpectatorsEnabled: document.getElementById('ct-mute-spec').checked,
+        insuranceEnabled:      document.getElementById('ct-insurance').checked,
+        noLimitEnabled:        document.getElementById('ct-no-limit').checked,
+        createAutoStartTask:   document.getElementById('ct-auto-task').checked
+      };
 
       // 当前俱乐部 ID
       const clubId = currentClubInfoId;
-      if (!clubId) {
-        if (typeof showToast === 'function') showToast('未能识别当前俱乐部,请回大厅重试');
-        return;
-      }
+      if (!clubId) return showToast('未能识别当前俱乐部,请回大厅重试');
 
       // 防双击
       const origText = btnCreateTable.textContent;
@@ -33619,21 +34180,19 @@
       btnCreateTable.textContent = '创建中…';
 
       try {
-        const resp = await window.apiClient.post(
-          '/api/clubs/' + clubId + '/tables',
-          {
-            name: name,
-            blinds_sb: sb,
-            blinds_bb: bb,
-            max_seats: maxSeats,
-            game_type: gameType,
-            min_buyin: minBuyin,
-            max_buyin: maxBuyin,
-            ante: ante
-          }
-        );
-        console.log('[N4] ✅ 建桌成功:', resp.table);
-        if (typeof showToast === 'function') showToast('牌桌已建立');
+        const resp = await window.apiClient.post('/api/clubs/' + clubId + '/tables', {
+          name: name,
+          blinds_sb: sbI,
+          blinds_bb: bbI,
+          max_seats: maxSeats,
+          game_type: gameType,
+          min_buyin: minBuyin,
+          max_buyin: maxBuyin,
+          ante: ante,
+          settings: settings
+        });
+        console.log('[N4 v2] ✅ 建桌成功:', resp.table);
+        showToast('牌桌已建立');
         // 回大厅 + 刷新房间列表
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         const lobbyPage = document.getElementById('page-club-lobby');
@@ -33642,10 +34201,8 @@
           fetchClubTablesAndRender(clubId);
         }
       } catch (err) {
-        console.warn('[N4] ❌ 建桌失败:', err);
-        if (typeof showToast === 'function') {
-          showToast('建桌失败:' + (err && err.message ? err.message : '未知错误'));
-        }
+        console.warn('[N4 v2] ❌ 建桌失败:', err);
+        showToast('建桌失败:' + (err && err.message ? err.message : '未知错误'));
       } finally {
         btnCreateTable.disabled = false;
         btnCreateTable.textContent = origText;

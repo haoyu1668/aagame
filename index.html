@@ -13223,8 +13223,13 @@
         </div>
       </div>
 
-      <!-- ⭐ v2.15 玩家行动按钮区(默认显示加注弹窗) -->
-      <div class="action-area" id="action-area" data-state="p1">
+      <!-- ⭐ v2.15 玩家行动按钮区
+           2026-05-28 修正:默认 state 从 "p1" 改为 "none"
+             原因:p1 = 我行动中,line 32279 的 MutationObserver init 会自动 startTimer,
+                   导致用户启动 Mini App 不进游戏页也跑后台倒计时,5s 后嘟嘟嘟。
+             修法:默认 idle "none",DEV"完整一手"按钮或真后端推送时再切到 p1-p4,
+                   timer / 音效 / demo 逻辑全部保留不动。 -->
+      <div class="action-area" id="action-area" data-state="none">
         <!-- 5 个快捷加注键(只在 state=raise 时显示) -->
         <div class="ab-tile tile-1" data-raise-tile="1/5" data-amount="82">
           <div class="t-frac">1/5</div>

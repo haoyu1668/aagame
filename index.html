@@ -3226,9 +3226,39 @@
   body.on-real-table #hash-chip,
   body.on-real-table #ws-mock-start-btn,
   body.on-real-table .seat .seat-cards-back { display: none !important; }
-  /* 真桌未入座时,my-seat 完全隐藏(底部留空,引导玩家点外围 8 个 + 坐下)
-     真坐下后(.seated 由 JS 加)→ my-seat 显示带真后端数据 */
-  body.on-real-table .my-seat:not(.seated) { display: none !important; }
+  /* 真桌未入座时:my-seat 变成"+ 坐下"占位(底部清晰可见,可点),
+     点击 = 触发第一个空外围座位的入座流程
+     真坐下后(.seated 由 JS 加)→ 恢复正常 my-seat 显示带真后端数据 */
+  body.on-real-table .my-seat:not(.seated) > * { display: none !important; }
+  body.on-real-table .my-seat:not(.seated) {
+    cursor: pointer;
+    text-align: center;
+    padding-top: 8px;
+  }
+  body.on-real-table .my-seat:not(.seated)::before {
+    content: '+';
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 60px;
+    border: 2px dashed rgba(255,255,255,0.4);
+    border-radius: 50%;
+    font-size: 32px;
+    color: rgba(255,255,255,0.5);
+    font-weight: 300;
+    line-height: 1;
+  }
+  body.on-real-table .my-seat:not(.seated)::after {
+    content: '坐下';
+    display: block;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 4px;
+  }
+  body.on-real-table .my-seat:not(.seated):active::before {
+    transform: scale(0.95);
+  }
   /* 真桌未入座时,顶部 rebuy/余额(补码)控件也隐藏 — 真坐下后才有意义 */
   body.on-real-table:not(:has(.my-seat.seated)) #topbar-rebuy { display: none !important; }
   /* 真桌中央"等待开局"占位文字(JS 不动 DOM,纯 CSS 用 ::before 加上) */
@@ -16487,6 +16517,27 @@
       occupied[seatOrder[i]] = demoPlayers[i];
     }
     return occupied;
+  }
+
+  // ⭐ 2026-05-29:真桌未入座时,点底部 my-seat 占位 = 触发第一个空外围座入座
+  //   仅 body.on-real-table + !.seated 时生效
+  //   demo 模式不影响
+  const _mySeatEl = document.querySelector('#page-table .my-seat');
+  if (_mySeatEl) {
+    _mySeatEl.addEventListener('click', (e) => {
+      // 已入座 → 不拦截(原 leave 流程)
+      if (_mySeatEl.classList.contains('seated')) return;
+      // 不是真桌 → 不拦截
+      if (!document.body.classList.contains('on-real-table')) return;
+      e.stopPropagation();
+      // 找第一个空外围座(.seat.empty),触发其 click
+      const firstEmpty = document.querySelector('#page-table .seat.empty');
+      if (firstEmpty) {
+        firstEmpty.click();
+      } else if (typeof showToast === 'function') {
+        showToast('当前没有空座');
+      }
+    });
   }
 
   // ⭐ v2.15 空座点击监听(事件委托,绑在牌桌容器上)

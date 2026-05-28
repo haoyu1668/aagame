@@ -3256,6 +3256,44 @@
   }
   /* 真桌未入座时,顶部 rebuy/余额(补码)控件也隐藏 — 真坐下后才有意义 */
   body.on-real-table:not(:has(.my-seat.seated)) #topbar-rebuy { display: none !important; }
+  /* ⭐ B9 Phase 1:有进行中的 hand 时,反向 reveal 之前因真桌而隐藏的 demo 元素 */
+  body.on-real-table.hand-active .table-center .pot-chips,
+  body.on-real-table.hand-active .table-center .pot-label,
+  body.on-real-table.hand-active #community-cards,
+  body.on-real-table.hand-active .my-seat .my-cards { display: revert !important; }
+  body.on-real-table.hand-active .table-center::before { display: none; }
+  /* ⭐ B9"开始牌局"按钮(无 active hand + 玩家入座 ≥ 2 时显示) */
+  .b9-start-hand-btn {
+    display: block;
+    margin: 12px auto 4px;
+    padding: 10px 22px;
+    background: var(--green-main);
+    color: #000;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(77, 255, 77, 0.4);
+  }
+  .b9-start-hand-btn:active { transform: scale(0.97); }
+  /* B9 dealer 按钮位置(贴座位右上角) */
+  .dealer-button.b9-marker {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    color: #000;
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 22px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    z-index: 10;
+  }
   /* 真桌中央"等待开局"占位文字(JS 不动 DOM,纯 CSS 用 ::before 加上) */
   body.on-real-table .table-center::before {
     content: '等待开局...';
@@ -33516,12 +33554,160 @@
   }
   window.fetchAndRenderTableSeats = fetchAndRenderTableSeats;
 
-  // 5s 轮询 page-table 座位(用户在桌上时启动,离桌停)
+  // ⭐ B9 Phase 1(2026-05-29):拉当前牌局状态 + 渲染 dealer/SB/BB/底池/我的底牌
+  //   demo 模式跳过;非真桌跳过
+  //   返 hand 对象(可能 null,表示无 active hand)
+  function fetchAndRenderCurrentHand(tableId) {
+    if (!window.apiClient || !window.tokenStore || !window.tokenStore.get()) return Promise.resolve(null);
+    var numericId = Number(tableId);
+    if (!Number.isInteger(numericId) || numericId <= 0) return Promise.resolve(null);
+    return window.apiClient.get('/api/tables/' + numericId + '/current-hand').then(function(resp) {
+      var hand = (resp && resp.hand) || null;
+      if (currentTableRoom && Number(currentTableRoom.id) === numericId) {
+        currentTableRoom._currentHand = hand;
+        renderCurrentHand(hand);
+      }
+      return hand;
+    }).catch(function(err) {
+      console.warn('[B9] 拉牌局状态失败:', err && err.message);
+      return null;
+    });
+  }
+  window.fetchAndRenderCurrentHand = fetchAndRenderCurrentHand;
+
+  // 渲染牌局状态到 page-table
+  function renderCurrentHand(hand) {
+    // 清旧 B9 标记
+    document.querySelectorAll('#page-table .b9-marker').forEach(function(el) { el.remove(); });
+    var oldStartBtn = document.getElementById('b9-start-btn');
+    if (oldStartBtn) oldStartBtn.remove();
+    var potEl = document.getElementById('table-pot');
+
+    if (!hand) {
+      // 无牌局
+      document.body.classList.remove('hand-active');
+      if (potEl) potEl.textContent = '0';
+      // 显示"开始牌局"按钮(条件:座位 ≥ 2 + 我已入座)
+      var occupied = currentTableRoom && currentTableRoom.occupiedSeats;
+      if (occupied) {
+        var occCount = Object.keys(occupied).length;
+        var myIsSeated = !!occupied['my'];
+        if (occCount >= 2 && myIsSeated) {
+          var center = document.querySelector('#page-table .table-center');
+          if (center) {
+            var btn = document.createElement('button');
+            btn.id = 'b9-start-btn';
+            btn.className = 'b9-start-hand-btn';
+            btn.textContent = '开始牌局';
+            btn.addEventListener('click', function() {
+              startHandViaBackend(Number(currentTableRoom.id));
+            });
+            center.appendChild(btn);
+          }
+        }
+      }
+      return;
+    }
+
+    // 有牌局
+    document.body.classList.add('hand-active');
+    if (potEl) potEl.textContent = String(hand.potMain);
+
+    // dealer 按钮
+    attachB9DealerButton(hand);
+    // SB / BB 标签
+    attachB9BlindLabel(hand, hand.sbSeat, 'SB');
+    attachB9BlindLabel(hand, hand.bbSeat, 'BB');
+    // 我的底牌(真后端发的,每人不同)
+    if (hand.myHoleCards && hand.myHoleCards.length === 2) {
+      renderMyHoleCardsB9(hand.myHoleCards);
+    }
+    // 公牌(preflop 阶段空,flop 后才有)
+    if (hand.communityCards) {
+      renderCommunityCardsB9(hand.communityCards);
+    }
+  }
+
+  // 把 backend seat_no 映射到前端 DOM 元素
+  function _b9FindSeatEl(seatNo, hand) {
+    var myUserId = window.currentUser && Number(window.currentUser.userId);
+    if (hand && hand.seats && myUserId) {
+      var thisSeat = hand.seats.find(function(s) { return s.seatNo === seatNo; });
+      if (thisSeat && Number(thisSeat.userId) === myUserId) {
+        return document.querySelector('#page-table .my-seat');
+      }
+    }
+    return document.querySelector('#page-table .seat.s' + seatNo);
+  }
+
+  function attachB9DealerButton(hand) {
+    var el = _b9FindSeatEl(hand.dealerSeat, hand);
+    if (!el) return;
+    var btn = document.createElement('div');
+    btn.className = 'dealer-button b9-marker';
+    btn.textContent = 'D';
+    el.appendChild(btn);
+  }
+
+  function attachB9BlindLabel(hand, seatNo, labelText) {
+    var el = _b9FindSeatEl(seatNo, hand);
+    if (!el) return;
+    var tag = document.createElement('div');
+    tag.className = 'blind-label b9-marker label-' + (labelText === 'SB' ? 'sb' : 'bb');
+    tag.textContent = labelText;
+    el.appendChild(tag);
+  }
+
+  function renderMyHoleCardsB9(cards) {
+    var myCardsEl = document.querySelector('#page-table .my-seat .my-cards');
+    if (!myCardsEl) return;
+    myCardsEl.innerHTML = cards.map(_b9CardToHtml).join('');
+  }
+
+  function renderCommunityCardsB9(cards) {
+    var ccEl = document.getElementById('community-cards');
+    if (!ccEl) return;
+    if (cards.length === 0) {
+      ccEl.innerHTML = '';
+      return;
+    }
+    ccEl.innerHTML = cards.map(_b9CardToHtml).join('');
+  }
+
+  function _b9CardToHtml(card) {
+    var suit = card.slice(-1);
+    var rank = card.slice(0, -1);
+    var isRed = (suit === '♥' || suit === '♦');
+    return '<div class="card ' + (isRed ? 'red' : '') + '" data-suit="' + suit + '">' +
+           '<span class="rank">' + rank + '</span>' +
+           '<span class="suit">' + suit + '</span></div>';
+  }
+
+  // 触发后端开局(POST /api/tables/:id/start-hand)
+  function startHandViaBackend(tableId) {
+    var btn = document.getElementById('b9-start-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '开局中...'; }
+    return window.apiClient.post('/api/tables/' + tableId + '/start-hand', {}).then(function(resp) {
+      console.log('[B9] ✅ 开局成功:', resp);
+      if (typeof showToast === 'function') showToast('牌局 #' + resp.handNo + ' 已开始');
+      // 立即拉一次状态
+      fetchAndRenderCurrentHand(tableId);
+    }).catch(function(err) {
+      console.warn('[B9] ❌ 开局失败:', err);
+      if (typeof showToast === 'function') showToast('开局失败:' + (err && err.message ? err.message : '未知错误'));
+      if (btn) { btn.disabled = false; btn.textContent = '开始牌局'; }
+    });
+  }
+  window.startHandViaBackend = startHandViaBackend;
+
+  // 5s 轮询 page-table 座位 + 牌局状态(用户在桌上时启动,离桌停)
   //   B10 真 WebSocket 接入后此轮询删
   var _tableSeatsPollTimer = null;
   function startTableSeatsPolling(tableId) {
     stopTableSeatsPolling();
-    fetchAndRenderTableSeats(tableId); // 立即拉一次
+    // 立即拉一次
+    fetchAndRenderTableSeats(tableId);
+    fetchAndRenderCurrentHand(tableId);
     _tableSeatsPollTimer = setInterval(function() {
       var pageTable = document.getElementById('page-table');
       if (!pageTable || !pageTable.classList.contains('active')) {
@@ -33533,6 +33719,7 @@
         return;
       }
       fetchAndRenderTableSeats(tableId);
+      fetchAndRenderCurrentHand(tableId);
     }, 5000);
   }
   function stopTableSeatsPolling() {

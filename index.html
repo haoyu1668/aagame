@@ -3257,10 +3257,11 @@
   /* 真桌未入座时,顶部 rebuy/余额(补码)控件也隐藏 — 真坐下后才有意义 */
   body.on-real-table:not(:has(.my-seat.seated)) #topbar-rebuy { display: none !important; }
   /* ⭐ B9 Phase 1:有进行中的 hand 时,反向 reveal 之前因真桌而隐藏的 demo 元素 */
-  body.on-real-table.hand-active .table-center .pot-chips,
-  body.on-real-table.hand-active .table-center .pot-label,
-  body.on-real-table.hand-active #community-cards,
-  body.on-real-table.hand-active .my-seat .my-cards { display: revert !important; }
+  /* 用 display 显式值(revert 会破原 flex 布局,导致手牌竖排) */
+  body.on-real-table.hand-active .table-center .pot-chips { display: flex !important; }
+  body.on-real-table.hand-active .table-center .pot-label { display: block !important; }
+  body.on-real-table.hand-active #community-cards { display: flex !important; }
+  body.on-real-table.hand-active .my-seat .my-cards { display: flex !important; }
   body.on-real-table.hand-active .table-center::before { display: none; }
   /* ⭐ B9"开始牌局"按钮(无 active hand + 玩家入座 ≥ 2 时显示) */
   .b9-start-hand-btn {

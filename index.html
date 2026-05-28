@@ -3502,6 +3502,7 @@
     animation: adminNotifyFlash 1.5s ease-in-out infinite;
     transition: transform 100ms ease;
     white-space: nowrap;
+    touch-action: none;          /* ⭐ 2026-05-29:防拖动时触发页面滚动 */
   }
   .admin-notify-chip.show { display: flex; }
   .admin-notify-chip:active { transform: scale(0.95); }
@@ -38890,15 +38891,89 @@
   //     - 因为 admin 看到 N9 一定是要审批,直达审批页最快
   //     - 落地页默认"未处理"勾选,显示 pending 列表
   //     - 处理完 → 触发 refreshAdminNotify 同步 N9
+  // ⭐ 2026-05-29:胶囊改可拖动 + localStorage 持久化位置
+  //   - pointerdown/move/up 处理拖动,touch + mouse 通用
+  //   - 边界约束在 phone-wrap 内,不会拖出屏幕
+  //   - 拖动 < 5px 阈值视为"点击",仍跳记分牌请求页
+  //   - 拖动 ≥ 5px 视为"移动",抑制 click 不跳页
   if (adminNotifyChip) {
-    adminNotifyChip.addEventListener('click', function() {
-      // 牌桌切走了,移除 body class
-      document.body.classList.remove('on-game-page');
-      // 直达记分牌请求页(自动选第一个 admin 俱乐部)
-      if (typeof window.openCoinRequestsPage === 'function') {
-        window.openCoinRequestsPage(null); // 传 null 让函数自己挑 admin 俱乐部
+    var _chipDragState = { dragging: false, didDrag: false, sx: 0, sy: 0, ox: 0, oy: 0 };
+    var _chipStorageKey = 'aagame-notify-chip-pos';
+    var _chipWrap = adminNotifyChip.parentElement; // phone-wrap
+
+    // 启动时还原存的位置(如有)
+    try {
+      var _saved = localStorage.getItem(_chipStorageKey);
+      if (_saved) {
+        var _pos = JSON.parse(_saved);
+        if (_pos.left) adminNotifyChip.style.left = _pos.left;
+        if (_pos.top)  adminNotifyChip.style.top  = _pos.top;
+        adminNotifyChip.style.right = 'auto';
       }
+    } catch (e) {}
+
+    adminNotifyChip.addEventListener('pointerdown', function(e) {
+      _chipDragState.dragging = true;
+      _chipDragState.didDrag = false;
+      _chipDragState.sx = e.clientX;
+      _chipDragState.sy = e.clientY;
+      var r = adminNotifyChip.getBoundingClientRect();
+      _chipDragState.ox = e.clientX - r.left;
+      _chipDragState.oy = e.clientY - r.top;
+      try { adminNotifyChip.setPointerCapture(e.pointerId); } catch (_) {}
     });
+
+    adminNotifyChip.addEventListener('pointermove', function(e) {
+      if (!_chipDragState.dragging) return;
+      var dx = e.clientX - _chipDragState.sx;
+      var dy = e.clientY - _chipDragState.sy;
+      if (!_chipDragState.didDrag && Math.hypot(dx, dy) > 5) {
+        _chipDragState.didDrag = true;
+      }
+      if (!_chipDragState.didDrag) return;
+      var wrapR = _chipWrap.getBoundingClientRect();
+      var chipR = adminNotifyChip.getBoundingClientRect();
+      var newLeft = e.clientX - wrapR.left - _chipDragState.ox;
+      var newTop  = e.clientY - wrapR.top  - _chipDragState.oy;
+      // 边界:不能拖出 phone-wrap
+      newLeft = Math.max(0, Math.min(newLeft, wrapR.width  - chipR.width));
+      newTop  = Math.max(0, Math.min(newTop,  wrapR.height - chipR.height));
+      adminNotifyChip.style.left  = newLeft + 'px';
+      adminNotifyChip.style.top   = newTop + 'px';
+      adminNotifyChip.style.right = 'auto';
+    });
+
+    function _chipEndDrag(e) {
+      if (!_chipDragState.dragging) return;
+      _chipDragState.dragging = false;
+      if (_chipDragState.didDrag) {
+        // 保存位置
+        try {
+          localStorage.setItem(_chipStorageKey, JSON.stringify({
+            left: adminNotifyChip.style.left,
+            top:  adminNotifyChip.style.top
+          }));
+        } catch (_) {}
+      }
+      try { adminNotifyChip.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    adminNotifyChip.addEventListener('pointerup',     _chipEndDrag);
+    adminNotifyChip.addEventListener('pointercancel', _chipEndDrag);
+
+    // click 拦截:capture phase 先看 didDrag,如有拖动则吞掉(不跳页)
+    adminNotifyChip.addEventListener('click', function(e) {
+      if (_chipDragState.didDrag) {
+        e.stopPropagation();
+        e.preventDefault();
+        _chipDragState.didDrag = false; // 重置防影响下次正常 click
+        return;
+      }
+      // 没拖动 → 原来跳记分牌请求页的逻辑
+      document.body.classList.remove('on-game-page');
+      if (typeof window.openCoinRequestsPage === 'function') {
+        window.openCoinRequestsPage(null);
+      }
+    }, true);
   }
 
   // DEV 触发器:模拟"新申请到达"(F12 Console 可用)

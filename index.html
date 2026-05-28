@@ -14381,6 +14381,11 @@
           <span>俱乐部管理</span>
           <span class="arrow">›</span>
         </div>
+        <!-- ⭐ N4 (2026-05-28):建立牌桌入口(admin 限)→ 跳 page-create-table -->
+        <div class="clubinfo-row" id="clubinfo-create-table-btn">
+          <span>建立牌桌</span>
+          <span class="arrow">›</span>
+        </div>
         <!-- ⭐ v2.28.81 阶段 2:记分牌请求入口 -->
         <!-- 点击 → 跳 page-coin-requests 页(申请发放/回收审批页)-->
         <!-- 用户反馈:文字用"记分牌请求"避免跟顶部"记分牌余额"混淆 -->
@@ -14452,6 +14457,78 @@
         </div>
 
         <button class="btn-primary" id="btn-save-club-edit">保存</button>
+      </div>
+    </div>
+
+    <!-- ============ N4 子页面:建立牌桌(admin) ============ -->
+    <!-- 2026-05-28:对应后端 B8 minimum slice 的 POST /api/clubs/:clubId/tables -->
+    <!-- 字段校验同步后端 table.js,前端先 fail-fast,后端兜底再校验一次          -->
+    <div class="page" id="page-create-table">
+      <div class="sub-topbar">
+        <div class="sub-back" id="create-table-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </div>
+        <div class="sub-title">建立牌桌</div>
+      </div>
+
+      <div class="create-club-page">
+        <!-- 牌桌名称 -->
+        <div class="form-group">
+          <div class="form-label-row">
+            <div class="form-label">牌桌名称</div>
+            <div class="form-counter"><span id="ct-name-count">0</span>/32</div>
+          </div>
+          <input type="text" class="form-input" id="ct-name-input" maxlength="32" placeholder="例:永旺娱乐 01">
+        </div>
+
+        <!-- 游戏类型 -->
+        <div class="form-group">
+          <div class="form-label">游戏类型</div>
+          <select class="form-input" id="ct-game-type">
+            <option value="NLH_long">长牌(NLH 52 张,最多 9 座)</option>
+            <option value="SHORT_DECK">短牌(去除 2-5,共 36 张,最多 6 座)</option>
+          </select>
+        </div>
+
+        <!-- 小盲 -->
+        <div class="form-group">
+          <div class="form-label">小盲(SB)</div>
+          <input type="number" class="form-input" id="ct-sb" min="1" max="1000000" value="1">
+        </div>
+
+        <!-- 大盲 -->
+        <div class="form-group">
+          <div class="form-label">大盲(BB,必须 ≥ 小盲)</div>
+          <input type="number" class="form-input" id="ct-bb" min="1" max="1000000" value="2">
+        </div>
+
+        <!-- 前注 -->
+        <div class="form-group">
+          <div class="form-label">前注(Ante,0 = 无前注)</div>
+          <input type="number" class="form-input" id="ct-ante" min="0" max="1000000" value="0">
+        </div>
+
+        <!-- 最大座位 -->
+        <div class="form-group">
+          <div class="form-label">最大座位(2-9,短牌最大 6)</div>
+          <input type="number" class="form-input" id="ct-max-seats" min="2" max="9" value="9">
+        </div>
+
+        <!-- 最小买入 -->
+        <div class="form-group">
+          <div class="form-label">最小买入(BB 倍数,行业默认 40)</div>
+          <input type="number" class="form-input" id="ct-min-buyin" min="1" max="10000" value="40">
+        </div>
+
+        <!-- 最大买入 -->
+        <div class="form-group">
+          <div class="form-label">最大买入(BB 倍数,留空 = 不限)</div>
+          <input type="number" class="form-input" id="ct-max-buyin" min="1" max="10000" value="100">
+        </div>
+
+        <button class="btn-primary" id="btn-create-table">创建</button>
       </div>
     </div>
 
@@ -33410,6 +33487,169 @@
     lobbyMoreBtn.addEventListener('click', () => {
       const clubId = document.getElementById('lobby-id').textContent;
       openClubInfo(clubId);
+    });
+  }
+
+  // ========== N4 建立牌桌(admin)==========
+  // 2026-05-28:对应后端 B8 minimum slice POST /api/clubs/:clubId/tables
+  //   入口:club-info admin actions 里"建立牌桌"行
+  //   流程:点击 → 重置表单到默认 → showSubPage('create-table')
+  //        填表 → 点"创建" → 前端校验 → POST → 成功回大厅 + fetchClubTablesAndRender
+  //   字段校验同步 backend table.js:
+  //     - name 1-32(后端是 1-64,前端更严是为了 UI 美观)
+  //     - sb >=1, bb >= sb
+  //     - max_seats 2-9(短牌时强制 ≤6)
+  //     - min_buyin 1-10000, max_buyin null 或 >= min_buyin
+  //     - ante >= 0
+  const clubinfoCreateTableBtn = document.getElementById('clubinfo-create-table-btn');
+  const ctNameInput   = document.getElementById('ct-name-input');
+  const ctNameCount   = document.getElementById('ct-name-count');
+  const ctGameType    = document.getElementById('ct-game-type');
+  const ctSb          = document.getElementById('ct-sb');
+  const ctBb          = document.getElementById('ct-bb');
+  const ctAnte        = document.getElementById('ct-ante');
+  const ctMaxSeats    = document.getElementById('ct-max-seats');
+  const ctMinBuyin    = document.getElementById('ct-min-buyin');
+  const ctMaxBuyin    = document.getElementById('ct-max-buyin');
+  const btnCreateTable = document.getElementById('btn-create-table');
+  const createTableBack = document.getElementById('create-table-back');
+
+  // 入口:重置表单 + 进子页
+  if (clubinfoCreateTableBtn) {
+    clubinfoCreateTableBtn.addEventListener('click', () => {
+      if (ctNameInput) ctNameInput.value = '';
+      if (ctNameCount) ctNameCount.textContent = '0';
+      if (ctGameType) ctGameType.value = 'NLH_long';
+      if (ctSb) ctSb.value = '1';
+      if (ctBb) ctBb.value = '2';
+      if (ctAnte) ctAnte.value = '0';
+      if (ctMaxSeats) { ctMaxSeats.value = '9'; ctMaxSeats.max = '9'; }
+      if (ctMinBuyin) ctMinBuyin.value = '40';
+      if (ctMaxBuyin) ctMaxBuyin.value = '100';
+      showSubPage('create-table');
+    });
+  }
+
+  // 返回按钮 → 回俱乐部信息页
+  if (createTableBack) {
+    createTableBack.addEventListener('click', () => {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      const infoPage = document.getElementById('page-club-info');
+      if (infoPage) infoPage.classList.add('active');
+    });
+  }
+
+  // 牌桌名字符计数
+  if (ctNameInput && ctNameCount) {
+    ctNameInput.addEventListener('input', () => {
+      ctNameCount.textContent = String(ctNameInput.value.length);
+    });
+  }
+
+  // 游戏类型切换 → 短牌时座位 max 改为 6
+  if (ctGameType && ctMaxSeats) {
+    ctGameType.addEventListener('change', () => {
+      const isShort = ctGameType.value === 'SHORT_DECK';
+      ctMaxSeats.max = isShort ? '6' : '9';
+      if (isShort && parseInt(ctMaxSeats.value, 10) > 6) {
+        ctMaxSeats.value = '6';
+      }
+    });
+  }
+
+  // 提交按钮
+  if (btnCreateTable) {
+    btnCreateTable.addEventListener('click', async () => {
+      const name = (ctNameInput && ctNameInput.value || '').trim();
+      const gameType = ctGameType ? ctGameType.value : 'NLH_long';
+      const sb = parseInt((ctSb && ctSb.value) || '0', 10);
+      const bb = parseInt((ctBb && ctBb.value) || '0', 10);
+      const ante = parseInt((ctAnte && ctAnte.value) || '0', 10) || 0;
+      const maxSeats = parseInt((ctMaxSeats && ctMaxSeats.value) || '0', 10);
+      const minBuyin = parseInt((ctMinBuyin && ctMinBuyin.value) || '0', 10);
+      const maxBuyinRaw = (ctMaxBuyin && ctMaxBuyin.value || '').trim();
+      const maxBuyin = maxBuyinRaw === '' ? null : parseInt(maxBuyinRaw, 10);
+
+      // 前端 fail-fast 校验
+      if (!name || name.length < 1 || name.length > 32) {
+        if (typeof showToast === 'function') showToast('牌桌名长度需 1-32');
+        return;
+      }
+      if (!Number.isInteger(sb) || sb < 1) {
+        if (typeof showToast === 'function') showToast('小盲必须是正整数');
+        return;
+      }
+      if (!Number.isInteger(bb) || bb < sb) {
+        if (typeof showToast === 'function') showToast('大盲必须 ≥ 小盲');
+        return;
+      }
+      if (!Number.isInteger(maxSeats) || maxSeats < 2 || maxSeats > 9) {
+        if (typeof showToast === 'function') showToast('座位数必须 2-9');
+        return;
+      }
+      if (gameType === 'SHORT_DECK' && maxSeats > 6) {
+        if (typeof showToast === 'function') showToast('短牌最大 6 座');
+        return;
+      }
+      if (!Number.isInteger(minBuyin) || minBuyin < 1 || minBuyin > 10000) {
+        if (typeof showToast === 'function') showToast('最小买入必须 1-10000');
+        return;
+      }
+      if (maxBuyin !== null) {
+        if (!Number.isInteger(maxBuyin) || maxBuyin < minBuyin || maxBuyin > 10000) {
+          if (typeof showToast === 'function') showToast('最大买入必须 ≥ 最小买入 且 ≤ 10000');
+          return;
+        }
+      }
+      if (!Number.isInteger(ante) || ante < 0) {
+        if (typeof showToast === 'function') showToast('前注必须 ≥ 0');
+        return;
+      }
+
+      // 当前俱乐部 ID
+      const clubId = currentClubInfoId;
+      if (!clubId) {
+        if (typeof showToast === 'function') showToast('未能识别当前俱乐部,请回大厅重试');
+        return;
+      }
+
+      // 防双击
+      const origText = btnCreateTable.textContent;
+      btnCreateTable.disabled = true;
+      btnCreateTable.textContent = '创建中…';
+
+      try {
+        const resp = await window.apiClient.post(
+          '/api/clubs/' + clubId + '/tables',
+          {
+            name: name,
+            blinds_sb: sb,
+            blinds_bb: bb,
+            max_seats: maxSeats,
+            game_type: gameType,
+            min_buyin: minBuyin,
+            max_buyin: maxBuyin,
+            ante: ante
+          }
+        );
+        console.log('[N4] ✅ 建桌成功:', resp.table);
+        if (typeof showToast === 'function') showToast('牌桌已建立');
+        // 回大厅 + 刷新房间列表
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        const lobbyPage = document.getElementById('page-club-lobby');
+        if (lobbyPage) lobbyPage.classList.add('active');
+        if (typeof fetchClubTablesAndRender === 'function') {
+          fetchClubTablesAndRender(clubId);
+        }
+      } catch (err) {
+        console.warn('[N4] ❌ 建桌失败:', err);
+        if (typeof showToast === 'function') {
+          showToast('建桌失败:' + (err && err.message ? err.message : '未知错误'));
+        }
+      } finally {
+        btnCreateTable.disabled = false;
+        btnCreateTable.textContent = origText;
+      }
     });
   }
 

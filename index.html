@@ -33186,6 +33186,30 @@
     document.getElementById('lobby-members').textContent = realCount || club.members || 0;
     document.getElementById('lobby-usdt').textContent = userPlatformBalance;
 
+    // ⭐ 2026-05-29 fix:大厅顶部"记分牌"接通真后端钱包余额
+    //   原版 userPlatformBalance 初始 0,从来没从后端刷新过 → 用户看到永远是 0
+    //   后端 GET /api/clubs/:id/wallet 已存在(申请发放弹窗已在用)
+    //   demo 模式(无 token)→ 跳过,保留旧值
+    if (window.apiClient && window.tokenStore && window.tokenStore.get()) {
+      window.apiClient.get('/api/clubs/' + clubId + '/wallet').then(function(resp) {
+        if (resp && resp.wallet && typeof resp.wallet.balance !== 'undefined') {
+          userPlatformBalance = Number(resp.wallet.balance) || 0;
+          const usdtEl = document.getElementById('lobby-usdt');
+          if (usdtEl) {
+            // 尊重"眼睛"按钮的隐藏态(dataset.hidden==='1' 时不暴露)
+            if (usdtEl.dataset.hidden === '1') {
+              usdtEl.dataset.value = String(userPlatformBalance);
+            } else {
+              usdtEl.textContent = String(userPlatformBalance);
+            }
+          }
+          console.log('[wallet] ✅ 拉到真余额:', userPlatformBalance);
+        }
+      }).catch(function(err) {
+        console.warn('[wallet] ⚠️ 拉余额失败,保留旧值:', err && err.message);
+      });
+    }
+
     // 重置筛选(切换俱乐部时回到"全部")
     resetLobbyFilter();
 

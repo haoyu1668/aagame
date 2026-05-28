@@ -32632,8 +32632,14 @@
     // 重置筛选(切换俱乐部时回到"全部")
     resetLobbyFilter();
 
-    // 渲染房间列表
+    // 渲染房间列表(先用 cache 立刻渲染,B8 异步拉真后端覆盖)
     renderLobbyRooms(clubId);
+    // ⭐ B8(2026-05-28):从真后端拉牌桌列表替换 mock
+    //   demo 模式(无 token)自动跳过 → 保留 mock 兜底
+    //   失败 → catch 不动 cache,大厅显示原状
+    if (typeof fetchClubTablesAndRender === 'function') {
+      fetchClubTablesAndRender(clubId);
+    }
 
     // N3 阶段 1:被封号者 → 申请发放/回收按钮加 blacklisted class(灰显)
     //   club.myBlacklisted 来自 F10 真后端;mock 兜底俱乐部无此字段 → undefined → falsy → 按钮正常
@@ -32712,6 +32718,43 @@
         fillTableCenter(currentTableRoom);
         showSubPage('table');
       });
+    });
+  }
+
+  // ⭐ B8(2026-05-28):从真后端拉指定俱乐部的牌桌列表 → 映射到 room 形 → 替换 cache + 重渲染
+  //   - demo 模式(无 token)直接 return,保留 clubRooms[clubId] mock 兜底
+  //   - mock 俱乐部(88888/94081/21104):后端会返 403(非成员)→ catch → 不动 mock
+  //   - 真俱乐部(11111 等):后端返 tables 数组 → 映射 → 覆盖 clubRooms[clubId] → 重渲染
+  //   - 失败:不动 cache,console.warn(不打扰用户)
+  //   - 字段映射:gameType 'SHORT_DECK' → '短牌',否则 '长牌'; ante>0 加括号显示
+  //   - seats/time 暂置 0(B9 创建牌局 + B10 WebSocket 接入后才有实时会话数据)
+  function fetchClubTablesAndRender(clubId) {
+    if (!window.apiClient || !window.tokenStore || !window.tokenStore.get()) {
+      return;
+    }
+    window.apiClient.get('/api/clubs/' + clubId + '/tables').then(function(resp) {
+      var backendTables = (resp && resp.tables) || [];
+      console.log('[B8] ✅ 拉到俱乐部 ' + clubId + ' 牌桌 ' + backendTables.length + ' 个');
+      var mapped = backendTables.map(function(t) {
+        var blindsStr = (t.ante && t.ante > 0)
+          ? t.blindsSb + '/' + t.blindsBb + '(' + t.ante + ')'
+          : t.blindsSb + '/' + t.blindsBb;
+        return makeRoom({
+          id: t.id,
+          name: t.name,
+          blinds: blindsStr,
+          type: t.gameType === 'SHORT_DECK' ? '短牌' : '长牌',
+          seats: 0,                       // 等 B9/B10 实时会话接入
+          total: t.maxSeats,
+          seatTotal: t.maxSeats,
+          time: '00:00:00',               // 等 B9/B10 实时会话接入
+          buyin: t.minBuyin               // BB 倍数,B8 简化展示
+        });
+      });
+      clubRooms[clubId] = mapped;
+      renderLobbyRooms(clubId);
+    }).catch(function(err) {
+      console.warn('[B8] ⚠️ 拉牌桌列表失败,保留 cache/mock:', err.message);
     });
   }
 

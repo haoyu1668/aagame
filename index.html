@@ -3221,7 +3221,13 @@
   body.on-real-table .my-seat .seat-bet,
   body.on-real-table .seat .seat-bet,
   body.on-real-table #table-hand-no,
-  body.on-real-table #table-timer { display: none !important; }
+  body.on-real-table #table-timer,
+  body.on-real-table #evidence-box,
+  body.on-real-table #hash-chip,
+  body.on-real-table #ws-mock-start-btn,
+  body.on-real-table .seat .seat-cards-back { display: none !important; }
+  /* my-seat 默认隐藏,真坐下(.seated)才显示 */
+  body.on-real-table .my-seat:not(.seated) { display: none !important; }
   /* 真桌中央"等待开局"占位文字(JS 不动 DOM,纯 CSS 用 ::before 加上) */
   body.on-real-table .table-center::before {
     content: '等待开局...';
@@ -33427,6 +33433,11 @@
         currentTableRoom.seats = seats.length;
         if (typeof renderSeats === 'function') {
           renderSeats(currentTableRoom);
+        }
+        // ⭐ 2026-05-29:真桌模式下,my-seat 只在用户已入座时显示
+        var mySeatEl = document.querySelector('#page-table .my-seat');
+        if (mySeatEl) {
+          mySeatEl.classList.toggle('seated', !!newOccupied['my']);
         }
       }
       return newOccupied;

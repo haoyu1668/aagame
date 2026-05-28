@@ -16462,6 +16462,14 @@
       if (chipsEl) chipsEl.textContent = myPlayer.chips;
       // 同步 .waitbb 类(灰显)
       mySeatEl.classList.toggle('waitbb', !!myPlayer.waitbb);
+      // ⭐ 2026-05-29:my-seat 静态 HTML 没头像,这里补一个(跟外围 seat 头像视觉一致)
+      let avatarEl = mySeatEl.querySelector('.seat-avatar');
+      if (!avatarEl) {
+        avatarEl = document.createElement('div');
+        avatarEl.className = 'seat-avatar';
+        mySeatEl.insertBefore(avatarEl, mySeatEl.firstChild);
+      }
+      avatarEl.textContent = myPlayer.avatar || (myPlayer.name || '?').charAt(0);
       // 玩家未入局时,清掉 .my-cards 内的演示牌(K♥10♦),等真实发牌
       // 但 DEV 切换器测试时这两张牌还是需要,所以只在玩家"等大盲"或未行动时清
       // 简化:玩家入座后,my-cards 保持(因为 mockServer 还是会发 K♥10♦)

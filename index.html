@@ -1408,6 +1408,15 @@
   }
   .lobby-coin-btn.deposit  { background: #4dff4d; }  /* 申请发放:项目主绿 */
   .lobby-coin-btn.withdraw { background: #f5a623; }  /* 申请回收:橙色 */
+  /* N3 阶段 1:被封号者灰显 + 点击仍触发 handler(handler 弹 toast 提示原因)
+     用 class 而非 disabled 属性:disabled 会让浏览器吞 click 事件,用户点了没反馈以为坏了 */
+  .lobby-coin-btn.blacklisted {
+    background: #555 !important;
+    color: #888 !important;
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .lobby-coin-btn.blacklisted:active { opacity: 0.5; transform: none; }
 
   /* 两按钮之间间距由父容器 .lobby-usdt-actions 控制(已有 gap)*/
 
@@ -32626,6 +32635,16 @@
     // 渲染房间列表
     renderLobbyRooms(clubId);
 
+    // N3 阶段 1:被封号者 → 申请发放/回收按钮加 blacklisted class(灰显)
+    //   club.myBlacklisted 来自 F10 真后端;mock 兜底俱乐部无此字段 → undefined → falsy → 按钮正常
+    //   不用 disabled 属性是因为浏览器会吞 click 事件,用户点了没反馈
+    //   handler 里会检测 class 并 toast 提示
+    const _depBtn = document.getElementById('lobby-deposit-btn');
+    const _wdwBtn = document.getElementById('lobby-withdraw-btn');
+    const _isBlack = !!(club && club.myBlacklisted);
+    if (_depBtn) _depBtn.classList.toggle('blacklisted', _isBlack);
+    if (_wdwBtn) _wdwBtn.classList.toggle('blacklisted', _isBlack);
+
     // 跳转到大厅子页面
     showSubPage('club-lobby');
   }
@@ -33233,13 +33252,27 @@
     if (requestMask) requestMask.classList.remove('show');
   }
 
+  // N3 阶段 1:被封号者点击 → toast 提示,不开弹窗
+  //   即便绕过 UI 调到后端,/api/clubs/:id/transfer-requests 也会 403 拦截(transfer.js)
+  function _checkBlacklistedAndToast() {
+    const club = clubs.find(c => c.id === currentClubInfoId);
+    if (club && club.myBlacklisted) {
+      if (typeof showToast === 'function') {
+        showToast('你已被封号,无法提交申请,请联系俱乐部管理员');
+      }
+      return true;
+    }
+    return false;
+  }
   if (lobbyDepositBtn) {
     lobbyDepositBtn.addEventListener('click', () => {
+      if (_checkBlacklistedAndToast()) return;
       openRequestModal('grant');
     });
   }
   if (lobbyWithdrawBtn) {
     lobbyWithdrawBtn.addEventListener('click', () => {
+      if (_checkBlacklistedAndToast()) return;
       openRequestModal('revoke');
     });
   }
@@ -38055,7 +38088,8 @@
                 coin: 0,                                    // 等 B7 钱包真接入(F8.5 补)
                 rooms: 0,                                   // 等 B8 牌桌接入
                 members: 1,                                 // 等"成员列表"接口
-                owner: c.myRole === 'admin'                 // admin 角色显示"创建者"标签
+                owner: c.myRole === 'admin',                // admin 角色显示"创建者"标签
+                myBlacklisted: !!c.myBlacklisted            // N3:被封号 → 大厅按钮禁用
               };
             });
             // 替换 clubs 数组(in-place 修改,保留外部引用)

@@ -29130,7 +29130,8 @@
           // ⭐ v2.25 子项 4:跟踪弃牌(投入仍归池,无资格争夺)
           trackFold(data.seatId);
         } else if (data.action === 'call' || data.action === 'bet' || data.action === 'raise' || data.action === 'allin') {
-          if (typeof data.amount === 'number') setSeatBet(data.seatId, data.amount);
+          // ⭐ Task 3.1(2026-05-29):改用飞筹码动画 —— 从座位头像飞到自己 .seat-bet
+          if (typeof data.amount === 'number') flyChipsToSeatBet(data.seatId, data.amount);
           // ⭐ v2.25 子项 4:累加本笔投入到整手累计
           if (typeof data.amount === 'number') trackBet(data.seatId, data.amount);
           if (data.action === 'allin') trackAllIn(data.seatId);
@@ -31053,6 +31054,50 @@
     return { x: 195, y: 250 };
   }
 
+  // ⭐ Task 3.1(2026-05-29):下注 / 跟注 / 加注 / All-in 时,筹码从座位头像飞向自己 .seat-bet
+  //   德州扑克标准体验:点行动 → 筹码先飞到自己面前的下注圈,街结束再统一收到底池
+  //   起点:座位 .seat-avatar 中心
+  //   终点:座位 .seat-bet 位置(若不存在先建,opacity=0 隐藏,等飞到再显)
+  //   复用 createFlyingChip(480ms 时长 + zoom 安全 + DOM 自清理)
+  function flyChipsToSeatBet(seatId, amount) {
+    const seatEl = seatId === 'my'
+      ? document.querySelector('.my-seat')
+      : document.querySelector('.seat.' + seatId);
+    if (!seatEl) return;
+    const avatarEl = seatEl.querySelector('.seat-avatar');
+    if (!avatarEl) {
+      // 兜底:无头像直接静态显示
+      if (typeof setSeatBet === 'function') setSeatBet(seatId, amount);
+      return;
+    }
+    const startPos = getRelativeCenter(avatarEl);
+
+    // 创建/更新 .seat-bet,隐藏到飞行结束
+    let betEl = seatEl.querySelector('.seat-bet');
+    const wasExisting = !!betEl;
+    if (!betEl) {
+      betEl = document.createElement('div');
+      betEl.className = 'seat-bet';
+      betEl.innerHTML = '<div class="seat-chip-icon">C</div><div class="seat-bet-amount">0</div>';
+      seatEl.appendChild(betEl);
+    }
+    const amountEl = betEl.querySelector('.seat-bet-amount');
+    if (amountEl) amountEl.textContent = amount;
+    betEl.style.opacity = '0';
+
+    // 下一帧拿 seat-bet 真实中心位置,飞行
+    requestAnimationFrame(() => {
+      const endPos = getRelativeCenter(betEl);
+      createFlyingChip(startPos.x, startPos.y, endPos.x, endPos.y, '+' + amount, (chip) => {
+        // 飞行结束:筹码渐隐 + seat-bet 显出
+        chip.style.opacity = '0';
+        betEl.style.opacity = '1';
+        setTimeout(() => chip.remove(), 240);
+      });
+    });
+  }
+  window.flyChipsToSeatBet = flyChipsToSeatBet;
+
   // 收筹码:所有座位的 .seat-bet 飞向中央底池
   function betChipsToPotAnimation() {
     const potPos = getPotCenter();
@@ -32804,22 +32849,38 @@
     // ⭐ 飞底牌动画(从牌堆 → 各人位置 → 翻面显示)
     //   仅在"hand 刚开始"才放:hand 已有 actions / 已经发了公牌 / 已经 showdown → 不重播
     //   场景:用户中途进入牌桌时,hand 已经打了一半,看到突然"重发底牌"动画很奇怪
+    //
+    // ⭐ Task 3.2(2026-05-29):新一手开始 → 先播 N6 洗牌动画(1500ms)→ 再发底牌
+    //   playShuffleAnimation 的 callback 链:洗牌完了立即调 dealHoleCardsAnimation
+    //   N6 元素 + CSS + JS 都已就位(line 13060 / 2802 / 39392),只是之前只挂 DEV 按钮
     var handAlreadyInProgress = (Array.isArray(hand.actions) && hand.actions.length > 0)
       || (Array.isArray(hand.communityCards) && hand.communityCards.length > 0)
       || hand.state !== 'preflop';
     if (!handAlreadyInProgress && typeof window.dealHoleCardsAnimation === 'function') {
-      try {
-        window.dealHoleCardsAnimation();
-      } catch (e) {
-        console.warn('[B9] dealHoleCardsAnimation 异常:', e);
+      function _b9PlayDealAfterShuffle() {
+        try {
+          window.dealHoleCardsAnimation();
+        } catch (e) {
+          console.warn('[B9] dealHoleCardsAnimation 异常:', e);
+        }
+      }
+      if (typeof window.playShuffleAnimation === 'function') {
+        try {
+          window.playShuffleAnimation(_b9PlayDealAfterShuffle);
+        } catch (e) {
+          console.warn('[B9] playShuffleAnimation 异常,直接发牌:', e);
+          _b9PlayDealAfterShuffle();
+        }
+      } else {
+        _b9PlayDealAfterShuffle();
       }
     } else if (handAlreadyInProgress) {
-      console.log('[B9] hand 已在进行中(state=' + hand.state + ', actions=' + (hand.actions || []).length + '),跳过发牌动画');
+      console.log('[B9] hand 已在进行中(state=' + hand.state + ', actions=' + (hand.actions || []).length + '),跳过洗牌+发牌动画');
     }
 
-    // 等飞牌完才下盲注筹码(飞牌总时长 ≈ 2轮 × N人 × 80ms + 380ms 飞行 + 余量)
-    // 中途进入时也下盲注筹码(但不延迟,因为飞牌动画跳过了)
-    var betDelay = handAlreadyInProgress ? 0 : 1200;
+    // 等洗牌(1500ms)+ 飞牌(~1200ms)完才下盲注筹码 = 2700ms
+    // 中途进入时也下盲注筹码(但不延迟,因为洗牌+发牌都跳过了)
+    var betDelay = handAlreadyInProgress ? 0 : 2700;
     setTimeout(function() {
       if (typeof window.setSeatBet === 'function') {
         if (Number(hand.sbAmount) > 0) window.setSeatBet(sbSeatId, Number(hand.sbAmount));

@@ -33482,6 +33482,33 @@
       row.addEventListener('click', () => {
         tableEntryFrom = 'lobby';
         currentTableRoom = rs[idx];
+        // ⭐ 软清 demo 残留(2026-05-29):真后端桌进入瞬间,先清 mock 玩家 + my-seat 残留
+        //   防止"BF JD洗 / 洗13 / 自己的旧头像"在 fetchAndRenderTableSeats 第一次拉完前露馅
+        //   demo 桌(非数字 id 如 88888 mock)保留 mock 数据
+        if (Number.isInteger(Number(currentTableRoom.id))) {
+          currentTableRoom.occupiedSeats = {};
+          // 清 my-seat 上次坐过的残留(头像 / 名字 / 筹码 / .seated class)
+          var _mySeatPre = document.querySelector('#page-table .my-seat');
+          if (_mySeatPre) {
+            _mySeatPre.classList.remove('seated');
+            var _oldAv = _mySeatPre.querySelector('.seat-avatar'); if (_oldAv) _oldAv.remove();
+            var _oldNm = _mySeatPre.querySelector('.seat-name-chip'); if (_oldNm) _oldNm.textContent = '';
+            var _oldCh = _mySeatPre.querySelector('.seat-chips'); if (_oldCh) _oldCh.textContent = '';
+          }
+          // 清 demo 残留:座位下注筹码 / D 标 / 盲注标 / 牌局状态跟踪
+          document.querySelectorAll('#page-table .seat .seat-bet, #page-table .my-seat .seat-bet, #page-table .dealer-mark, #page-table .blind-label').forEach(function(el) {
+            el.remove();
+          });
+          window._b9AnimatedHandId = null;
+          window._b9CurrentHand = null;
+          window._b9LastSeenActionId = 0;
+          window._b9LastSeenHandId = null;
+          window._b9LastActingSeatNo = undefined;
+          window._b9LastSeenState = undefined;
+          window._b9ShowdownShownForHandId = null;
+          window._b9PrevHand = null;
+          window._b9AutoStartFired = false;
+        }
         fillTableCenter(currentTableRoom);
         showSubPage('table');
         // ⭐ B8.5(2026-05-29):真后端桌 → 启动 5s 轮询拉座位(看见其他玩家)

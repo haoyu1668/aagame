@@ -28992,15 +28992,7 @@
     const area = document.getElementById('action-area');
     if (!area) return;
 
-    // ⭐ v2.24 防御:仅在 WS 模式下接管 P 弹窗,demo 模式不响应(避免污染演示流)
-    // ⭐ B9 P2.1 旁路:body.on-real-table 时(真后端桌)也允许接管 — 因为 B9 polling 派发的
-    //    ACTION_REQUEST 是真实业务事件,不是 demo 自动跑的事件
-    const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
-    const isOnRealTable = document.body.classList.contains('on-real-table');
-    if (currentMode === 'demo' && !isOnRealTable) {
-      console.log('[action-request] ignored in demo mode');
-      return;
-    }
+    // ⭐ 大整顿 B(2026-05-29):删 demo 模式防御 — appMode 全局态已删,真桌默认接管
 
     // ⭐ v2.26 子项 4:检查预选 → 条件成立则自动 send,不弹 P 弹窗
     const preselect = window.preselectStore && window.preselectStore.get();
@@ -29218,11 +29210,7 @@
     const area = document.getElementById('action-area');
     if (!area) return;
 
-    // 防御:demo 模式不接管(B9 真桌旁路)
-    const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
-    const isOnRealTablePresel = document.body.classList.contains('on-real-table');
-    if (currentMode === 'demo' && !isOnRealTablePresel) return;
-
+    // ⭐ 大整顿 B(2026-05-29):删 demo 模式防御
     // 防御:已在 P 态(轮到我)→ 不显示 Y 态
     if (currentActionRequest) return;
 
@@ -29864,115 +29852,12 @@
   }
   window.handleServerEvent = handleServerEvent;
 
-  // ⭐ v2.22 模式开关:演示模式(本地 setTimeout) vs WebSocket 模式
-  // ═════════════════════════════════════════════════════════════════
-  // 控制方式:
-  //   1. URL hash:#ws=1 → WS 模式(默认 mock 数据);#ws=real → 真实 WS;否则演示模式
-  //   2. DEV 按钮:▶ 切换模式
-  // ═════════════════════════════════════════════════════════════════
-  let appMode = 'demo';   // 'demo' | 'ws_mock' | 'ws_real'
-
-  function detectModeFromUrl() {
-    const hash = (location.hash || '').toLowerCase();
-    if (hash.indexOf('ws=real') !== -1) return 'ws_real';
-    if (hash.indexOf('ws=1') !== -1 || hash.indexOf('ws=mock') !== -1) return 'ws_mock';
-    return 'demo';
-  }
-
-  function setAppMode(newMode) {
-    if (newMode === appMode) return;
-    const oldMode = appMode;
-    appMode = newMode;
-
-    // 切到 WS 模式:断开演示 + 连接 ws
-    if (newMode === 'ws_mock') {
-      // 中断演示
-      if (window._demoHandCancel) window._demoHandCancel.cancelled = true;
-      // ⭐ v2.24 子项 1:WS 模式默认隐藏 P 区(等 ACTION_REQUEST 才显示)
-      if (typeof window.clearActionRequest === 'function') window.clearActionRequest();
-      wsClient.connect({ mode: 'mock' });
-      document.body.classList.add('app-mode-ws');
-      document.body.classList.remove('app-mode-demo');
-    } else if (newMode === 'ws_real') {
-      if (window._demoHandCancel) window._demoHandCancel.cancelled = true;
-      // ⭐ v2.24 同上
-      if (typeof window.clearActionRequest === 'function') window.clearActionRequest();
-      // TODO: 配置真实 WS URL(后端就绪时填)
-      const realUrl = 'wss://aagame-six.vercel.app/ws';
-      wsClient.connect({ mode: 'real', url: realUrl });
-      document.body.classList.add('app-mode-ws');
-      document.body.classList.remove('app-mode-demo');
-    } else {
-      // 切回 demo:恢复初始 P1 态(让 DEV 切换器和演示流能用)
-      wsClient.disconnect();
-      const area = document.getElementById('action-area');
-      if (area && area.dataset.state === 'none') {
-        area.dataset.state = 'p1';   // 回到初始演示态
-      }
-      document.body.classList.add('app-mode-demo');
-      document.body.classList.remove('app-mode-ws');
-    }
-
-    updateModeIndicator();
-    if (typeof showToast === 'function') {
-      const labels = { demo: '演示模式', ws_mock: 'WS Mock 模式', ws_real: 'WS 真实模式' };
-      showToast('已切换到 ' + (labels[newMode] || newMode));
-    }
-  }
-
-  function updateModeIndicator() {
-    const el = document.getElementById('mode-indicator');
-    if (!el) return;
-    const labels = { demo: 'DEMO', ws_mock: 'WS·MOCK', ws_real: 'WS·LIVE' };
-    el.textContent = labels[appMode] || appMode;
-    el.className = 'mode-indicator mode-' + appMode.replace('_', '-');
-  }
-
-  window.setAppMode = setAppMode;
-  window.getAppMode = () => appMode;
-
-  // 初始化:从 URL hash 读模式
-  setTimeout(() => {
-    const initialMode = detectModeFromUrl();
-    if (initialMode !== 'demo') {
-      setAppMode(initialMode);
-    } else {
-      // demo 模式默认不连 ws
-      document.body.classList.add('app-mode-demo');
-    }
-    updateModeIndicator();
-  }, 100);
-
-  // 监听 hash 变化
-  window.addEventListener('hashchange', () => {
-    setAppMode(detectModeFromUrl());
-  });
-
-  // ⭐ v2.22 模式指示器交互(点击展开菜单 + 切换模式)
-  (function initModeIndicator() {
-    const wrap = document.getElementById('mode-indicator-wrap');
-    const indicator = document.getElementById('mode-indicator');
-    const menu = document.getElementById('mode-indicator-menu');
-    if (!wrap || !indicator || !menu) return;
-
-    indicator.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.classList.toggle('open');
-    });
-    // 点击外部关闭
-    document.addEventListener('click', () => {
-      menu.classList.remove('open');
-    });
-    // 菜单项点击
-    menu.querySelectorAll('.mim-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const mode = item.dataset.mode;
-        if (mode) setAppMode(mode);
-        menu.classList.remove('open');
-      });
-    });
-  })();
+  // ⭐ 大整顿 B(2026-05-29):删除 v2.22 模式开关系统
+  //   原 appMode 全局态('demo'/'ws_mock'/'ws_real')+ detectModeFromUrl + setAppMode +
+  //   updateModeIndicator + hashchange 监听 + initModeIndicator IIFE 全删。
+  //   原因:Telegram Mini App 实战只走真后端 polling(B9 P2.1+),不需要演示/mock 模式切换。
+  //   连带影响:body.app-mode-* class 不再设置(CSS 不依赖,已验证)。
+  //   wsClient / mockServer 单例保留(死代码,B10 真 WS 接入时一起重写)。
 
   // ⭐ v2.22 网络状态条:订阅 wsClient 状态变化
   (function initNetBanner() {
@@ -32592,11 +32477,7 @@
     if (window.mockServer && typeof window.mockServer.isWaitingMyTurn === 'function') {
       if (window.mockServer.isWaitingMyTurn()) return true;
     }
-    // ⭐ v2.24 防御:demo 模式下永远返回 false,避免污染演示流
-    // ⭐ B9 P2.1 旁路:真桌(on-real-table)允许返 true
-    const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
-    const isOnRealTableLive = document.body.classList.contains('on-real-table');
-    if (currentMode === 'demo' && !isOnRealTableLive) return false;
+    // ⭐ 大整顿 B(2026-05-29):删 demo 模式防御
     return !!(window.currentActionRequest && window.currentActionRequest());
   }
   function sendClientAction(action, amount) {

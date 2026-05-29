@@ -32651,15 +32651,43 @@
             window.handleServerEvent({
               type: WS_EVENTS.STREET_NEXT, data: { street: hand.state }
             });
-            // ⭐ Bug D fix(2026-05-29):街转换 → 发公牌动画(flop/turn/river)
-            //   原 bug:前端 polling 没派发 CARD_DEAL_BOARD,导致 dealBoardAnimation 永远没调
-            //   → 公牌 .community-cards 一直 [data-stage=""] 隐藏 → 用户看不见翻牌/转牌/河牌
-            //   修复:只要进入 flop/turn/river,派发对应 street 的发公牌事件
-            if (hand.state === 'flop' || hand.state === 'turn' || hand.state === 'river') {
-              window.handleServerEvent({
-                type: WS_EVENTS.CARD_DEAL_BOARD,
-                data: { street: hand.state, cards: hand.communityCards || [] }
-              });
+            // ⭐ Bug D fix v2(2026-05-29):
+            //   1. 街转换 → 发公牌动画 dispatching CARD_DEAL_BOARD
+            //   2. 全 all-in fast-forward 时后端会一次性从 preflop 跳到 showdown,
+            //      中间的 flop/turn/river 跳过,前端没机会派发各自的 CARD_DEAL_BOARD
+            //   → 这里检测"跳跃的街",顺次播放跳过的动画
+            //   3. 进 showdown 必须 setStage 让全部 5 张可见
+            var STREETS = ['preflop','flop','turn','river','showdown'];
+            var prevIdx = STREETS.indexOf(prevState);
+            var newIdx = STREETS.indexOf(hand.state);
+            if (prevIdx >= 0 && newIdx > prevIdx) {
+              // 顺次播 prevIdx+1 .. min(newIdx, river) 这几条街的动画(showdown 不发牌)
+              var lastStreetToAnimate = Math.min(newIdx, STREETS.indexOf('river'));
+              var delay = 0;
+              for (var si = prevIdx + 1; si <= lastStreetToAnimate; si++) {
+                (function(streetName, d) {
+                  setTimeout(function() {
+                    window.handleServerEvent({
+                      type: WS_EVENTS.CARD_DEAL_BOARD,
+                      data: { street: streetName, cards: hand.communityCards || [] }
+                    });
+                  }, d);
+                })(STREETS[si], delay);
+                // 每条街动画约 1.6s(烧 600 + 3张×160 + 翻 320 + 缓冲)
+                // 翻牌 1800ms,转/河 1200ms
+                delay += (STREETS[si] === 'flop') ? 1800 : 1200;
+              }
+              // 跳到 showdown 时,等所有发牌动画跑完后强制 setStage('showdown')
+              //   保证 5 张全可见(CSS .community-cards[data-stage="showdown"] .card{opacity:1})
+              if (hand.state === 'showdown') {
+                setTimeout(function() {
+                  if (typeof setStage === 'function') setStage('showdown');
+                  else {
+                    var ccEl = document.getElementById('community-cards');
+                    if (ccEl) ccEl.setAttribute('data-stage', 'showdown');
+                  }
+                }, delay + 200);
+              }
             }
           }
         }
@@ -32939,6 +32967,21 @@
     if (freshPageEntryWithExistingHand) {
       window._b9AnimatedHandId = hand.id;
       window._b9FreshPageEntry = false;
+      // ⭐ Bug D v3:中途进入时若已有公牌,直接 setStage 让 CSS 显示
+      //   3 张 = flop, 4 张 = turn, 5 张 = river/showdown
+      var ccCnt = (hand.communityCards || []).length;
+      var stage = null;
+      if (hand.state === 'showdown') stage = 'showdown';
+      else if (ccCnt === 5) stage = 'river';
+      else if (ccCnt === 4) stage = 'turn';
+      else if (ccCnt === 3) stage = 'flop';
+      if (stage) {
+        if (typeof setStage === 'function') setStage(stage);
+        else {
+          var ccElFresh = document.getElementById('community-cards');
+          if (ccElFresh) ccElFresh.setAttribute('data-stage', stage);
+        }
+      }
     }
     if (!handAlreadyInProgress && !freshPageEntryWithExistingHand && typeof window.dealHoleCardsAnimation === 'function') {
       function _b9PlayDealAfterShuffle() {

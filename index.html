@@ -30960,27 +30960,19 @@
   // 发公共牌动画:翻牌3张 / 转牌1张 / 河牌1张
   // 烧 1 张(快速飞个牌背到旁边消失) + 飞牌到目标位置 + 翻面
   function dealBoardAnimation(stage) {
-    // ⭐ Bug 3 v2 fix(2026-05-30):函数级双保险 throttle
-    //   原 _b9DealtStreets 在 polling 派发层去重,但仍偶发重复(用户报告翻牌发两遍)
-    //   不管派发层有没有挡,函数自己也挡一道:用 hand.id + stage 做 key,同 key 已跑过就 return
-    //   key 来源:window._b9CurrentHand.id(polling 设置的当前 hand);无 hand 时不挡(DEV 按钮兼容)
-    try {
-      var curHand = window._b9CurrentHand;
-      var hid = curHand && curHand.id;
-      if (hid) {
-        if (!window._b9DealtBoardAnims) window._b9DealtBoardAnims = {};
-        var key = hid + ':' + stage;
-        if (window._b9DealtBoardAnims[key]) {
-          console.log('[dealBoardAnimation] throttle:已跑过 ' + key + ',跳过');
-          return;
-        }
-        window._b9DealtBoardAnims[key] = true;
-        // 防内存累积:只保留最近 1 手的 key
-        Object.keys(window._b9DealtBoardAnims).forEach(function(k) {
-          if (k.split(':')[0] !== String(hid)) delete window._b9DealtBoardAnims[k];
-        });
-      }
-    } catch (e) {}
+    // ⭐ Bug 3 v3 fix(2026-05-30):暴力 throttle —— 同 stage 3 秒内重复调用直接 return
+    //   不依赖 hand.id(可能没设),不依赖派发层去重(可能有 race)
+    //   只看"当前是不是正在跑某 stage 的动画",简单粗暴
+    //   单次完整 dealBoardAnimation 约 1.6 秒,3 秒锁足够覆盖
+    if (window._b9DealBoardActiveStages && window._b9DealBoardActiveStages[stage]) {
+      console.warn('[dealBoardAnimation] throttle:正在跑 ' + stage + ',跳过');
+      return;
+    }
+    if (!window._b9DealBoardActiveStages) window._b9DealBoardActiveStages = {};
+    window._b9DealBoardActiveStages[stage] = true;
+    setTimeout(function() {
+      if (window._b9DealBoardActiveStages) window._b9DealBoardActiveStages[stage] = false;
+    }, 3000);
 
     const deck = document.getElementById('card-deck');
     if (!deck) return;

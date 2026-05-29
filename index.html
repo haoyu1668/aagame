@@ -32497,8 +32497,14 @@
           name:   fullName,
           avatar: (fullName.charAt(0) || '?'),
           chips:  String(s.chips),
-          bet:    0
+          bet:    0,
+          waitbb: !!s.waitbb               // ⭐ 规格 F3 等大盲
         };
+        // 加 action/actionLabel 让 renderSeats 模板挂 ⏰ 灰显 + "等大盲" 气泡
+        if (s.waitbb) {
+          player.action = 'waitbb';
+          player.actionLabel = '等大盲';
+        }
         // 富化:庄家 / 盲注金额
         if (hand) {
           if (Number(s.seatNo) === Number(hand.dealerSeat)) player.isDealer = true;
@@ -32833,6 +32839,22 @@
               options.push('raise');
               var minRaise = Math.max(Number(streetMax) * 2, Number(streetMax) + 1);
               var maxRaise = Number(mySeat.chips || 0) + Number(mySeat.currentBet || 0);
+
+              // ⭐ 规格 F2(2026-05-30):预选金额变化失效校验
+              //   ACTION_REQUEST 来时,若 preselect 是 call 类(validAtCallAmount > 0),
+              //   且新 callAmount 不等于 preselect 时的 callAmount → 清预选 + toast
+              try {
+                if (window.preselectStore && window.preselectStore.has()) {
+                  var ps = window.preselectStore.get();
+                  if (ps && ps.action === 'call' && Number(ps.validAtCallAmount) !== Number(callAmount)) {
+                    window.preselectStore.clear();
+                    if (typeof window.clearPreselectWindow === 'function') window.clearPreselectWindow();
+                    if (typeof showToast === 'function') showToast('预选金额已变,请重新决策');
+                    console.log('[F2] 预选 call 金额从 ' + ps.validAtCallAmount + ' 变为 ' + callAmount + ' → 清预选');
+                  }
+                }
+              } catch (psErr) { console.warn('[F2 预选校验]', psErr); }
+
               console.log('[B9 P2.1] 派发 ACTION_REQUEST(轮到我):', { options: options, callAmount: callAmount, minRaise: minRaise, maxRaise: maxRaise });
               if (typeof window.handleServerEvent === 'function' && typeof WS_EVENTS !== 'undefined') {
                 window.handleServerEvent({
@@ -32851,9 +32873,41 @@
                 });
               }
             } else {
-              // 别人的回合 → 头像绿环
-              console.log('[B9 P2.1] 轮到他人,加绿环:', actingSeatId);
+              // ⭐ 规格 F1(2026-05-30):别人的回合 → 派发 PRESELECT 给我(Y 态)
+              //   决策:Y1/Y2/Y3 由 showPreselectFromContext 内部按 expectedCallAmount + isBigBlind 算
+              //   isBigBlind = 我是不是大盲位(hand.bbSeat === 我的 seatNo)
+              console.log('[B9 P2.1] 轮到他人,加绿环 + 派发 PRESELECT:', actingSeatId);
               if (typeof window.setActingSeat === 'function') window.setActingSeat(actingSeatId);
+              // 派发 PRESELECT 给我(若我在本手)
+              try {
+                var myUid2 = window.currentUser && Number(window.currentUser.userId);
+                var mySeatData = hand.seats.find(function(s) { return Number(s.userId) === myUid2 && !s.folded; });
+                if (mySeatData) {
+                  var sMax = hand.seats.reduce(function(m, s) {
+                    if (s.folded) return m;
+                    return Math.max(m, Number(s.currentBet || 0));
+                  }, 0);
+                  var expectedCall = sMax - Number(mySeatData.currentBet || 0);
+                  var allowed = ['fold'];
+                  if (expectedCall === 0) {
+                    allowed.push('check');
+                    allowed.push('check_fold');
+                  } else {
+                    allowed.push('call');
+                  }
+                  var iAmBB = (hand.bbSeat && Number(hand.bbSeat) === Number(mySeatData.seatNo));
+                  if (typeof window.showPreselectFromContext === 'function') {
+                    window.showPreselectFromContext({
+                      seatId: 'my',
+                      expectedCallAmount: expectedCall,
+                      allowedActions: allowed,
+                      isBigBlind: iAmBB,
+                      myChips: Number(mySeatData.chips || 0),
+                      potSize: Number(hand.potMain || 0)
+                    });
+                  }
+                }
+              } catch (preErr) { console.warn('[F1 PRESELECT 派发]', preErr); }
             }
           }
         }

@@ -32349,6 +32349,11 @@
         //   animate=false:补挂关掉 popup 动画(头一次挂在 renderCurrentHand 里时已弹过)
         if (hand && hand.sbSeat) attachB9BlindLabel(hand, hand.sbSeat, 'SB', false);
         if (hand && hand.bbSeat) attachB9BlindLabel(hand, hand.bbSeat, 'BB', false);
+        // ⭐ B11 抓头(2026-05-29):hand.actions 里有 'straddle' → 给该 seat 加 抓头 标签
+        if (hand && Array.isArray(hand.actions)) {
+          var straddleAct = hand.actions.find(function(a) { return a.action === 'straddle'; });
+          if (straddleAct) attachB9BlindLabel(hand, straddleAct.seatNo, '抓头', false);
+        }
         // ⭐ 杀掉 renderSeats 模板新渲染的 .dealer-mark 的 dealerPop 动画
         //   原 bug:模板里 <div class="dealer-mark">D</div> 每次 innerHTML 重渲就重建,
         //   CSS animation:dealerPop 420ms 又触发 → 玩家看到 D 标每 5 秒"一闪一闪"
@@ -32513,6 +32518,9 @@
           hand.actions.forEach(function(a) {
             var aid = Number(a.id);
             if (aid <= lastSeen) return;
+            // ⭐ B11 抓头:straddle 是开局自动行动,demo ACTION_EXEC labelMap 不含 straddle
+            //   → 跳过派发(标签已由 attachB9BlindLabel('抓头') 挂上)
+            if (a.action === 'straddle') { window._b9LastSeenActionId = aid; return; }
             var seatId = _b9SeatNoToId(a.seatNo, hand);
             console.log('[B9 P2.1] 派发 ACTION_EXEC:', seatId, a.action, a.amount);
             if (typeof window.handleServerEvent === 'function' && typeof WS_EVENTS !== 'undefined') {
@@ -32710,6 +32718,11 @@
     // SB / BB 标签(attachBlindLabel 复用 .blind-label CSS)
     attachB9BlindLabel(hand, hand.sbSeat, 'SB');
     attachB9BlindLabel(hand, hand.bbSeat, 'BB');
+    // ⭐ B11 抓头:hand.actions 里有 'straddle' → 给该 seat 加 抓头 金色标签
+    if (Array.isArray(hand.actions)) {
+      var straddleActPrimary = hand.actions.find(function(a) { return a.action === 'straddle'; });
+      if (straddleActPrimary) attachB9BlindLabel(hand, straddleActPrimary.seatNo, '抓头');
+    }
 
     // 预填我的底牌(飞牌动画走完会让它显形)
     if (hand.myHoleCards && hand.myHoleCards.length === 2) {

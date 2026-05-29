@@ -33113,10 +33113,34 @@
           }, 2000);
         }
       }
+
+      // ⭐ 2026-05-29 UX:中央显示"等待 X/Y 人开局"提示
+      //   占用 .table-center::before 位置(原 CSS 已有"等待开局..."占位,这里覆盖成具体人数)
+      var center = document.querySelector('#page-table .table-center');
+      if (center && occupied && tableSettings) {
+        var occCountWait = Object.keys(occupied).length;
+        var minPlayersWait = Number(tableSettings.autoStartMinPlayers || 2);
+        var oldWait = document.getElementById('b9-wait-hint');
+        if (oldWait) oldWait.remove();
+        var waitDiv = document.createElement('div');
+        waitDiv.id = 'b9-wait-hint';
+        waitDiv.style.cssText = 'position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);text-align:center;color:rgba(255,255,255,0.55);font-size:13px;pointer-events:none;z-index:3;';
+        if (occCountWait < minPlayersWait) {
+          waitDiv.innerHTML = '等待玩家入座<br><span style="font-size:18px;color:var(--green-main);font-weight:700;">' + occCountWait + ' / ' + minPlayersWait + '</span>';
+        } else if (window._b9AutoStartFired) {
+          waitDiv.innerHTML = '准备开局...<span style="color:var(--green-main);">2 秒后开始</span>';
+        } else {
+          waitDiv.innerHTML = '等待开局...';
+        }
+        center.appendChild(waitDiv);
+      }
       return;
     }
     // 有牌局 → 重置自动开局 flag,下次 hand 结束又可触发
     window._b9AutoStartFired = false;
+    // 清"等待开局"提示(进入 hand-active 后不再需要)
+    var oldWaitHint = document.getElementById('b9-wait-hint');
+    if (oldWaitHint) oldWaitHint.remove();
 
     // 有牌局
     document.body.classList.add('hand-active');
@@ -33323,7 +33347,7 @@
       }
       fetchAndRenderTableSeats(tableId);
       fetchAndRenderCurrentHand(tableId);
-    }, 5000);
+    }, 2000);   // ⭐ 2026-05-29 UX:5s → 2s 让对手行动反应更跟手(B10 真 WS 接通后再砍掉轮询)
   }
   function stopTableSeatsPolling() {
     if (_tableSeatsPollTimer) { clearInterval(_tableSeatsPollTimer); _tableSeatsPollTimer = null; }
@@ -35417,17 +35441,9 @@
   }
 
   // ========== 成员管理页 ==========
-  // 假数据:成员列表(真实业务从后端获取)
-  // owner=true 的人 → 显示"创建者"徽章 + 绿色名字 + 无操作按钮
-  // 其他人 → 显示"设为管理员/黑名单"操作按钮
-  // role: 'admin' / 'player'  status: 'online' / 'new' / null
-  // 假数据:用时间戳表示最近上线和被设为管理员的时间(等后端推真实值)
-  const NOW = Date.now();
-  const clubMembersData = [
-    { uid: '1001958', name: '伯恩',   owner: true,  role: 'admin', adminType: '总管理', adminSetAt: NOW - 30*24*3600*1000, lastOnline: NOW - 30*1000,        joinDate: '05/14' },
-    { uid: '1001941', name: 'HB华强', owner: false, role: 'player',                                                       lastOnline: NOW - 2*3600*1000,    joinDate: '05/16' },
-    { uid: '1002691', name: 'HB飘雪', owner: false, role: 'player',                                                       lastOnline: NOW - 10*60*1000,     joinDate: '05/14', avatar: null }
-  ];
+  // ⭐ 大整顿 C(2026-05-29):N3 阶段 2 已接通真后端 GET /api/clubs/:id/members
+  //   原 3 个 mock 成员(伯恩/HB华强/HB飘雪)删除,fetchClubMembersAndRefresh 异步填入真数据。
+  const clubMembersData = [];
 
   let currentMembersClubId = null;
   let currentCmmTab = '全部';

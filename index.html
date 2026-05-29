@@ -33211,12 +33211,32 @@
     var ccEl = document.getElementById('community-cards');
     if (!ccEl) return;
     if (cards.length === 0) {
-      ccEl.innerHTML = '';
+      if (ccEl.innerHTML) ccEl.innerHTML = '';
       return;
     }
-    // ⭐ Bug D fix(2026-05-29):必须挂 data-slot 属性,否则 CSS
-    //   `.community-cards[data-stage="flop"] .card[data-slot="1"]{opacity:1}` 永远不匹配
-    //   → 公牌不可见。原 _b9CardToHtml 不挂 data-slot 是 bug。
+    // ⭐ Bug 3 真因 v2(2026-05-30):防 polling 每 2 秒重渲触发 360ms CSS 淡入再播
+    //   原 bug:每次 polling 都 innerHTML 全部 replace,新 DOM 元素 opacity:0 → 触发 CSS transition
+    //   → 用户看到"翻牌动画播完,2 秒后又一次淡入" → 误认为"发牌发了两次"
+    //   修复:对比 ccEl 里现有 .card 元素跟 cards 数组是否完全一致 → 一致就直接 return
+    var existing = ccEl.querySelectorAll('.card');
+    if (existing.length === cards.length) {
+      var allSame = true;
+      for (var i = 0; i < cards.length; i++) {
+        var c = cards[i];
+        var suit = c.slice(-1);
+        var rank = c.slice(0, -1);
+        var rankEl = existing[i].querySelector('.rank');
+        if (!rankEl
+            || rankEl.textContent !== rank
+            || existing[i].getAttribute('data-suit') !== suit
+            || existing[i].getAttribute('data-slot') !== String(i + 1)) {
+          allSame = false;
+          break;
+        }
+      }
+      if (allSame) return;   // 内容完全一样 → 不重渲,避免 CSS 淡入重播
+    }
+    // 有差异 → 全部重渲(用 data-slot 让 CSS data-stage 选择器匹配)
     ccEl.innerHTML = cards.map(function(card, i) {
       var suit = card.slice(-1);
       var rank = card.slice(0, -1);

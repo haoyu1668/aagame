@@ -39686,6 +39686,18 @@
   const devN9Clear = document.getElementById('dev-n9-clear');
   const devN9HidePanel = document.getElementById('dev-n9-hide-panel');
 
+  // ⭐ 2026-05-29 fix(N9 误触发 bug):
+  //   Telegram 实战模式(localStorage 有 JWT token)→ 隐藏 DEV 面板
+  //   demo 模式(浏览器无 token)→ 保留(开发者可手动测 N9)
+  //   原 bug:HB袁华启动 Mini App 看到左下角 DEV 面板,误点"① 模拟新申请(+1)" →
+  //          panel handler 强制 clubs[0].owner = true(假冒 admin)+ 注入 mock 申请 →
+  //          N9 胶囊 mock 显示"待审申请",但 caller 跟后端无关 → 行为错乱。
+  //   注:不删 DEV 面板(红线 1),仅在实战模式藏起来。等 B17 整顿期再删除。
+  if (devN9Panel && window.tokenStore && window.tokenStore.get()) {
+    devN9Panel.style.display = 'none';
+    console.log('[N9 DEV] 实战模式 → DEV 面板隐藏');
+  }
+
   if (devN9Trigger) {
     devN9Trigger.addEventListener('click', function() {
       // 确保 clubs 数组有内容

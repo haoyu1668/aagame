@@ -37571,25 +37571,46 @@
   // 提币:记分牌提现流水(平台余额 → 客服人工),含审核中/失败状态 ⭐ F4 改造
   // 消耗:玩家牌局输赢(每局对应一条,正数为赢、负数为输)
   // Jackpot:中奖记录(击中大牌奖励,牌型 + 奖金)
-  // ⭐ 2026-05-29 大整顿:充币/提币改调真后端 GET /api/user/me/transfer-requests
-  //   消耗(牌局输赢)/ Jackpot 暂保留 mock(等 B16 派彩入 hand_seats + jackpot 接口)
+  // ⭐ 2026-05-29 大整顿:充币/提币/消耗 都接真后端
+  //   Jackpot 暂保留 mock(MVP 1 未做大牌奖系统)
   const billData = {
-    '充币': [],   // 真后端动态填充(申请发放历史)
-    '提币': [],   // 真后端动态填充(申请回收历史)
-    '消耗': [
-      { name: '长牌 NL100', time: '2026-05-18 23:45:12', amount: '+125.5', status: 'success', statusText: '已结算' },
-      { name: '短牌 SD50',  time: '2026-05-18 21:12:08', amount: '-80.0',  status: 'success', statusText: '已结算', neg: true },
-      { name: '长牌 NL200', time: '2026-05-18 19:33:55', amount: '+340.0', status: 'success', statusText: '已结算' },
-      { name: '长牌 NL50',  time: '2026-05-17 22:08:41', amount: '-45.5',  status: 'success', statusText: '已结算', neg: true },
-      { name: '短牌 SD100', time: '2026-05-17 18:25:33', amount: '+210.0', status: 'success', statusText: '已结算' },
-      { name: '长牌 NL100', time: '2026-05-16 23:55:18', amount: '-180.0', status: 'success', statusText: '已结算', neg: true }
-    ],
+    '充币': [],   // GET /api/user/me/transfer-requests type='grant'
+    '提币': [],   // GET /api/user/me/transfer-requests type='revoke'
+    '消耗': [],   // GET /api/user/me/game-history(牌局输赢)
     'Jackpot': [
       { name: '同花顺',      time: '2026-05-17 21:45:33', amount: '+500.0',  status: 'success', statusText: '已发放' },
       { name: '四条',        time: '2026-05-15 22:18:07', amount: '+120.0',  status: 'success', statusText: '已发放' },
       { name: '皇家同花顺',  time: '2026-05-13 19:33:42', amount: '+2000.0', status: 'success', statusText: '已发放' }
     ]
   };
+
+  // 拉真后端牌局输赢历史(消耗 Tab 用)
+  function fetchMyGameHistory() {
+    if (!window.apiClient || !window.tokenStore || !window.tokenStore.get()) return Promise.resolve();
+    return window.apiClient.get('/api/user/me/game-history?limit=100').then(function(resp) {
+      const list = (resp && resp.history) || [];
+      billData['消耗'] = list.map(formatGameHistoryToBill);
+    }).catch(function(err) {
+      console.warn('[bill] 拉牌局历史失败:', err && err.message);
+    });
+  }
+
+  // 把后端 game-history 行映射成 billData 项
+  function formatGameHistoryToBill(g) {
+    const delta = Number(g.delta || 0);
+    const isWin = delta >= 0;
+    const gameTypeName = g.gameType === 'SHORT_DECK' ? '短牌' : '长牌';
+    const t = g.endedAt ? new Date(g.endedAt) : null;
+    const time = t ? t.toISOString().slice(0,19).replace('T',' ') : '';
+    return {
+      name: gameTypeName + ' · ' + (g.tableName || ('桌' + g.tableId)),
+      time,
+      amount: (isWin ? '+' : '') + delta.toFixed(1),
+      status: 'success',
+      statusText: '已结算',
+      neg: !isWin
+    };
+  }
 
   // 拉真后端申请发放/回收历史(用户进充币/提币 Tab 时调)
   function fetchMyTransferRequests() {
@@ -37684,11 +37705,13 @@
     const tab = defaultTab || '充币';
     switchBillTab(tab);
     showSubPage('bill');
-    // ⭐ 进入账单页时刷一次真后端历史(充币/提币 Tab 用)
-    fetchMyTransferRequests().then(function() {
-      if (tab === '充币' || tab === '提币') {
-        renderBillList(tab);
-      }
+    // ⭐ 进入账单页并行拉 3 个真后端数据源(充币/提币/消耗)
+    Promise.all([
+      fetchMyTransferRequests(),
+      fetchMyGameHistory()
+    ]).then(function() {
+      // 刷新当前 Tab 的列表
+      renderBillList(tab);
     });
   }
 

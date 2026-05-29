@@ -3425,6 +3425,14 @@
   .card .suit {
     font-size: 18px;
   }
+  /* ⭐ 2026-05-29 修复:花色符号(♥♦♣♠ Unicode U+2665-2668)在很多系统会 fallback 到彩色 emoji 字体,
+     emoji 自带颜色,忽略 CSS color → 导致 K♥ 的 K 是 CSS 的暗红、♥ 是 emoji 的鲜红,两个颜色不统一。
+     font-variant-emoji:text 强制文字模式(Chrome 99+ / Firefox 116+ / Safari 16.4+,现代浏览器都支持)
+     渲染 _b9CardToHtml 时也会给花色字符挂 U+FE0E (VS-15) 做老浏览器兜底。 */
+  .card .rank,
+  .card .suit {
+    font-variant-emoji: text;
+  }
   .card.red { color: #d33; }
   .card.black { color: #000; }
 
@@ -12956,7 +12964,11 @@
     </div>
 
     <!-- ============ 子页面：牌桌界面 ============ -->
-    <div class="page table-9seats poker-color4 state-p1" id="page-table">
+    <!-- ⭐ 2026-05-29:去掉默认 poker-color4 → 默认 2 色(红黑古典)。
+         用户在设置 → 扑克样式里仍可手动切到 4 色(line 37123 add 'poker-color4')。
+         原 bug:4 色模式下 .card[data-suit="♦"] color:#2a6ec0 !important 让 10 变蓝,
+         而 ♦ 符号被系统当 emoji 渲染保持红 → 同一张卡两个颜色。 -->
+    <div class="page table-9seats state-p1" id="page-table">
       <!-- 牌桌椭圆 -->
       <div class="table-ellipse">
         <div class="table-watermark">C</div>
@@ -33787,16 +33799,21 @@
   //   isRed ? 'red' : 'black'(都加类!不能只加 'red' 不加 'black')
   //   原 bug:黑色花色(♠/♣)缺 .black 类 → CSS .card.black{color:#000} 不生效
   //          → 文字颜色继承父级(白/浅色)→ 牌上看不见字
-  // ⭐ 2026-05-29 加固:span 也写 inline color,防 poker-color4 / 字体渲染异常
-  //   让 K♦ 的 K 也是红色(用户截图反馈:.card.red 居然只让 ♦ 红、K 黑)
+  // ⭐ 2026-05-29 三修(K 跟 ♥ 颜色统一):
+  //   花色符号 ♥♦♣♠(Unicode U+2665-2668)在很多系统会被渲染成彩色 emoji
+  //   (emoji 自带颜色,忽略 CSS color),K 用 Georgia 文字渲染听 CSS color。
+  //   两个渲染源 → 颜色不统一。
+  //   修法:在花色字符后挂 U+FE0E(Variation Selector-15)强制文字模式;
+  //         配 demo CSS .card .suit{font-variant-emoji:text} 现代浏览器双保险。
+  //   inline color !important 这次取消 — VS-15 后 emoji 不再覆盖 CSS,继承 .card.red 即可。
   function _b9CardToHtml(card) {
     var suit = card.slice(-1);
     var rank = card.slice(0, -1);
     var isRed = (suit === '♥' || suit === '♦');
-    var color = isRed ? '#d33' : '#000';
-    return '<div class="card ' + (isRed ? 'red' : 'black') + '" data-suit="' + suit + '" style="color:' + color + ';">' +
-           '<span class="rank" style="color:' + color + ';">' + rank + '</span>' +
-           '<span class="suit" style="color:' + color + ';">' + suit + '</span></div>';
+    var VS15 = '︎';   // Variation Selector-15:强制文字渲染,压 emoji
+    return '<div class="card ' + (isRed ? 'red' : 'black') + '" data-suit="' + suit + '">' +
+           '<span class="rank">' + rank + '</span>' +
+           '<span class="suit">' + suit + VS15 + '</span></div>';
   }
 
   // 触发后端开局(POST /api/tables/:id/start-hand)

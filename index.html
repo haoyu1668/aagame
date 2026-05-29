@@ -30887,7 +30887,11 @@
       el.style.opacity = '0';
     });
     const mySeatCards = document.querySelector('.my-seat .my-cards');
-    if (mySeatCards) mySeatCards.style.opacity = '0';
+    if (mySeatCards) {
+      mySeatCards.style.opacity = '0';
+      // ⭐ Bug 1+5 fix:开局清掉上一手的 muck-back 类(双保险,renderMyHoleCardsB9 也清一次)
+      mySeatCards.classList.remove('muck-back');
+    }
 
     const deck = document.getElementById('card-deck');
     const seats = getDealableSeats();
@@ -31075,8 +31079,21 @@
   // 找到底池中心点(.pot-chips)
   function getPotCenter() {
     const potEl = document.querySelector('.table-center .pot-chips');
-    if (potEl) return getRelativeCenter(potEl);
-    // 兜底:中央
+    // ⭐ Bug 2 fix(2026-05-29):potEl 可能存在但 display:none 时
+    //   getBoundingClientRect 返 {0,0,0,0} → 飞行筹码飞到屏幕左上角
+    //   修复:检查实际 size,无 size 时用兜底
+    if (potEl) {
+      const rect = potEl.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        return getRelativeCenter(potEl);
+      }
+    }
+    // 兜底:中央(用 .table-center 元素位置,比纯 page 算更准)
+    const center = document.querySelector('.table-center');
+    if (center) {
+      const rect = center.getBoundingClientRect();
+      if (rect.width > 0) return getRelativeCenter(center);
+    }
     const page = document.getElementById('page-table');
     if (page) {
       const r = page.getBoundingClientRect();
@@ -31813,6 +31830,29 @@
             pageTable.classList.add('state-' + sliderState);
           }
         }
+        // ⭐ Bug 6 fix(2026-05-29):动态更新 tile 按钮金额,不再用 HTML 硬编码 data-amount
+        //   原 bug:HTML 写死 82/110/250/145/1245.92(demo 占位),从未根据真 pot/myChips 算
+        //   修复:开滑杆前,按 req.potSize 和 req.myChips 算各 tile 实际金额并更新文本
+        try {
+          var rPot = Math.max(0, Math.round(Number(req.potSize) || 0));
+          var rMyChips = Math.max(0, Math.round(Number(req.myChips) || 0));
+          var tileCalc = {
+            '1/5':    Math.round(rPot / 5),
+            '1/3':    Math.round(rPot / 3),
+            '1/2':    Math.round(rPot / 2),
+            '1':      rPot,
+            'all-in': rMyChips
+          };
+          document.querySelectorAll('.ab-tile').forEach(function(t) {
+            var key = t.dataset.raiseTile;
+            if (tileCalc[key] !== undefined) {
+              var amt = tileCalc[key];
+              t.dataset.amount = amt;
+              var amountEl = t.querySelector('.t-amount');
+              if (amountEl) amountEl.textContent = amt;
+            }
+          });
+        } catch (tErr) { console.warn('[raise tile update]', tErr); }
         const sliderOverlay = document.getElementById('raise-slider-overlay');
         if (sliderOverlay) sliderOverlay.classList.add('show');
         if (typeof showToast === 'function') showToast('调整加注金额(子项 5 实现)');
@@ -32625,6 +32665,10 @@
           window._b9LastSeenState = undefined;
           // 已是 showdown 状态进来 → 标记摊牌已"看过"(防 muck-modal 弹出)
           window._b9ShowdownShownForHandId = (hand.state === 'showdown') ? hand.id : null;
+          // Bug 3 fix:重置本手"已派发的街"记录(防内存累积 + 防上手 id 撞)
+          if (window._b9DealtStreets) {
+            window._b9DealtStreets = { [hand.id]: {} };
+          }
         } else if (!hand) {
           window._b9LastSeenActionId = 0;
           window._b9LastSeenHandId = null;
@@ -32651,34 +32695,35 @@
             window.handleServerEvent({
               type: WS_EVENTS.STREET_NEXT, data: { street: hand.state }
             });
-            // ⭐ Bug D fix v2(2026-05-29):
+            // ⭐ Bug D fix v3(2026-05-29):街转换 + fast-forward + 防重复派发
             //   1. 街转换 → 发公牌动画 dispatching CARD_DEAL_BOARD
-            //   2. 全 all-in fast-forward 时后端会一次性从 preflop 跳到 showdown,
-            //      中间的 flop/turn/river 跳过,前端没机会派发各自的 CARD_DEAL_BOARD
-            //   → 这里检测"跳跃的街",顺次播放跳过的动画
-            //   3. 进 showdown 必须 setStage 让全部 5 张可见
+            //   2. 全 all-in fast-forward 时跨多条街跳跃,顺次播
+            //   3. Bug 3 fix:每条街只能 dispatch 一次,防止重叠/重播
+            //      用 window._b9DealtStreets[handId] = Set 记录已派发的街
             var STREETS = ['preflop','flop','turn','river','showdown'];
             var prevIdx = STREETS.indexOf(prevState);
             var newIdx = STREETS.indexOf(hand.state);
             if (prevIdx >= 0 && newIdx > prevIdx) {
-              // 顺次播 prevIdx+1 .. min(newIdx, river) 这几条街的动画(showdown 不发牌)
+              // 初始化每手的"已派发的街"记录
+              if (!window._b9DealtStreets) window._b9DealtStreets = {};
+              if (!window._b9DealtStreets[hand.id]) window._b9DealtStreets[hand.id] = {};
+              var dealt = window._b9DealtStreets[hand.id];
               var lastStreetToAnimate = Math.min(newIdx, STREETS.indexOf('river'));
               var delay = 0;
               for (var si = prevIdx + 1; si <= lastStreetToAnimate; si++) {
-                (function(streetName, d) {
+                var streetName = STREETS[si];
+                if (dealt[streetName]) continue;   // 防重复派发(Bug 3)
+                dealt[streetName] = true;
+                (function(sn, d) {
                   setTimeout(function() {
                     window.handleServerEvent({
                       type: WS_EVENTS.CARD_DEAL_BOARD,
-                      data: { street: streetName, cards: hand.communityCards || [] }
+                      data: { street: sn, cards: hand.communityCards || [] }
                     });
                   }, d);
-                })(STREETS[si], delay);
-                // 每条街动画约 1.6s(烧 600 + 3张×160 + 翻 320 + 缓冲)
-                // 翻牌 1800ms,转/河 1200ms
-                delay += (STREETS[si] === 'flop') ? 1800 : 1200;
+                })(streetName, delay);
+                delay += (streetName === 'flop') ? 1800 : 1200;
               }
-              // 跳到 showdown 时,等所有发牌动画跑完后强制 setStage('showdown')
-              //   保证 5 张全可见(CSS .community-cards[data-stage="showdown"] .card{opacity:1})
               if (hand.state === 'showdown') {
                 setTimeout(function() {
                   if (typeof setStage === 'function') setStage('showdown');
@@ -33075,6 +33120,12 @@
   function renderMyHoleCardsB9(cards) {
     var myCardsEl = document.querySelector('#page-table .my-seat .my-cards');
     if (!myCardsEl) return;
+    // ⭐ Bug 1+5 fix(2026-05-29):清掉上一手 muck 残留的 muck-back 类
+    //   原 bug:上一手玩家选盖牌(或 3 秒默认 muck)时 my-cards 加了 muck-back 类
+    //   新一手发牌时 renderMyHoleCardsB9 只换 innerHTML,muck-back 类还在
+    //   → CSS .my-cards.muck-back .card { background: red-bg } + visibility:hidden 持续生效
+    //   → 新一手的牌一直显示成牌背
+    myCardsEl.classList.remove('muck-back');
     myCardsEl.innerHTML = cards.map(_b9CardToHtml).join('');
   }
 

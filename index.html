@@ -31073,7 +31073,17 @@
 
   function chooseShowMuck(choice) {
     closeShowMuckModal();
-    if (choice === 'show') {
+    const show = (choice === 'show');
+    // ⭐ B11(2026-05-29):POST /api/hands/:id/reveal 真后端
+    if (window._b9CurrentHand && window._b9CurrentHand.id && window.apiClient) {
+      window.apiClient.post('/api/hands/' + window._b9CurrentHand.id + '/reveal', { show: show })
+        .then(function(resp) {
+          console.log('[B11 reveal] ✅', resp);
+        }).catch(function(err) {
+          console.warn('[B11 reveal] 失败:', err && err.message);
+        });
+    }
+    if (show) {
       // 展示底牌:确保自己手牌高亮可见(加 reveal-flip 重播一次翻牌动画)
       const myCards = document.querySelectorAll('.my-seat .my-cards .card');
       myCards.forEach(c => {
@@ -32958,22 +32968,37 @@
           window._b9ShowdownShownForHandId = hand.id;
           var sd = hand.showdown;
           console.log('[B9 P2.3] 摊牌:', sd);
-          // 翻开对手底牌
+          // 翻开对手底牌(mucked 玩家 holeCards 为 null,跳过)
           sd.players.forEach(function(p) {
             var seatId = _b9SeatNoToId(p.seatNo, hand);
-            if (seatId !== 'my' && typeof window.revealSeatCards === 'function') {
+            if (seatId !== 'my' && !p.mucked && Array.isArray(p.holeCards)
+                && typeof window.revealSeatCards === 'function') {
               window.revealSeatCards(seatId, p.holeCards);
             }
           });
-          // toast 赢家 + 牌型
+          // toast 赢家 + 牌型(mucked 赢家 handName 为 null,显"已盖牌")
           if (Array.isArray(sd.winners) && sd.winners.length > 0) {
             var winnerLabels = sd.winners.map(function(w) {
               var sid = _b9SeatNoToId(w.seatNo, hand);
               var occ = currentTableRoom && currentTableRoom.occupiedSeats && currentTableRoom.occupiedSeats[sid];
               var name = (occ && occ.name) || ('座位 ' + w.seatNo);
-              return name + '(' + w.handName + ')';
+              var typeName = w.handName ? '(' + w.handName + ')' : '(已盖牌)';
+              return name + typeName;
             }).join(' / ');
             if (typeof showToast === 'function') showToast(winnerLabels + ' 赢');
+          }
+          // ⭐ B11 延迟看牌:settings.delayedRevealEnabled=true 时弹 muck-modal 让自己选
+          //   我必须是 not-folded 玩家才有意义(已弃牌的不需要选)
+          var settings = currentTableRoom && currentTableRoom.settings;
+          if (settings && settings.delayedRevealEnabled) {
+            var myUid = window.currentUser && Number(window.currentUser.userId);
+            var iAmInShowdown = sd.players.some(function(p) {
+              var sd_seat = (hand.seats || []).find(function(hs) { return hs.seatNo === p.seatNo; });
+              return sd_seat && Number(sd_seat.userId) === myUid;
+            });
+            if (iAmInShowdown && typeof window.openShowMuckModal === 'function') {
+              window.openShowMuckModal();
+            }
           }
         }
         if (hand && Array.isArray(hand.actions)) {

@@ -16878,29 +16878,71 @@
       leaveTableId = window._myRealTableId;
     }
     if (leaveTableId && window.apiClient && window.tokenStore && window.tokenStore.get()) {
+      async function callLeaveApi(force) {
+        const url = '/api/tables/' + leaveTableId + '/my-seat' + (force ? '?force=1' : '');
+        return await window.apiClient.del(url);
+      }
+      let leftPending = false;   // 申请退出但暂未真离 → return 不走回大厅流程
       try {
-        const resp = await window.apiClient.del('/api/tables/' + leaveTableId + '/my-seat');
+        const resp = await callLeaveApi(false);
         console.log('[B8.5] ✅ 离座成功,后端返:', resp);
         if (resp && typeof resp.returnedChips === 'number') {
           returnedAmount = resp.returnedChips;
         }
       } catch (err) {
-        // ⭐ B16:409 进行中牌局 → toast + 留桌(不返回大厅,玩家继续等)
-        if (err && err.status === 409) {
+        // ⭐ Task 2(2026-05-29 重写):409 强退确认 → 申请退出(德州正规流程)
+        //   后端在牌局进行中且玩家未弃牌时返 409 + { inHand:true, folded:false }
+        //   → 弹"申请退出"确认窗 → 用户确认 → 重试 with ?force=1
+        //   后端 force=1 不立即弃牌,只设 table_seats.pending_leave=TRUE
+        //   玩家继续看牌,轮到他时后端 autoFoldPendingLeaveLoop 自动 fold
+        //   hand 结束时 cleanupPendingLeaveSeats 退筹码 + 删座位
+        //   前端 polling /seats 发现自己已不在 → 自动 doReturnToLobby + toast
+        if (err && err.status === 409 && err.data && err.data.inHand && err.data.folded === false) {
+          const confirmed = window.confirm(
+            '牌局进行中,你还未弃牌。\n\n申请退出说明:\n• 本手继续看牌(不立即弃牌)\n• 轮到你时自动弃牌\n• 本手结束自动离桌,筹码退回钱包\n• 申请后不可反悔\n\n是否确认?'
+          );
+          if (!confirmed) {
+            console.log('[Task 2] 用户取消申请退出,留桌');
+            return;
+          }
+          try {
+            const resp2 = await callLeaveApi(true);
+            console.log('[Task 2] ✅ 申请退出成功,后端返:', resp2);
+            if (resp2 && resp2.pending) {
+              // 申请成功:留在桌上等本手结束
+              leftPending = true;
+              if (typeof showToast === 'function') {
+                showToast('已申请退出,本手结束自动离桌(轮到你时自动弃牌)');
+              }
+              // 标记给 polling:发现"自己已不在 seats" → 自动返大厅
+              window._pendingLeaveTableId = leaveTableId;
+              return;   // 不进 doReturnToLobby
+            } else if (resp2 && typeof resp2.returnedChips === 'number') {
+              // 立即离座成功(已 folded 等场景)
+              returnedAmount = resp2.returnedChips;
+            }
+          } catch (err2) {
+            console.warn('[Task 2] 申请退出失败:', err2);
+            if (typeof showToast === 'function') {
+              showToast('申请退出失败:' + (err2.message || '未知错误'));
+            }
+            return;
+          }
+        } else if (err && err.status === 409) {
           const msg = (err.message || '').indexOf('进行中') >= 0
             ? '牌局进行中,无法离座(等本手结束)'
             : (err.message || '无法离座');
           if (typeof showToast === 'function') showToast(msg);
           console.log('[B16] 离座被拒(409):', err.message);
-          return;   // 不进 doReturnToLobby
-        }
-        // 404 = 后端没找到我的座位(可能已离 / 没入座过)→ 不重要,继续返大厅
-        if (err && err.status !== 404) {
+          return;
+        } else if (err && err.status !== 404) {
           console.warn('[B8.5] ⚠️ 离座调后端失败,前端仍返大厅:', err);
         }
       }
-      window._myRealTableId = null;
-      window._myRealSeatNo = null;
+      if (!leftPending) {
+        window._myRealTableId = null;
+        window._myRealSeatNo = null;
+      }
     }
     // 离桌 toast(⭐ 货币术语锁死:记分牌)
     if (typeof showToast === 'function') {
@@ -32351,6 +32393,23 @@
           newOccupied['s' + s.seatNo] = player;
         }
       });
+      // ⭐ Task 2(2026-05-29):pending_leave 后端自动离桌检测
+      //   若之前申请了退出(window._pendingLeaveTableId === 当前桌),且自己不在 seats 里 → 真离桌了
+      //   自动返大厅 + toast"已自动离桌"。无需筹码量(后端已退到 wallet,my 页会刷)
+      if (window._pendingLeaveTableId
+          && Number(window._pendingLeaveTableId) === numericId
+          && !newOccupied['my']) {
+        console.log('[Task 2] 检测到 pending_leave 自动离桌完成,返回大厅');
+        window._pendingLeaveTableId = null;
+        window._myRealTableId = null;
+        window._myRealSeatNo = null;
+        if (typeof showToast === 'function') {
+          showToast('本手结束,已自动离桌,筹码退回钱包');
+        }
+        if (typeof cleanupTableSession === 'function') cleanupTableSession();
+        if (typeof doReturnToLobby === 'function') doReturnToLobby();
+        return;
+      }
       // 同步到 currentTableRoom + 重渲(只有当还在同一张桌时才生效)
       if (currentTableRoom && Number(currentTableRoom.id) === numericId) {
         currentTableRoom.occupiedSeats = newOccupied;

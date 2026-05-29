@@ -33657,8 +33657,11 @@
   // 优点:沿用 .seat.sN .dealer-mark / .my-seat .dealer-mark 的每座位定位 CSS,自动落到正确角落
   function attachB9DealerButton(hand) {
     var seatId = _b9SeatNoToId(hand.dealerSeat, hand);
+    console.log('[B9] D 标置位:dealerSeat=' + hand.dealerSeat + ' → seatId=' + seatId);
     if (typeof window.setDealer === 'function') {
       window.setDealer(seatId, false);   // animate=false 因为是初始放置,不是轮换
+    } else {
+      console.warn('[B9] window.setDealer 不存在,D 标无法置位');
     }
   }
 
@@ -33687,11 +33690,15 @@
     ccEl.innerHTML = cards.map(_b9CardToHtml).join('');
   }
 
+  // ⭐ 跟 demo 行 18167 / 18517 的渲染逻辑对齐:
+  //   isRed ? 'red' : 'black'(都加类!不能只加 'red' 不加 'black')
+  //   原 bug:黑色花色(♠/♣)缺 .black 类 → CSS .card.black{color:#000} 不生效
+  //          → 文字颜色继承父级(白/浅色)→ 牌上看不见字
   function _b9CardToHtml(card) {
     var suit = card.slice(-1);
     var rank = card.slice(0, -1);
     var isRed = (suit === '♥' || suit === '♦');
-    return '<div class="card ' + (isRed ? 'red' : '') + '" data-suit="' + suit + '">' +
+    return '<div class="card ' + (isRed ? 'red' : 'black') + '" data-suit="' + suit + '">' +
            '<span class="rank">' + rank + '</span>' +
            '<span class="suit">' + suit + '</span></div>';
   }

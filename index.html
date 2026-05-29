@@ -17043,6 +17043,14 @@
         clubLobby.classList.add('active');
         clubLobby.scrollTop = 0;
       }
+      // ⭐ 2026-05-29 Q1 fix:刷新大厅牌桌列表
+      //   解散牌桌后,管理员/被踢出的玩家返回大厅,不刷新会还看到已 archived 的桌
+      //   小修:这里再调一次 fetchClubTablesAndRender(currentClubInfoId)
+      //   后端 GET /clubs/:id/tables 只返 status='open' 的(table.js line 203),
+      //   所以解散后自然消失
+      if (typeof fetchClubTablesAndRender === 'function' && currentClubInfoId) {
+        fetchClubTablesAndRender(currentClubInfoId);
+      }
     } else {
       if (typeof showMainPage === 'function') showMainPage('game');
     }

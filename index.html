@@ -33661,10 +33661,33 @@
           window._b9LastSeenActionId = 0;
           window._b9LastSeenHandId = hand.id;
           window._b9LastActingSeatNo = undefined;  // 新一手 reset 行动跟踪,防同座连两手漏 popup
+          window._b9LastSeenState = undefined;     // 新一手 reset state 跟踪
         } else if (!hand) {
           window._b9LastSeenActionId = 0;
           window._b9LastSeenHandId = null;
           window._b9LastActingSeatNo = undefined;
+          window._b9LastSeenState = undefined;
+        }
+
+        // ⭐ P2.2 #12 #13:识别街转换(state preflop→flop→turn→river)
+        //   后端 actions 路由街结束时改 hands.state + 发公牌 → 这里轮询拿到 state 变化
+        //   派发:
+        //     1) POT_COLLECT → demo betChipsToPotAnimation:座位 .seat-bet 飞到底池中央
+        //     2) STREET_NEXT → demo handler:清动作气泡 + 停 acting + 推历史
+        //   公牌:hand.communityCards 已含新公牌,后面 renderCommunityCardsB9 渲染(P2.2 无飞牌动画,P3+ 加)
+        if (hand && hand.state && hand.state !== window._b9LastSeenState) {
+          var prevState = window._b9LastSeenState;
+          window._b9LastSeenState = hand.state;
+          // 非"首次见 hand 当前 state"才派发(避免初次见 preflop 时误派发)
+          if (prevState && prevState !== hand.state && typeof window.handleServerEvent === 'function' && typeof WS_EVENTS !== 'undefined') {
+            console.log('[B9 P2.2] 街转换:' + prevState + ' → ' + hand.state);
+            window.handleServerEvent({
+              type: WS_EVENTS.POT_COLLECT, data: {}
+            });
+            window.handleServerEvent({
+              type: WS_EVENTS.STREET_NEXT, data: { street: hand.state }
+            });
+          }
         }
         if (hand && Array.isArray(hand.actions)) {
           var lastSeen = Number(window._b9LastSeenActionId || 0);

@@ -33544,6 +33544,13 @@
         //   animate=false:补挂关掉 popup 动画(头一次挂在 renderCurrentHand 里时已弹过)
         if (hand && hand.sbSeat) attachB9BlindLabel(hand, hand.sbSeat, 'SB', false);
         if (hand && hand.bbSeat) attachB9BlindLabel(hand, hand.bbSeat, 'BB', false);
+        // ⭐ 杀掉 renderSeats 模板新渲染的 .dealer-mark 的 dealerPop 动画
+        //   原 bug:模板里 <div class="dealer-mark">D</div> 每次 innerHTML 重渲就重建,
+        //   CSS animation:dealerPop 420ms 又触发 → 玩家看到 D 标每 5 秒"一闪一闪"
+        //   修法:渲染后立刻 inline animation:none(同步,浏览器还没 paint 前生效)
+        document.querySelectorAll('#page-table .seat .dealer-mark').forEach(function(el) {
+          el.style.animation = 'none';
+        });
         // ⭐ 2026-05-29:真桌模式下,my-seat 只在用户已入座时显示
         var mySeatEl = document.querySelector('#page-table .my-seat');
         if (mySeatEl) {

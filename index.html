@@ -32821,6 +32821,32 @@
     return !!(window.currentActionRequest && window.currentActionRequest());
   }
   function sendClientAction(action, amount) {
+    // ⭐ B9 P2.1(2026-05-29):真后端模式 → POST /api/hands/:id/actions
+    //   触发条件:window._b9CurrentHand.id 有值(由 fetchAndRenderCurrentHand 设置)
+    //   不走 wsClient / mockServer,直接 HTTP POST
+    //   响应不立即触发动画 — 5s 轮询会拿到新 hand state 后派发 ACTION_EXEC(P2.1 #5)
+    if (window._b9CurrentHand && window._b9CurrentHand.id && window.apiClient && typeof window.apiClient.post === 'function') {
+      var handId = window._b9CurrentHand.id;
+      var body = { action: action };
+      if (typeof amount === 'number' && amount > 0) body.amount = amount;
+      console.log('[B9 P2.1] → POST /actions', body);
+      window.apiClient.post('/api/hands/' + handId + '/actions', body).then(function(resp) {
+        console.log('[B9 P2.1] ✅ action 接收:', resp);
+        // 立即拉一次最新 hand state,不等下次 5s 轮询(更跟手)
+        if (typeof window.fetchAndRenderCurrentHand === 'function' && window.currentTableRoom) {
+          window.fetchAndRenderCurrentHand(Number(window.currentTableRoom.id));
+        }
+      }).catch(function(err) {
+        console.warn('[B9 P2.1] ❌ action 失败:', err);
+        if (typeof showToast === 'function') {
+          showToast('行动失败:' + (err && err.message ? err.message : '未知错误'));
+        }
+      });
+      // 乐观关弹窗
+      if (typeof window.clearActionRequest === 'function') window.clearActionRequest();
+      return true;
+    }
+
     // ⭐ v2.28.54:mockServer 模式 → 调 fulfillMyTurn(不走 ws)
     if (window.mockServer && typeof window.mockServer.isWaitingMyTurn === 'function' && window.mockServer.isWaitingMyTurn()) {
       if (typeof window.mockServer.fulfillMyTurn === 'function') {
@@ -33602,6 +33628,119 @@
         // ⭐ 暴露给 fetchAndRenderTableSeats 用,让 player.isDealer / player.bet 富化
         //   解决 bug:renderSeats 5s 一次 innerHTML 重写,洗掉 setDealer 的 .dealer-mark
         window._b9CurrentHand = hand;
+
+        // ⭐ P2.1 #5(2026-05-29):识别新行动 → 派发模拟 ACTION_EXEC 让 demo handler 处理
+        //   demo 处理(line 29821-29857)自动:挂气泡(attachActionTag)+ 改 setSeatBet
+        //   + fold 灰显(trackFold)+ 播音效 + 历史推
+        //   策略:全局 _b9LastSeenActionId 跟踪已派发的行动 id;hand 变了重置
+        // ⭐ P2.1 #7:结束反馈 — hand 从非空变 null = 本手刚结束(被后端 ended_at 标记)
+        //   后端 GET /current-hand 滤 ended_at IS NULL,结束后下次轮询拿到 null
+        //   策略:缓存上一手在 _b9PrevHand,从非空→null 的边沿触发 toast
+        var prevHand = window._b9PrevHand;
+        if (prevHand && !hand) {
+          // 本手结束
+          if (Array.isArray(prevHand.seats)) {
+            var myUidEnd = window.currentUser && Number(window.currentUser.userId);
+            var notFolded = prevHand.seats.filter(function(s) { return !s.folded; });
+            var winnerNames = notFolded.map(function(s) {
+              var sid = (Number(s.userId) === myUidEnd) ? 'my' : ('s' + s.seatNo);
+              var occ = currentTableRoom && currentTableRoom.occupiedSeats && currentTableRoom.occupiedSeats[sid];
+              return (occ && occ.name) || ('座位 ' + s.seatNo);
+            });
+            var endMsg = (notFolded.length === 1)
+              ? (winnerNames[0] + ' 赢得本手')
+              : (winnerNames.join(' / ') + ' 平分本手');
+            console.log('[B9 P2.1] 本手结束:', endMsg);
+            if (typeof showToast === 'function') showToast(endMsg);
+          }
+        }
+        window._b9PrevHand = hand;
+
+        if (hand && hand.id !== window._b9LastSeenHandId) {
+          window._b9LastSeenActionId = 0;
+          window._b9LastSeenHandId = hand.id;
+          window._b9LastActingSeatNo = undefined;  // 新一手 reset 行动跟踪,防同座连两手漏 popup
+        } else if (!hand) {
+          window._b9LastSeenActionId = 0;
+          window._b9LastSeenHandId = null;
+          window._b9LastActingSeatNo = undefined;
+        }
+        if (hand && Array.isArray(hand.actions)) {
+          var lastSeen = Number(window._b9LastSeenActionId || 0);
+          hand.actions.forEach(function(a) {
+            var aid = Number(a.id);
+            if (aid <= lastSeen) return;
+            var seatId = _b9SeatNoToId(a.seatNo, hand);
+            console.log('[B9 P2.1] 派发 ACTION_EXEC:', seatId, a.action, a.amount);
+            if (typeof window.handleServerEvent === 'function' && typeof WS_EVENTS !== 'undefined') {
+              window.handleServerEvent({
+                type: WS_EVENTS.ACTION_EXEC,
+                data: { seatId: seatId, action: a.action, amount: Number(a.amount) }
+              });
+            }
+            window._b9LastSeenActionId = aid;
+          });
+        }
+
+        // ⭐ P2.1 #6:识别"轮到谁行动"变化 → 派发 ACTION_REQUEST(我)/ setActingSeat(他人)
+        //   核心:currentActionSeat 变了才派发,避免 5s 轮询重复触发 popup 弹窗
+        //   流程:
+        //     - 是我的回合 → handleServerEvent(ACTION_REQUEST) → demo 弹按钮 + 倒计时
+        //     - 不是我的回合 → setActingSeat(对方 seatId)→ demo 头像绿环
+        //     - currentActionSeat 变 null(hand 结束/暂停)→ 清环 + 关弹窗
+        var newActingSeatNo = hand && hand.currentActionSeat;
+        var lastActingSeatNo = window._b9LastActingSeatNo;
+        if (newActingSeatNo !== lastActingSeatNo) {
+          window._b9LastActingSeatNo = newActingSeatNo;
+          // 清旧 popup(可能是上一手或上一轮我的)
+          if (typeof window.clearActionRequest === 'function') window.clearActionRequest();
+          if (!newActingSeatNo) {
+            // 没人在行动(hand 结束/暂停)→ 清绿环
+            if (typeof window.setActingSeat === 'function') window.setActingSeat(null);
+          } else if (hand && Array.isArray(hand.seats)) {
+            var actingSeatId = _b9SeatNoToId(newActingSeatNo, hand);
+            var actingSeatData = hand.seats.find(function(s) { return Number(s.seatNo) === Number(newActingSeatNo); });
+            var myUid = window.currentUser && Number(window.currentUser.userId);
+            var isMyTurn = !!(actingSeatData && Number(actingSeatData.userId) === myUid);
+            if (isMyTurn) {
+              // 是我的回合 → 算 callAmount / minRaise / maxRaise → 派发 ACTION_REQUEST
+              var mySeat = actingSeatData;
+              var streetMax = hand.seats.reduce(function(m, s) {
+                if (s.folded) return m;
+                return Math.max(m, Number(s.currentBet || 0));
+              }, 0);
+              var callAmount = streetMax - Number(mySeat.currentBet || 0);
+              var canCheck = (callAmount === 0);
+              var options = ['fold'];
+              if (canCheck) options.push('check'); else options.push('call');
+              options.push('raise');
+              var minRaise = Math.max(Number(streetMax) * 2, Number(streetMax) + 1);
+              var maxRaise = Number(mySeat.chips || 0) + Number(mySeat.currentBet || 0);
+              console.log('[B9 P2.1] 派发 ACTION_REQUEST(轮到我):', { options: options, callAmount: callAmount, minRaise: minRaise, maxRaise: maxRaise });
+              if (typeof window.handleServerEvent === 'function' && typeof WS_EVENTS !== 'undefined') {
+                window.handleServerEvent({
+                  type: WS_EVENTS.ACTION_REQUEST,
+                  data: {
+                    handNo:     hand.id,
+                    seatId:     'my',
+                    options:    options,
+                    callAmount: callAmount,
+                    minRaise:   minRaise,
+                    maxRaise:   maxRaise,
+                    myChips:    Number(mySeat.chips || 0),
+                    timeoutSec: 15,
+                    potSize:    Number(hand.potMain || 0)
+                  }
+                });
+              }
+            } else {
+              // 别人的回合 → 头像绿环
+              console.log('[B9 P2.1] 轮到他人,加绿环:', actingSeatId);
+              if (typeof window.setActingSeat === 'function') window.setActingSeat(actingSeatId);
+            }
+          }
+        }
+
         renderCurrentHand(hand);
       }
       return hand;

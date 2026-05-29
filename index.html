@@ -12663,7 +12663,7 @@
         <div class="asset-row">
           <div class="asset-icon">₮</div>
           <div class="asset-name">记分牌</div>
-          <div class="asset-amount">0.10</div>
+          <div class="asset-amount" id="me-asset-amount">--</div>
         </div>
       </div>
     </div>
@@ -37147,9 +37147,25 @@
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       const newPage = document.getElementById('page-' + pageName);
       newPage.classList.add('active');
-      
+
       // 回到顶部
       newPage.scrollTop = 0;
+
+      // ⭐ 2026-05-29:切到"我的"Tab 时,拉真后端余额刷新 #me-asset-amount
+      if (pageName === 'me' && window.apiClient && window.tokenStore && window.tokenStore.get()
+          && Array.isArray(clubs) && clubs.length > 0) {
+        const meAmtEl = document.getElementById('me-asset-amount');
+        if (meAmtEl) {
+          const clubId = clubs[0].id;
+          window.apiClient.get('/api/clubs/' + clubId + '/wallet').then(function(resp) {
+            if (resp && resp.wallet && typeof resp.wallet.balance !== 'undefined') {
+              meAmtEl.textContent = String(Number(resp.wallet.balance) || 0);
+            }
+          }).catch(function(err) {
+            console.warn('[me] 拉余额失败:', err && err.message);
+          });
+        }
+      }
     });
   });
 
@@ -37681,30 +37697,47 @@
   // 数据结构:按 牌型 × 时间 二维分类
   // 现阶段:长牌 24小时 = 全 0(新玩家典型场景),其他维度用假数据展示效果
   // 真实业务:后端按 (userId, gameType, timeRange) 聚合返回这 4 个指标
-  const recordData = {
-    '长牌': {
-      '24小时': { games: 0,  hands: 0,    vpip: '0.00%',  winrate: '0.00%' },
-      '7日':    { games: 18, hands: 542,  vpip: '24.35%', winrate: '52.18%' },
-      '30日':   { games: 76, hands: 2238, vpip: '26.81%', winrate: '49.73%' }
-    },
-    '短牌': {
-      '24小时': { games: 0,  hands: 0,    vpip: '0.00%',  winrate: '0.00%' },
-      '7日':    { games: 5,  hands: 168,  vpip: '38.50%', winrate: '55.20%' },
-      '30日':   { games: 22, hands: 712,  vpip: '40.12%', winrate: '51.66%' }
-    }
-  };
+  // ⭐ 2026-05-29:战绩页接通真后端 GET /api/user/me/stats?range=24h|7d|30d
+  //   原 mock recordData(长牌/短牌 × 3 个时间窗 12 项假数据)删除
+  //   MVP 1 简化:不区分长牌/短牌,真后端返全部(后续 ?gameType= 参数)
+  const RANGE_MAP = { '24小时': '24h', '7日': '7d', '30日': '30d' };
 
-  // 当前选中(变量名加 Stats 前缀,避免与俱乐部牌局记录页的 currentRecordType 冲突)
+  // 当前选中
   let currentStatsType = '长牌';
   let currentStatsTime = '24小时';
 
-  // 渲染 4 列数据
+  // 渲染 4 列数据(调真后端)
   function renderRecordStats() {
-    const d = recordData[currentStatsType][currentStatsTime];
-    document.getElementById('record-stat-games').textContent   = d.games;
-    document.getElementById('record-stat-hands').textContent   = d.hands;
-    document.getElementById('record-stat-vpip').textContent    = d.vpip;
-    document.getElementById('record-stat-winrate').textContent = d.winrate;
+    const gamesEl = document.getElementById('record-stat-games');
+    const handsEl = document.getElementById('record-stat-hands');
+    const vpipEl = document.getElementById('record-stat-vpip');
+    const winEl = document.getElementById('record-stat-winrate');
+    if (!gamesEl) return;
+    // 立刻显示"--"(loading)
+    gamesEl.textContent = '--';
+    handsEl.textContent = '--';
+    vpipEl.textContent = '--';
+    winEl.textContent = '--';
+    if (!window.apiClient || !window.tokenStore || !window.tokenStore.get()) {
+      gamesEl.textContent = '0';
+      handsEl.textContent = '0';
+      vpipEl.textContent = '0.00%';
+      winEl.textContent = '0.00%';
+      return;
+    }
+    const range = RANGE_MAP[currentStatsTime] || 'all';
+    window.apiClient.get('/api/user/me/stats?range=' + range).then(function(resp) {
+      gamesEl.textContent = String(resp.games || 0);
+      handsEl.textContent = String(resp.hands || 0);
+      vpipEl.textContent  = (resp.vpip || 0).toFixed(2) + '%';
+      winEl.textContent   = (resp.winrate || 0).toFixed(2) + '%';
+    }).catch(function(err) {
+      console.warn('[record] 拉战绩失败:', err && err.message);
+      gamesEl.textContent = '0';
+      handsEl.textContent = '0';
+      vpipEl.textContent = '0.00%';
+      winEl.textContent = '0.00%';
+    });
   }
 
   // 切牌型

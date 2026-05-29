@@ -33574,19 +33574,34 @@
   window.fetchAndRenderCurrentHand = fetchAndRenderCurrentHand;
 
   // 渲染牌局状态到 page-table
+  //
+  // 🔑 关键:5 秒轮询每次都进这里,但 demo 的 setDealer / attachBlindLabel / dealHoleCardsAnimation
+  //    都带 CSS 弹出动画(dealerPop / blindLabelPop)。如果每次轮询都重置,玩家会看到
+  //    D 标 / 盲注标 / 底牌"每 5 秒 嘣 一下"。
+  //
+  // 策略:
+  //   - 无 hand → 全清(下一手开始时是干净的)
+  //   - 有 hand → 用 hand.id 守卫,只在"本 hand 第一次见"时跑置位 + 动画
+  //   - 公牌 + 底池每次都更新(因为 flop/turn/river 可能动)
   function renderCurrentHand(hand) {
-    // 清旧 B9 标记(老自建样式残留 + demo 的 D 标 + 盲注标)
-    document.querySelectorAll('#page-table .b9-marker').forEach(function(el) { el.remove(); });
-    if (typeof window.setDealer === 'function') window.setDealer(null);
-    if (typeof window.clearBlindLabels === 'function') window.clearBlindLabels();
     var oldStartBtn = document.getElementById('b9-start-btn');
     if (oldStartBtn) oldStartBtn.remove();
     var potEl = document.getElementById('table-pot');
 
     if (!hand) {
-      // 无牌局
+      // 无牌局:全清
+      document.querySelectorAll('#page-table .b9-marker').forEach(function(el) { el.remove(); });
+      if (typeof window.setDealer === 'function') window.setDealer(null);
+      if (typeof window.clearBlindLabels === 'function') window.clearBlindLabels();
+      // 清残留座位筹码(对齐 demo 行 29614 的做法)
+      document.querySelectorAll('#page-table .seat .seat-bet, #page-table .my-seat .seat-bet').forEach(function(el) {
+        el.remove();
+      });
       document.body.classList.remove('hand-active');
       if (potEl) potEl.textContent = '0';
+      // 重置守卫(下一手就被视为"第一次见")
+      window._b9AnimatedHandId = null;
+
       // 显示"开始牌局"按钮(条件:座位 ≥ 2 + 我已入座)
       var occupied = currentTableRoom && currentTableRoom.occupiedSeats;
       if (occupied) {
@@ -33611,21 +33626,62 @@
 
     // 有牌局
     document.body.classList.add('hand-active');
-    if (potEl) potEl.textContent = String(hand.potMain);
+    if (potEl) potEl.textContent = String(hand.potMain);   // 底池每次更新
 
-    // dealer 按钮
-    attachB9DealerButton(hand);
-    // SB / BB 标签
-    attachB9BlindLabel(hand, hand.sbSeat, 'SB');
-    attachB9BlindLabel(hand, hand.bbSeat, 'BB');
-    // 我的底牌(真后端发的,每人不同)
-    if (hand.myHoleCards && hand.myHoleCards.length === 2) {
-      renderMyHoleCardsB9(hand.myHoleCards);
-    }
-    // 公牌(preflop 阶段空,flop 后才有)
+    // 公牌每次更新(flop/turn/river 时变化)
     if (hand.communityCards) {
       renderCommunityCardsB9(hand.communityCards);
     }
+
+    // ⭐ 守卫:hand.id 变了才跑置位 + 动画(防 5s 轮询重播 popup)
+    var isFirstRenderOfHand = (window._b9AnimatedHandId !== hand.id);
+    if (!isFirstRenderOfHand) return;
+    window._b9AnimatedHandId = hand.id;
+
+    // 清旧标(上一手残留)
+    document.querySelectorAll('#page-table .b9-marker').forEach(function(el) { el.remove(); });
+    if (typeof window.setDealer === 'function') window.setDealer(null);
+    if (typeof window.clearBlindLabels === 'function') window.clearBlindLabels();
+    document.querySelectorAll('#page-table .seat .seat-bet, #page-table .my-seat .seat-bet').forEach(function(el) {
+      el.remove();
+    });
+
+    // 同步状态供 demo 函数(getDealableSeats 等)用 — wsCurrentHand.dealerSeat 决定发牌起始位
+    var dealerSeatId = _b9SeatNoToId(hand.dealerSeat, hand);
+    var sbSeatId = _b9SeatNoToId(hand.sbSeat, hand);
+    var bbSeatId = _b9SeatNoToId(hand.bbSeat, hand);
+    window.wsCurrentHand = window.wsCurrentHand || {};
+    window.wsCurrentHand.dealerSeat = dealerSeatId;
+    window.wsCurrentHand.sbSeat = sbSeatId;
+    window.wsCurrentHand.bbSeat = bbSeatId;
+
+    // dealer 按钮(setDealer 复用 .seat.sN .dealer-mark per-seat CSS)
+    attachB9DealerButton(hand);
+    // SB / BB 标签(attachBlindLabel 复用 .blind-label CSS)
+    attachB9BlindLabel(hand, hand.sbSeat, 'SB');
+    attachB9BlindLabel(hand, hand.bbSeat, 'BB');
+
+    // 预填我的底牌(飞牌动画走完会让它显形)
+    if (hand.myHoleCards && hand.myHoleCards.length === 2) {
+      renderMyHoleCardsB9(hand.myHoleCards);
+    }
+
+    // 飞底牌动画(从牌堆 → 各人位置 → 翻面显示)
+    if (typeof window.dealHoleCardsAnimation === 'function') {
+      try {
+        window.dealHoleCardsAnimation();
+      } catch (e) {
+        console.warn('[B9] dealHoleCardsAnimation 异常:', e);
+      }
+    }
+
+    // 等飞牌完才下盲注筹码(飞牌总时长 ≈ 2轮 × N人 × 80ms + 380ms 飞行 + 余量)
+    setTimeout(function() {
+      if (typeof window.setSeatBet === 'function') {
+        if (Number(hand.sbAmount) > 0) window.setSeatBet(sbSeatId, Number(hand.sbAmount));
+        if (Number(hand.bbAmount) > 0) window.setSeatBet(bbSeatId, Number(hand.bbAmount));
+      }
+    }, 1200);
   }
 
   // 把 backend seat_no 映射到前端 DOM 元素

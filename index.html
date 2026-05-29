@@ -33662,11 +33662,13 @@
           window._b9LastSeenHandId = hand.id;
           window._b9LastActingSeatNo = undefined;  // 新一手 reset 行动跟踪,防同座连两手漏 popup
           window._b9LastSeenState = undefined;     // 新一手 reset state 跟踪
+          window._b9ShowdownShownForHandId = null; // 新一手 reset 摊牌已展示标
         } else if (!hand) {
           window._b9LastSeenActionId = 0;
           window._b9LastSeenHandId = null;
           window._b9LastActingSeatNo = undefined;
           window._b9LastSeenState = undefined;
+          window._b9ShowdownShownForHandId = null;
         }
 
         // ⭐ P2.2 #12 #13:识别街转换(state preflop→flop→turn→river)
@@ -33687,6 +33689,34 @@
             window.handleServerEvent({
               type: WS_EVENTS.STREET_NEXT, data: { street: hand.state }
             });
+          }
+        }
+
+        // ⭐ P2.3 #17:showdown 摊牌处理(state='showdown' 第一次见)
+        //   - 翻开所有 not-folded 玩家的对手座位底牌(自己已经看得见)
+        //   - toast 赢家名 + 牌型
+        //   - 用 _b9ShowdownShownForHandId 防重复(showdown 状态后端保留 10 秒,会被轮询多次)
+        if (hand && hand.state === 'showdown' && hand.showdown && hand.showdown.players
+            && window._b9ShowdownShownForHandId !== hand.id) {
+          window._b9ShowdownShownForHandId = hand.id;
+          var sd = hand.showdown;
+          console.log('[B9 P2.3] 摊牌:', sd);
+          // 翻开对手底牌
+          sd.players.forEach(function(p) {
+            var seatId = _b9SeatNoToId(p.seatNo, hand);
+            if (seatId !== 'my' && typeof window.revealSeatCards === 'function') {
+              window.revealSeatCards(seatId, p.holeCards);
+            }
+          });
+          // toast 赢家 + 牌型
+          if (Array.isArray(sd.winners) && sd.winners.length > 0) {
+            var winnerLabels = sd.winners.map(function(w) {
+              var sid = _b9SeatNoToId(w.seatNo, hand);
+              var occ = currentTableRoom && currentTableRoom.occupiedSeats && currentTableRoom.occupiedSeats[sid];
+              var name = (occ && occ.name) || ('座位 ' + w.seatNo);
+              return name + '(' + w.handName + ')';
+            }).join(' / ');
+            if (typeof showToast === 'function') showToast(winnerLabels + ' 赢');
           }
         }
         if (hand && Array.isArray(hand.actions)) {

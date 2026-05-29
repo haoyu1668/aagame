@@ -32295,6 +32295,14 @@
       });
       clubRooms[clubId] = mapped;
       renderLobbyRooms(clubId);
+      // ⭐ 2026-05-29 bug 1 修复:同步真俱乐部牌桌到游戏 Tab 全局 rooms 数组
+      //   游戏 Tab 显示当前用户所在俱乐部的牌桌(MVP 1 阶段 1 个俱乐部,显示它的桌)
+      //   按俱乐部 id 累加(多俱乐部时游戏 Tab 显示全部)
+      rooms.length = 0;   // 清旧
+      Object.keys(clubRooms).forEach(function(cid) {
+        (clubRooms[cid] || []).forEach(function(r) { rooms.push(r); });
+      });
+      if (typeof renderRooms === 'function') renderRooms();
     }).catch(function(err) {
       console.warn('[B8] ⚠️ 拉牌桌列表失败,保留 cache/mock:', err.message);
     });

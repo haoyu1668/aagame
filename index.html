@@ -17120,6 +17120,15 @@
           returnedAmount = resp.returnedChips;
         }
       } catch (err) {
+        // ⭐ B16:409 进行中牌局 → toast + 留桌(不返回大厅,玩家继续等)
+        if (err && err.status === 409) {
+          const msg = (err.message || '').indexOf('进行中') >= 0
+            ? '牌局进行中,无法离座(等本手结束)'
+            : (err.message || '无法离座');
+          if (typeof showToast === 'function') showToast(msg);
+          console.log('[B16] 离座被拒(409):', err.message);
+          return;   // 不进 doReturnToLobby
+        }
         // 404 = 后端没找到我的座位(可能已离 / 没入座过)→ 不重要,继续返大厅
         if (err && err.status !== 404) {
           console.warn('[B8.5] ⚠️ 离座调后端失败,前端仍返大厅:', err);
@@ -17128,12 +17137,12 @@
       window._myRealTableId = null;
       window._myRealSeatNo = null;
     }
-    // 离桌 toast
+    // 离桌 toast(⭐ 货币术语锁死:记分牌)
     if (typeof showToast === 'function') {
       if (returnedAmount > 0) {
-        showToast('已离桌,带走 ' + formatAmount(returnedAmount) + ' 筹码');
+        showToast('已离座,' + formatAmount(returnedAmount) + ' 记分牌已退回钱包');
       } else {
-        showToast('已离桌');
+        showToast('已离座');
       }
     }
     // 离桌音效

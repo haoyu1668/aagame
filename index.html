@@ -32285,12 +32285,12 @@
           name: t.name,
           blinds: blindsStr,
           type: t.gameType === 'SHORT_DECK' ? '短牌' : '长牌',
-          seats: 0,                       // 等 B9/B10 实时会话接入
+          seats: Number(t.seatedCount) || 0,           // ⭐ 真后端实时人数(LEFT JOIN table_seats COUNT)
           total: t.maxSeats,
           seatTotal: t.maxSeats,
-          time: '00:00:00',               // 等 B9/B10 实时会话接入
-          buyin: t.minBuyin,              // BB 倍数,B8 简化展示
-          settings: t.settings || null    // ⭐ N4 表单 JSON(autoStartEnabled / autoStartMinPlayers 等)
+          time: t.hasActiveHand ? '游戏中' : '空闲',   // ⭐ 真后端 hand 状态
+          buyin: t.minBuyin,                            // BB 倍数,B8 简化展示
+          settings: t.settings || null                  // ⭐ N4 表单 JSON
         });
       });
       clubRooms[clubId] = mapped;

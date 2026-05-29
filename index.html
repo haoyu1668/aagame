@@ -29094,7 +29094,12 @@
 
       case WS_EVENTS.CARD_DEAL_BOARD: {
         // 发公共牌(街切换)
-        if (data.street) dealBoardAnimation(data.street);
+        // ⭐ Bug 3 真凶根除(2026-05-30):必须把 data.cards 传给 dealBoardAnimation
+        //   原 bug:只传 street,dealBoardAnimation 从 DOM slot 读残留牌值(初始 HTML
+        //   烘焙的 J♦/7♣/K♥ demo 牌或 setStage 留下的 DEMO_BOARD)→ 飞牌动画飞的
+        //   是 demo 牌;而 renderCommunityCardsB9 后续写真后端牌
+        //   → 视觉:"飞的牌"和"DOM 里看到的牌"是两套,看起来像"翻牌发两次还不一样"
+        if (data.street) dealBoardAnimation(data.street, data.cards);
         // ⭐ v2.28 批次 A1:发公共牌音效(根据张数错开)
         if (window.soundEngine) {
           const n = data.street === 'flop' ? 3 : 1;
@@ -30969,11 +30974,8 @@
 
   // 发公共牌动画:翻牌3张 / 转牌1张 / 河牌1张
   // 烧 1 张(快速飞个牌背到旁边消失) + 飞牌到目标位置 + 翻面
-  function dealBoardAnimation(stage) {
+  function dealBoardAnimation(stage, cards) {
     // ⭐ Bug 3 v3 fix(2026-05-30):暴力 throttle —— 同 stage 3 秒内重复调用直接 return
-    //   不依赖 hand.id(可能没设),不依赖派发层去重(可能有 race)
-    //   只看"当前是不是正在跑某 stage 的动画",简单粗暴
-    //   单次完整 dealBoardAnimation 约 1.6 秒,3 秒锁足够覆盖
     if (window._b9DealBoardActiveStages && window._b9DealBoardActiveStages[stage]) {
       console.warn('[dealBoardAnimation] throttle:正在跑 ' + stage + ',跳过');
       return;
@@ -30983,6 +30985,19 @@
     setTimeout(function() {
       if (window._b9DealBoardActiveStages) window._b9DealBoardActiveStages[stage] = false;
     }, 3000);
+
+    // ⭐ Bug 3 真凶根除(2026-05-30):cards 参数 = ['3♥','9♣','Q♦'] 形(后端字符串数组)
+    //   把它转成 { rank, suit, color } 形供后面飞行动画用,避免回退去读 DOM slot 残留
+    const realCards = (function() {
+      if (!Array.isArray(cards) || cards.length === 0) return null;
+      return cards.map(function(c) {
+        if (typeof c !== 'string' || c.length < 2) return null;
+        const suit = c.slice(-1);
+        const rank = c.slice(0, -1);
+        const isRed = (suit === '♥' || suit === '♦');
+        return { rank: rank, suit: suit, color: isRed ? 'red' : 'black' };
+      });
+    })();
 
     const deck = document.getElementById('card-deck');
     if (!deck) return;
@@ -31038,12 +31053,18 @@
     targetSlots.forEach((slot, i) => {
       setTimeout(() => {
         const tgtPos = getRelativeCenter(slot);
-        // 取该 slot 当前牌值
-        const card = {
-          rank: slot.querySelector('.rank').textContent,
-          suit: slot.querySelector('.suit').textContent,
-          color: slot.classList.contains('red') ? 'red' : 'black'
-        };
+        // ⭐ Bug 3 真凶根除:优先用传入的 cards(真后端牌),fallback 才读 DOM slot
+        //   绝对索引 = startSlot + i,真后端 cards 数组按全局 slot 顺序对齐
+        const absIdx = info.startSlot + i;
+        let card = realCards && realCards[absIdx];
+        if (!card) {
+          // 兜底(DEV 按钮 / 无 cards 传入):读 DOM slot 当前牌值
+          card = {
+            rank: slot.querySelector('.rank').textContent,
+            suit: slot.querySelector('.suit').textContent,
+            color: slot.classList.contains('red') ? 'red' : 'black'
+          };
+        }
         createFlyingCard('board', card, deckPos.x, deckPos.y, tgtPos.x, tgtPos.y, true, (fc) => {
           // 翻面 300ms 后,显示真正的公共牌位 + 移除飞行牌
           setTimeout(() => {

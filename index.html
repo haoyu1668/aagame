@@ -32358,6 +32358,9 @@
           window._b9ShowdownShownForHandId = null;
           window._b9PrevHand = null;
           window._b9AutoStartFired = false;
+          // ⭐ Bug A fix(2026-05-29):标记"刚进牌桌页面"→ 第一次 polling 拿到 hand 时不播洗牌/发牌动画
+          //   防止用户重进牌桌时已存在的 hand 被当作"新一手"再播一次开局动画 + 声音
+          window._b9FreshPageEntry = true;
         }
         fillTableCenter(currentTableRoom);
         showSubPage('table');
@@ -32597,11 +32600,23 @@
         window._b9PrevHand = hand;
 
         if (hand && hand.id !== window._b9LastSeenHandId) {
-          window._b9LastSeenActionId = 0;
+          // ⭐ 2026-05-29 Bug A fix:首次见此 hand → 把"已存在 actions"算历史,不重放
+          //   原 bug:每次重进牌桌 polling 都把 hand_actions 表里所有旧 action 当新的 dispatch
+          //   → "加注/飞牌"音效连续响一遍,UI 出现已结束的动作气泡
+          //   修复:计算当前 hand 已存在的最大 action id,只 dispatch 比它新的(将来发生的)
+          var existingMaxAid = 0;
+          if (Array.isArray(hand.actions)) {
+            for (var _ai = 0; _ai < hand.actions.length; _ai++) {
+              var _aidN = Number(hand.actions[_ai].id) || 0;
+              if (_aidN > existingMaxAid) existingMaxAid = _aidN;
+            }
+          }
+          window._b9LastSeenActionId = existingMaxAid;
           window._b9LastSeenHandId = hand.id;
-          window._b9LastActingSeatNo = undefined;  // 新一手 reset 行动跟踪,防同座连两手漏 popup
-          window._b9LastSeenState = undefined;     // 新一手 reset state 跟踪
-          window._b9ShowdownShownForHandId = null; // 新一手 reset 摊牌已展示标
+          window._b9LastActingSeatNo = undefined;
+          window._b9LastSeenState = undefined;
+          // 已是 showdown 状态进来 → 标记摊牌已"看过"(防 muck-modal 弹出)
+          window._b9ShowdownShownForHandId = (hand.state === 'showdown') ? hand.id : null;
         } else if (!hand) {
           window._b9LastSeenActionId = 0;
           window._b9LastSeenHandId = null;
@@ -32894,12 +32909,20 @@
     //   场景:用户中途进入牌桌时,hand 已经打了一半,看到突然"重发底牌"动画很奇怪
     //
     // ⭐ Task 3.2(2026-05-29):新一手开始 → 先播 N6 洗牌动画(1500ms)→ 再发底牌
-    //   playShuffleAnimation 的 callback 链:洗牌完了立即调 dealHoleCardsAnimation
-    //   N6 元素 + CSS + JS 都已就位(line 13060 / 2802 / 39392),只是之前只挂 DEV 按钮
+    // ⭐ Bug A fix(2026-05-29):isFirstRenderOfHand=true 但用户是中途进来的 → 不重播
+    //   _b9AnimatedHandId 在 page 进入时被重置为 null,导致每次重进都视为"首次"重放动画
+    //   修复:只在 _b9FreshEntryHandUnseen=true(刚进+真没见过该 hand)时才动画
+    //   有 hand 但是页面刚进入(_b9FreshPageEntry=true)→ 直接标记动画过,不播
     var handAlreadyInProgress = (Array.isArray(hand.actions) && hand.actions.length > 0)
       || (Array.isArray(hand.communityCards) && hand.communityCards.length > 0)
       || hand.state !== 'preflop';
-    if (!handAlreadyInProgress && typeof window.dealHoleCardsAnimation === 'function') {
+    var freshPageEntryWithExistingHand = window._b9FreshPageEntry === true;
+    // 不论"hand 已开打"或"刚进页面看到 hand"→ 标记已动画,跳过 shuffle+deal
+    if (freshPageEntryWithExistingHand) {
+      window._b9AnimatedHandId = hand.id;
+      window._b9FreshPageEntry = false;
+    }
+    if (!handAlreadyInProgress && !freshPageEntryWithExistingHand && typeof window.dealHoleCardsAnimation === 'function') {
       function _b9PlayDealAfterShuffle() {
         try {
           window.dealHoleCardsAnimation();

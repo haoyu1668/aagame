@@ -29202,8 +29202,11 @@
     if (!area) return;
 
     // ⭐ v2.24 防御:仅在 WS 模式下接管 P 弹窗,demo 模式不响应(避免污染演示流)
+    // ⭐ B9 P2.1 旁路:body.on-real-table 时(真后端桌)也允许接管 — 因为 B9 polling 派发的
+    //    ACTION_REQUEST 是真实业务事件,不是 demo 自动跑的事件
     const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
-    if (currentMode === 'demo') {
+    const isOnRealTable = document.body.classList.contains('on-real-table');
+    if (currentMode === 'demo' && !isOnRealTable) {
       console.log('[action-request] ignored in demo mode');
       return;
     }
@@ -29424,9 +29427,10 @@
     const area = document.getElementById('action-area');
     if (!area) return;
 
-    // 防御:demo 模式不接管
+    // 防御:demo 模式不接管(B9 真桌旁路)
     const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
-    if (currentMode === 'demo') return;
+    const isOnRealTablePresel = document.body.classList.contains('on-real-table');
+    if (currentMode === 'demo' && !isOnRealTablePresel) return;
 
     // 防御:已在 P 态(轮到我)→ 不显示 Y 态
     if (currentActionRequest) return;
@@ -32816,8 +32820,10 @@
       if (window.mockServer.isWaitingMyTurn()) return true;
     }
     // ⭐ v2.24 防御:demo 模式下永远返回 false,避免污染演示流
+    // ⭐ B9 P2.1 旁路:真桌(on-real-table)允许返 true
     const currentMode = (typeof appMode !== 'undefined') ? appMode : 'demo';
-    if (currentMode === 'demo') return false;
+    const isOnRealTableLive = document.body.classList.contains('on-real-table');
+    if (currentMode === 'demo' && !isOnRealTableLive) return false;
     return !!(window.currentActionRequest && window.currentActionRequest());
   }
   function sendClientAction(action, amount) {
@@ -33594,8 +33600,8 @@
         var mySeatEl = document.querySelector('#page-table .my-seat');
         if (mySeatEl) {
           mySeatEl.classList.toggle('seated', !!newOccupied['my']);
-          // 入座后注入头像(static HTML 的 my-seat 没 .seat-avatar,这里补)
           if (newOccupied['my']) {
+            // 入座后注入头像(static HTML 的 my-seat 没 .seat-avatar,这里补)
             var myP = newOccupied['my'];
             var avatarEl = mySeatEl.querySelector('.seat-avatar');
             if (!avatarEl) {
@@ -33604,6 +33610,14 @@
               mySeatEl.insertBefore(avatarEl, mySeatEl.firstChild);
             }
             avatarEl.textContent = (myP.avatar || (myP.name || '?').charAt(0));
+          } else {
+            // ⭐ 未入座 → 清掉之前坐过留下的头像 + 名字残留(防"还没坐下就显示自己")
+            var oldAvatar = mySeatEl.querySelector('.seat-avatar');
+            if (oldAvatar) oldAvatar.remove();
+            var oldName = mySeatEl.querySelector('.seat-name-chip');
+            if (oldName) oldName.textContent = '';
+            var oldChips = mySeatEl.querySelector('.seat-chips');
+            if (oldChips) oldChips.textContent = '';
           }
         }
       }
@@ -33903,22 +33917,31 @@
       renderMyHoleCardsB9(hand.myHoleCards);
     }
 
-    // 飞底牌动画(从牌堆 → 各人位置 → 翻面显示)
-    if (typeof window.dealHoleCardsAnimation === 'function') {
+    // ⭐ 飞底牌动画(从牌堆 → 各人位置 → 翻面显示)
+    //   仅在"hand 刚开始"才放:hand 已有 actions / 已经发了公牌 / 已经 showdown → 不重播
+    //   场景:用户中途进入牌桌时,hand 已经打了一半,看到突然"重发底牌"动画很奇怪
+    var handAlreadyInProgress = (Array.isArray(hand.actions) && hand.actions.length > 0)
+      || (Array.isArray(hand.communityCards) && hand.communityCards.length > 0)
+      || hand.state !== 'preflop';
+    if (!handAlreadyInProgress && typeof window.dealHoleCardsAnimation === 'function') {
       try {
         window.dealHoleCardsAnimation();
       } catch (e) {
         console.warn('[B9] dealHoleCardsAnimation 异常:', e);
       }
+    } else if (handAlreadyInProgress) {
+      console.log('[B9] hand 已在进行中(state=' + hand.state + ', actions=' + (hand.actions || []).length + '),跳过发牌动画');
     }
 
     // 等飞牌完才下盲注筹码(飞牌总时长 ≈ 2轮 × N人 × 80ms + 380ms 飞行 + 余量)
+    // 中途进入时也下盲注筹码(但不延迟,因为飞牌动画跳过了)
+    var betDelay = handAlreadyInProgress ? 0 : 1200;
     setTimeout(function() {
       if (typeof window.setSeatBet === 'function') {
         if (Number(hand.sbAmount) > 0) window.setSeatBet(sbSeatId, Number(hand.sbAmount));
         if (Number(hand.bbAmount) > 0) window.setSeatBet(bbSeatId, Number(hand.bbAmount));
       }
-    }, 1200);
+    }, betDelay);
   }
 
   // 把 backend seat_no 映射到前端 DOM 元素

@@ -3278,23 +3278,7 @@
     box-shadow: 0 4px 12px rgba(77, 255, 77, 0.4);
   }
   .b9-start-hand-btn:active { transform: scale(0.97); }
-  /* B9 dealer 按钮位置(贴座位右上角) */
-  .dealer-button.b9-marker {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: #fff;
-    color: #000;
-    font-weight: 700;
-    font-size: 12px;
-    line-height: 22px;
-    text-align: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-    z-index: 10;
-  }
+  /* (旧 .dealer-button.b9-marker 已删除 — B9 改调 demo 现成 setDealer() 复用 .dealer-mark CSS) */
   /* 真桌中央"等待开局"占位文字(JS 不动 DOM,纯 CSS 用 ::before 加上) */
   body.on-real-table .table-center::before {
     content: '等待开局...';
@@ -16744,8 +16728,16 @@
     const perUnit = bb * 100;
     // 房间设置的最大买入个数(后端推送,默认 100)
     const roomMaxBuyins = (currentTableRoom && currentTableRoom.maxBuyins) || 100;
+
+    // ⭐ 2026-05-29 fix:接通真后端钱包余额
+    //   实战模式(Telegram 内 + 有 token):用 userPlatformBalance(openClubLobby 已拉真余额)
+    //   demo 模式(浏览器无 token):回退 demoUserBalance = 50000 以保证演示可买入
+    //   修前 bug:始终用 50000 显示 → 新号余额 0 时 UI 显示 50000 误导用户点买入 → 后端 422
+    const hasToken = !!(window.tokenStore && window.tokenStore.get());
+    const realBalance = hasToken ? (Number(userPlatformBalance) || 0) : demoUserBalance;
+
     // 余额能买几个(整除)
-    const affordableUnits = Math.floor(demoUserBalance / perUnit);
+    const affordableUnits = Math.floor(realBalance / perUnit);
     // 实际可选最大 = min(房间设置, 余额能买的)
     const maxUnits = Math.max(0, Math.min(roomMaxBuyins, affordableUnits));
 
@@ -16758,7 +16750,7 @@
 
     // 更新弹窗显示
     if (buyinBlindsEl) buyinBlindsEl.textContent = blindsStr;
-    if (buyinBalance) buyinBalance.textContent = formatAmount(demoUserBalance);
+    if (buyinBalance) buyinBalance.textContent = formatAmount(realBalance);
     if (buyinMinUnitsEl) buyinMinUnitsEl.textContent = maxUnits === 0 ? '0' : '1';
     if (buyinMaxUnitsEl) buyinMaxUnitsEl.textContent = maxUnits;
 
@@ -17451,7 +17443,12 @@
     const bb = parseBigBlind(blindsStr);
     const perUnit = bb * 100;
     const roomMaxBuyins = (currentTableRoom && currentTableRoom.maxBuyins) || 100;
-    const affordableUnits = Math.floor(demoUserBalance / perUnit);
+
+    // ⭐ 2026-05-29 fix:接通真后端钱包余额(同 openBuyinModal 修法)
+    const hasToken = !!(window.tokenStore && window.tokenStore.get());
+    const realBalance = hasToken ? (Number(userPlatformBalance) || 0) : demoUserBalance;
+
+    const affordableUnits = Math.floor(realBalance / perUnit);
     const maxUnits = Math.max(0, Math.min(roomMaxBuyins, affordableUnits));
 
     if (maxUnits === 0) {
@@ -17466,7 +17463,7 @@
       targetSeatId: latest.seatId
     };
 
-    if (rebuyBalance) rebuyBalance.textContent = formatAmount(demoUserBalance);
+    if (rebuyBalance) rebuyBalance.textContent = formatAmount(realBalance);
     if (rebuyBlindsEl) rebuyBlindsEl.textContent = blindsStr;
     if (rebuyCurrentChipsEl) rebuyCurrentChipsEl.textContent = latest.player.chips || '0';
     if (rebuyMinUnitsEl) rebuyMinUnitsEl.textContent = '1';
@@ -33578,8 +33575,10 @@
 
   // 渲染牌局状态到 page-table
   function renderCurrentHand(hand) {
-    // 清旧 B9 标记
+    // 清旧 B9 标记(老自建样式残留 + demo 的 D 标 + 盲注标)
     document.querySelectorAll('#page-table .b9-marker').forEach(function(el) { el.remove(); });
+    if (typeof window.setDealer === 'function') window.setDealer(null);
+    if (typeof window.clearBlindLabels === 'function') window.clearBlindLabels();
     var oldStartBtn = document.getElementById('b9-start-btn');
     if (oldStartBtn) oldStartBtn.remove();
     var potEl = document.getElementById('table-pot');
@@ -33641,22 +33640,35 @@
     return document.querySelector('#page-table .seat.s' + seatNo);
   }
 
-  function attachB9DealerButton(hand) {
-    var el = _b9FindSeatEl(hand.dealerSeat, hand);
-    if (!el) return;
-    var btn = document.createElement('div');
-    btn.className = 'dealer-button b9-marker';
-    btn.textContent = 'D';
-    el.appendChild(btn);
+  // ⭐ 把 backend seat_no(整数 1-9) 映射到前端 seatId 字符串('my' 或 's1'..'s8')
+  // 用途:调 demo 现成的 setDealer(seatId) / attachBlindLabel(seatId, label) 等函数
+  function _b9SeatNoToId(seatNo, hand) {
+    var myUserId = window.currentUser && Number(window.currentUser.userId);
+    if (hand && hand.seats && myUserId) {
+      var thisSeat = hand.seats.find(function(s) { return s.seatNo === seatNo; });
+      if (thisSeat && Number(thisSeat.userId) === myUserId) {
+        return 'my';
+      }
+    }
+    return 's' + seatNo;
   }
 
+  // ⭐ 改用 demo 现成的 setDealer(seatId, animate)
+  // 优点:沿用 .seat.sN .dealer-mark / .my-seat .dealer-mark 的每座位定位 CSS,自动落到正确角落
+  function attachB9DealerButton(hand) {
+    var seatId = _b9SeatNoToId(hand.dealerSeat, hand);
+    if (typeof window.setDealer === 'function') {
+      window.setDealer(seatId, false);   // animate=false 因为是初始放置,不是轮换
+    }
+  }
+
+  // ⭐ 改用 demo 现成的 attachBlindLabel(seatId, labelText)
+  // 优点:沿用 .blind-label / .label-sb / .label-bb / .my-seat .blind-label 的现成 CSS
   function attachB9BlindLabel(hand, seatNo, labelText) {
-    var el = _b9FindSeatEl(seatNo, hand);
-    if (!el) return;
-    var tag = document.createElement('div');
-    tag.className = 'blind-label b9-marker label-' + (labelText === 'SB' ? 'sb' : 'bb');
-    tag.textContent = labelText;
-    el.appendChild(tag);
+    var seatId = _b9SeatNoToId(seatNo, hand);
+    if (typeof window.attachBlindLabel === 'function') {
+      window.attachBlindLabel(seatId, labelText);
+    }
   }
 
   function renderMyHoleCardsB9(cards) {

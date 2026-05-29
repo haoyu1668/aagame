@@ -16046,28 +16046,9 @@
     }, opts);
   }
 
-  const rooms = [
-    // ⭐ v2.18.6 大厅房间数据严格对应 17 个测试场景(X/Y 一一对应)
-    // 7 人桌 7 个:1/7 ~ 7/7
-    makeRoom({ name: '永旺娱乐(长牌) 01031', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 1, total: 7, seatTotal: 7, time: '00:01:48', buyin: 20 }),
-    makeRoom({ name: '快速短牌 01032',       blinds: '0.1/0.2(0.2)',     type: '短牌', seats: 2, total: 7, seatTotal: 7, time: '00:15:30', buyin: 5 }),
-    makeRoom({ name: '新手友好场 01033',      blinds: '0.02/0.05/0.1(0.1)', type: '长牌', seats: 3, total: 7, seatTotal: 7, time: '00:33:14', buyin: 2 }),
-    makeRoom({ name: '新手娱乐场 01034',      blinds: '0.05/0.1/0.2(0.2)', type: '长牌', seats: 4, total: 7, seatTotal: 7, time: '00:45:22', buyin: 10 }),
-    makeRoom({ name: '高手对决 长牌 01035',   blinds: '5/10/20(20)',      type: '长牌', seats: 5, total: 7, seatTotal: 7, time: '01:08:45', buyin: 1000 }),
-    makeRoom({ name: '永旺娱乐(长牌) 01036', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 6, total: 7, seatTotal: 7, time: '04:20:18', buyin: 20 }),
-    makeRoom({ name: '俱乐部内局 01037',      blinds: '0.2/0.5/1(1)',     type: '长牌', seats: 7, total: 7, seatTotal: 7, time: '05:30:22', buyin: 100 }),
-    // 9 人桌 10 个:0/9 ~ 9/9
-    makeRoom({ name: '深夜场 短牌 01038',     blinds: '0.5/1(1)',         type: '短牌', seats: 0, total: 9, seatTotal: 9, time: '00:00:00', buyin: 50 }),
-    makeRoom({ name: '土豪专场 短牌 01039',   blinds: '10/20(20)',        type: '短牌', seats: 1, total: 9, seatTotal: 9, time: '00:02:34', buyin: 2000 }),
-    makeRoom({ name: '永旺娱乐(长牌) 01040', blinds: '0.5/1/2(2)',       type: '长牌', seats: 2, total: 9, seatTotal: 9, time: '00:11:55', buyin: 100 }),
-    makeRoom({ name: '永旺娱乐(短牌) 01041', blinds: '0.5/1/2(2)',       type: '短牌', seats: 3, total: 9, seatTotal: 9, time: '00:22:15', buyin: 100 }),
-    makeRoom({ name: '快速牌局 短牌 01042',   blinds: '0.1/0.2(0.2)',     type: '短牌', seats: 4, total: 9, seatTotal: 9, time: '01:45:33', buyin: 5 }),
-    makeRoom({ name: '永旺娱乐(长牌) 01043', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 5, total: 9, seatTotal: 9, time: '00:08:17', buyin: 20 }),
-    makeRoom({ name: '永旺娱乐(长牌) 01044', blinds: '0.2/0.5/1(1)',     type: '长牌', seats: 6, total: 9, seatTotal: 9, time: '01:23:45', buyin: 50, duration: '3h', autoStart: 4 }),
-    makeRoom({ name: '黄金VIP厅 01045',      blinds: '2/5/10(10)',       type: '长牌', seats: 7, total: 9, seatTotal: 9, time: '03:45:11', buyin: 500 }),
-    makeRoom({ name: 'VIP高额局 长牌 01046', blinds: '1/2/4(4)',         type: '长牌', seats: 8, total: 9, seatTotal: 9, time: '02:11:08', buyin: 200 }),
-    makeRoom({ name: '夜间高手场 01047',      blinds: '5/10/20(20)',      type: '长牌', seats: 9, total: 9, seatTotal: 9, time: '06:55:33', buyin: 1500 })
-  ];
+  // ⭐ 大整顿 A2(2026-05-29):游戏 Tab 全局牌局列表 MVP 1 不用(玩家走俱乐部 Tab → 11111 → 牌桌)
+  //   原 22 个 makeRoom() demo 房间(01031-01047)删除。空列表 renderRooms 自动显示"该分类暂无房间"。
+  const rooms = [];
 
   // 渲染房间列表
   let gameFilterType = '全部';
@@ -33037,62 +33018,15 @@
   //   真实业务对接后:应改为 club.creatorUid + 比较 currentUser.uid
   //   重要:owner/creatorUid 一旦创建就锁死,永远不能动态修改
   //   (张三创建的俱乐部,张三永远是创建者,不能跳变成李四)
-  // ⭐ v2.28.73 F10:demo 模式兜底(浏览器打开 / 后端不通)
-  //   - Telegram 验证模式:启动后会异步调 GET /api/clubs 替换为真实数据(见 setupAppScale)
-  //   - demo / 失败兜底:保留这 3 个 mock 俱乐部,UI 不空
-  let clubs = [
-    { id: '88888', name: 'LobbyPlayersClub', coin: 10000,   rooms: 10, members: 1638, owner: false },
-    { id: '94081', name: '昊泊',             coin: 0,       rooms: 15, members: 423,  owner: false },
-    { id: '21104', name: '地方',             coin: 6000.22, rooms: 8,  members: 56,   owner: true  }
-  ];
+  // ⭐ 大整顿 A2(2026-05-29):清 demo 俱乐部 mock(88888 LobbyPlayersClub / 94081 昊泊 / 21104 地方)
+  //   原兜底数据已删,启动时 F10 异步 GET /api/clubs 拉真俱乐部填进来
+  //   失败兜底:空数组 → 渲染"暂无俱乐部"(优于 mock 数据误导用户)
+  let clubs = [];
 
-  // 俱乐部内部房间数据(按俱乐部id分组)
-  const clubRooms = {
-    '88888': [
-      { name: '永旺娱乐(长牌) 01101', blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 7, total: 7, time: '01:23:45', buyin: 20 },
-      { name: '永旺娱乐(长牌) 01102', blinds: '0.2/0.5/1(1)',     type: '长牌', seats: 5, total: 7, time: '00:42:11', buyin: 50 },
-      { name: 'VIP长牌局 01103',       blinds: '1/2/4(4)',         type: '长牌', seats: 6, total: 7, time: '02:08:30', buyin: 200 },
-      { name: 'Lobby长牌 01104',       blinds: '0.5/1/2(2)',       type: '长牌', seats: 7, total: 7, time: '03:15:08', buyin: 100 },
-      { name: 'Lobby长牌 01105',       blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 4, total: 7, time: '00:18:22', buyin: 20 },
-      { name: 'Lobby长牌 01106',       blinds: '2/5/10(10)',       type: '长牌', seats: 6, total: 7, time: '04:22:11', buyin: 500 },
-      { name: 'Lobby长牌 01107',       blinds: '0.05/0.1/0.2(0.2)',type: '长牌', seats: 3, total: 7, time: '00:05:43', buyin: 10 },
-      { name: 'VIP高额场 01108',       blinds: '5/10/20(20)',      type: '长牌', seats: 7, total: 7, time: '02:30:15', buyin: 1000 },
-      { name: 'Lobby长牌 01109',       blinds: '0.1/0.2/0.4(0.4)', type: '长牌', seats: 5, total: 7, time: '01:11:00', buyin: 20 },
-      { name: 'Lobby长牌 01110',       blinds: '1/2/4(4)',         type: '长牌', seats: 7, total: 7, time: '05:45:33', buyin: 200 }
-    ],
-    '94081': [
-      { name: '永旺娱乐(短牌) 01533', blinds: '0.1/0.2(0.2)',     type: '短牌', seats: 6, total: 7, time: '00:32:03', buyin: 10 },
-      { name: '永旺娱乐(短牌) 01535', blinds: '1/2(2)',           type: '短牌', seats: 6, total: 7, time: '00:28:32', buyin: 100 },
-      { name: '永旺娱乐(短牌) 01525', blinds: '1/2(2)',           type: '短牌', seats: 6, total: 7, time: '00:17:19', buyin: 100 },
-      { name: '高手短牌 01540',       blinds: '5/10(10)',         type: '短牌', seats: 4, total: 7, time: '01:45:22', buyin: 500 },
-      { name: '新手短牌 01545',       blinds: '0.05/0.1(0.1)',    type: '短牌', seats: 2, total: 7, time: '00:08:15', buyin: 5 },
-      { name: '昊泊长牌局 01550',     blinds: '0.5/1/2(2)',       type: '长牌', seats: 7, total: 7, time: '02:00:00', buyin: 100 },
-      { name: '昊泊长牌局 01551',     blinds: '0.2/0.5/1(1)',     type: '长牌', seats: 5, total: 7, time: '00:55:30', buyin: 50 },
-      { name: '昊泊短牌快速 01552',   blinds: '0.5/1(1)',         type: '短牌', seats: 3, total: 7, time: '00:12:08', buyin: 30 },
-      { name: '昊泊VIP场 01553',       blinds: '10/20(20)',        type: '短牌', seats: 6, total: 7, time: '03:25:18', buyin: 2000 },
-      { name: '昊泊长牌局 01554',     blinds: '1/2/4(4)',         type: '长牌', seats: 7, total: 7, time: '01:48:45', buyin: 200 },
-      { name: '昊泊新手场 01555',     blinds: '0.02/0.05/0.1(0.1)',type: '长牌', seats: 4, total: 7, time: '00:22:00', buyin: 2 },
-      { name: '昊泊短牌 01556',       blinds: '2/5(5)',           type: '短牌', seats: 5, total: 7, time: '00:38:55', buyin: 200 },
-      { name: '昊泊高额局 01557',     blinds: '5/10/20(20)',      type: '长牌', seats: 6, total: 7, time: '04:10:22', buyin: 1000 },
-      { name: '昊泊短牌 01558',       blinds: '0.5/1(1)',         type: '短牌', seats: 7, total: 7, time: '02:15:30', buyin: 50 },
-      { name: '昊泊深夜场 01559',     blinds: '0.1/0.2(0.2)',     type: '短牌', seats: 1, total: 7, time: '00:03:11', buyin: 10 }
-    ],
-    '21104': [
-      { name: '地方长牌局 01201', blinds: '0.5/1/2(2)',   type: '长牌', seats: 7, total: 7, time: '03:12:00', buyin: 100 },
-      { name: '地方短牌局 01202', blinds: '0.2/0.5(0.5)', type: '短牌', seats: 5, total: 7, time: '01:05:33', buyin: 30 },
-      { name: '地方长牌 01203',   blinds: '1/2/4(4)',     type: '长牌', seats: 6, total: 7, time: '02:48:11', buyin: 200 },
-      { name: '地方VIP场 01204',  blinds: '5/10(10)',     type: '短牌', seats: 4, total: 7, time: '00:55:00', buyin: 500 },
-      { name: '地方新手场 01205', blinds: '0.05/0.1/0.2(0.2)',type: '长牌', seats: 3, total: 7, time: '00:20:18', buyin: 10 },
-      { name: '地方长牌 01206',   blinds: '0.2/0.5/1(1)', type: '长牌', seats: 7, total: 7, time: '01:35:45', buyin: 50 },
-      { name: '地方短牌 01207',   blinds: '1/2(2)',       type: '短牌', seats: 5, total: 7, time: '00:42:30', buyin: 100 },
-      { name: '地方高额场 01208', blinds: '10/20/40(40)', type: '长牌', seats: 7, total: 7, time: '06:20:00', buyin: 2000 }
-    ]
-  };
-
-  // 给 clubRooms 里所有房间也用 makeRoom 补全字段
-  Object.keys(clubRooms).forEach(clubId => {
-    clubRooms[clubId] = clubRooms[clubId].map(r => makeRoom(r));
-  });
+  // ⭐ 大整顿 A2(2026-05-29):清俱乐部内 demo 房间 mock(33 个房间,88888/94081/21104)
+  //   真俱乐部进入大厅时,fetchClubTablesAndRender 异步拉 GET /api/clubs/:id/tables 填进来。
+  //   clubRooms 仍保留(用对象索引,key 是 clubId,value 是 makeRoom 数组)。
+  const clubRooms = {};
 
   // 俱乐部币(记分牌)图标 - 用于俱乐部行
   const ICON_USDT = '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--green-usdt);color:#fff;font-size:12px;font-weight:700;">₮</span>';
@@ -39343,23 +39277,6 @@
     }
   };
 
-  // demo 版(墓碑保留 — dev-n9-panel 还在用)
-  //   __demoJoinRequests 是 N2.1 的"加入申请"mock(MVP 2 才接通真后端),不是 transfer
-  function refreshAdminNotifyFromDemo() {
-    // 非 admin 永远不显示
-    if (!isAnyClubAdmin()) {
-      window.updateAdminNotify(0);
-      return;
-    }
-    // 统计 demo 申请池里 PENDING 数量,仅算"我是 admin 的俱乐部"
-    const myAdminClubIds = clubs.filter(function(c) { return c.owner; })
-                                .map(function(c) { return String(c.id); });
-    const pending = (window.__demoJoinRequests || []).filter(function(r) {
-      return r.status === 'pending' && myAdminClubIds.indexOf(String(r.clubId)) >= 0;
-    });
-    window.updateAdminNotify(pending.length);
-  }
-
   // 切 Tab 时刷新(N9.4 核心钩子)
   //   项目实际 class 是 .tab-item(底部 5 个 Tab),含 data-page 标识
   document.querySelectorAll('.tab-item').forEach(function(btn) {
@@ -39561,23 +39478,6 @@
       }
     }, true);
   }
-
-  // DEV 触发器:模拟"新申请到达"(F12 Console 可用)
-  //   用法:window.__demoAddRequest('12345')
-  //   效果:demo 申请池加一条 PENDING,胶囊立刻显示
-  //   注意:仅当 clubs 数组里有 id='12345' 且 owner=true 的俱乐部才会触发显示
-  //   (因为非 admin 不显示通知,这是产品逻辑)
-  window.__demoAddRequest = function(clubId) {
-    if (!window.__demoJoinRequests) window.__demoJoinRequests = [];
-    window.__demoJoinRequests.push({
-      clubId: String(clubId),
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      requesterName: 'DEMO_REQUESTER_' + Math.floor(Math.random() * 1000)
-    });
-    refreshAdminNotifyFromDemo();
-    console.log('[N9 DEV] 模拟新申请加入 clubId=' + clubId + ',当前申请池:', window.__demoJoinRequests);
-  };
 
   // ════════════════════════════════════════════════════════════════════════
   // ⭐ v2.17 Telegram Mini App 集成 + 自适应屏幕缩放

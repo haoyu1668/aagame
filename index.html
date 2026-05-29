@@ -30124,22 +30124,32 @@
     const cardsEl = document.getElementById('community-cards');
     if (!cardsEl) return;
     currentStage = stage;
-    // 用传入 board 或 demo 数据,渲染前 N 张
-    const useBoard = (board && board.length) ? board : DEMO_BOARD;
+    // ⭐ Bug 3 真因(2026-05-30):无 board 时只切 data-stage,不动 slot 内容
+    //   原 bug:无 board → 用 DEMO_BOARD(J♦7♣K♥...)兜底覆盖 slot 文本
+    //   → dealBoardAnimation 末尾调 setStage('flop') 把真后端牌覆盖成 demo 牌
+    //   → CSS .card 360ms opacity 过渡再触发一次淡入 → 看起来"翻牌发两次牌还不一样"
+    //   修复:只在 board 参数显式传时才改 slot 文本(DEV 按钮场景);
+    //         polling 路径走 renderCommunityCardsB9 设真后端牌,setStage 只切 data-stage
     const slots = cardsEl.querySelectorAll('.card');
-    slots.forEach((el, i) => {
-      // ⭐ v2.19.1 修复:清掉 dealBoardAnimation 残留的行内 style
-      // 否则 preflop 时 CSS opacity:0 被行内 opacity:1 压制,牌不消失
-      el.style.opacity = '';
-      el.style.transform = '';
-      const c = useBoard[i];
-      if (!c) return;
-      el.classList.remove('red', 'black');
-      el.classList.add(c.color);
-      el.setAttribute('data-suit', c.suit);
-      el.querySelector('.rank').textContent = c.rank;
-      el.querySelector('.suit').textContent = c.suit;
-    });
+    if (board && board.length) {
+      slots.forEach((el, i) => {
+        el.style.opacity = '';
+        el.style.transform = '';
+        const c = board[i];
+        if (!c) return;
+        el.classList.remove('red', 'black');
+        el.classList.add(c.color);
+        el.setAttribute('data-suit', c.suit);
+        el.querySelector('.rank').textContent = c.rank;
+        el.querySelector('.suit').textContent = c.suit;
+      });
+    } else {
+      // 只清 inline style(让 CSS 接管显隐),不动文本/类
+      slots.forEach((el) => {
+        el.style.opacity = '';
+        el.style.transform = '';
+      });
+    }
     cardsEl.setAttribute('data-stage', stage);
     // 翻牌阶段切换时清空所有座位动作气泡(状态机要求)
     clearActionTags();

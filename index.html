@@ -13043,6 +13043,7 @@
           <span class="meta-row" id="table-hand-no">#992793</span>
           <span class="meta-row">盲注 <span id="table-blinds">10/20(20)</span></span>
           <span class="meta-row">止损上限 <span id="table-stoploss">50K</span></span>
+          <span class="meta-row" id="table-rake-info" style="display:none;">抽水 <span id="table-rake-text">5%</span></span>
           <span class="meta-row" id="table-timer">00:24:00</span>
         </div>
       </div>
@@ -16169,13 +16170,35 @@
     // 盲注:直接用房间的
     document.getElementById('table-blinds').textContent = room.blinds || '-';
 
-    // 止损上限:用买入上限 × 一定倍数(简化:用 buyin × 25,然后压缩成K)
-    const stoploss = (room.buyin || 0) * 25;
-    document.getElementById('table-stoploss').textContent = formatChips(stoploss);
+    // ⭐ 2026-05-29:止损上限 + 抽水显示真 N4 设置值
+    const settings = room.settings || {};
+    const stoplossEl = document.getElementById('table-stoploss');
+    if (stoplossEl) {
+      if (settings.stoplossEnabled && settings.stoplossMultiplier) {
+        const pct = Math.round(Number(settings.stoplossMultiplier) * 100);
+        stoplossEl.textContent = '止损 ' + pct + '%';
+      } else {
+        // 兜底:旧路径(假数据 buyin × 25)— demo 桌仍用
+        const stoploss = (room.buyin || 0) * 25;
+        stoplossEl.textContent = stoploss > 0 ? formatChips(stoploss) : '不限';
+      }
+    }
 
-    // 底池:示例值(没真实底池数据,用房间盲注大小做参考)
-    const potExample = (room.buyin || 0) * 0.7; // 简化示例
-    document.getElementById('table-pot').textContent = formatChips(potExample);
+    // 抽水信息:N4 settings.rakeType + rakePercent
+    const rakeInfoEl = document.getElementById('table-rake-info');
+    const rakeTextEl = document.getElementById('table-rake-text');
+    if (rakeInfoEl && rakeTextEl) {
+      if (settings.rakeType && settings.rakeType !== 'none' && settings.rakePercent) {
+        const typeName = settings.rakeType === 'pot' ? '底池' : (settings.rakeType === 'buyin' ? '买入' : '局');
+        rakeTextEl.textContent = typeName + ' ' + settings.rakePercent + '%';
+        rakeInfoEl.style.display = '';
+      } else {
+        rakeInfoEl.style.display = 'none';
+      }
+    }
+
+    // 底池:hand 开局前显示 0,B9 真后端会接管动态更新
+    document.getElementById('table-pot').textContent = '0';
 
     // 计时:用房间的 time 字段
     document.getElementById('table-timer').textContent = room.time || '00:00:00';

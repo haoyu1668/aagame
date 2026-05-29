@@ -7693,6 +7693,27 @@
     color: #5a9bff;
   }
 
+  /* ⭐ 2026-05-29 解散牌桌项(红字 + 红点) */
+  .drawer-item-dissolve {
+    color: #ff4d4d;
+    font-weight: 600;
+  }
+  .drawer-red-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff3b3b;
+    margin-left: 6px;
+    vertical-align: middle;
+    box-shadow: 0 0 6px rgba(255,59,59,0.7);
+    animation: drawerRedDotPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes drawerRedDotPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.6; transform: scale(1.18); }
+  }
+
   /* ⭐ v2.18.6 子项 7:自动补码抽屉开关项 */
   .drawer-toggle {
     display: flex;
@@ -13888,6 +13909,10 @@
           </div>
           <div class="drawer-item" data-drawer-action="退出房间">
             <span>退出房间</span>
+          </div>
+          <!-- ⭐ 2026-05-29 解散牌桌(仅管理员可见,JS 动态控制 display) -->
+          <div class="drawer-item drawer-item-dissolve" data-drawer-action="解散牌桌" id="drawer-dissolve-item" style="display:none">
+            <span>解散牌桌<span class="drawer-red-dot"></span></span>
           </div>
         </div>
       </div>
@@ -32369,6 +32394,7 @@
           : t.blindsSb + '/' + t.blindsBb;
         return makeRoom({
           id: t.id,
+          clubId: clubId,                               // ⭐ 解散牌桌需要 admin 校验,带回 clubId
           name: t.name,
           blinds: blindsStr,
           type: t.gameType === 'SHORT_DECK' ? '短牌' : '长牌',
@@ -32438,6 +32464,23 @@
           newOccupied['s' + s.seatNo] = player;
         }
       });
+      // ⭐ 2026-05-29 解散牌桌检测:后端返 tableStatus='archived' → 所有客户端自动返大厅
+      //   admin 点解散 → 后端 status='archived' + table_seats 全清 + chips refund
+      //   每个客户端(包括 admin 自己 + 普通玩家)polling 看到 archived → 自动跑路
+      //   优先于 pending_leave 检测,因为解散覆盖所有玩家场景
+      if (resp && resp.tableStatus === 'archived'
+          && currentTableRoom && Number(currentTableRoom.id) === numericId) {
+        console.log('[dissolve] 检测到牌桌已解散(status=archived),自动返大厅');
+        window._pendingLeaveTableId = null;
+        window._myRealTableId = null;
+        window._myRealSeatNo = null;
+        if (typeof showToast === 'function') {
+          showToast('牌桌已被解散,筹码已退回钱包');
+        }
+        if (typeof cleanupTableSession === 'function') cleanupTableSession();
+        if (typeof doReturnToLobby === 'function') doReturnToLobby();
+        return;
+      }
       // ⭐ Task 2(2026-05-29):pending_leave 后端自动离桌检测
       //   若之前申请了退出(window._pendingLeaveTableId === 当前桌),且自己不在 seats 里 → 真离桌了
       //   自动返大厅 + toast"已自动离桌"。无需筹码量(后端已退到 wallet,my 页会刷)
@@ -36638,6 +36681,21 @@
       if (soundSwitch && window.soundEngine) {
         soundSwitch.classList.toggle('on', window.soundEngine.isEnabled());
       }
+      // ⭐ 2026-05-29:解散牌桌按钮只对管理员可见
+      //   查 currentTableRoom.clubId 对应的 clubs 数组 entry,看 owner=true(admin) 才显示
+      try {
+        var dissolveItem = document.getElementById('drawer-dissolve-item');
+        if (dissolveItem) {
+          var isAdmin = false;
+          if (currentTableRoom && currentTableRoom.clubId && Array.isArray(clubs)) {
+            var clubEntry = clubs.find(function(c) { return Number(c.id) === Number(currentTableRoom.clubId); });
+            isAdmin = !!(clubEntry && clubEntry.owner);   // owner 字段映射的是 myRole === 'admin'
+          }
+          dissolveItem.style.display = isAdmin ? '' : 'none';
+        }
+      } catch (e) {
+        console.warn('[drawer] 解散按钮显示判断异常:', e);
+      }
     });
 
     // 点遮罩外面关闭
@@ -36674,6 +36732,44 @@
           if (typeof startLeaveTableFlow === 'function') {
             startLeaveTableFlow();
           }
+          return;
+        }
+        // ⭐ 2026-05-29 解散牌桌(管理员):confirm → POST /api/tables/:id/dissolve
+        //   后端 refund 所有座位 chips + status='archived';前端 polling 检测到自己不在 seats → 自动返大厅
+        //   非 admin 看不到这个按钮(JS 启动时根据 club myRole 控制 display)
+        if (action === '解散牌桌') {
+          (async function dissolveTableFlow() {
+            var tid = null;
+            if (currentTableRoom && Number.isInteger(Number(currentTableRoom.id))) {
+              tid = Number(currentTableRoom.id);
+            }
+            if (!tid || !window.apiClient || !window.tokenStore || !window.tokenStore.get()) {
+              if (typeof showToast === 'function') showToast('未在真后端牌桌上,无法解散');
+              return;
+            }
+            var ok = window.confirm(
+              '解散牌桌后:\n' +
+              '• 当前牌局立即终止(不派彩)\n' +
+              '• 所有座位玩家筹码退回各自钱包\n' +
+              '• 牌桌进入归档状态(不再出现在大厅)\n\n' +
+              '是否确认?'
+            );
+            if (!ok) return;
+            try {
+              var resp = await window.apiClient.post('/api/tables/' + tid + '/dissolve', {});
+              console.log('[dissolve] ✅ 牌桌已解散:', resp);
+              if (typeof showToast === 'function') {
+                showToast('牌桌已解散,共退回 ' + (resp.refundedSeats || 0) + ' 位玩家的筹码');
+              }
+              // 标记给 polling:发现"自己已不在 seats" → 自动返大厅
+              window._pendingLeaveTableId = tid;
+            } catch (err) {
+              console.warn('[dissolve] 解散失败:', err);
+              if (typeof showToast === 'function') {
+                showToast('解散失败:' + (err.message || '未知错误'));
+              }
+            }
+          })();
           return;
         }
         // "牌局信息" 打开信息弹窗

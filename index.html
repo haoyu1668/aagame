@@ -33504,6 +33504,10 @@
       var seats = (resp && resp.seats) || [];
       var newOccupied = {};
       var myUserId = (window.currentUser && Number(window.currentUser.userId)) || null;
+      // ⭐ 拉当前 hand(可能上一轮 5s 已设),用来富化 player 对象:
+      //   isDealer / bet(SB 金额 / BB 金额)→ renderSeats 模板自动渲染 D 标 + 座位前筹码
+      //   不依赖 setDealer / setSeatBet 后挂(那些会被下次 renderSeats 洗掉)
+      var hand = window._b9CurrentHand || null;
       seats.forEach(function(s) {
         var fullName = ((s.firstName || '') + ' ' + (s.lastName || '')).trim();
         if (!fullName) fullName = (s.username ? '@' + s.username : 'User' + s.userId);
@@ -33513,6 +33517,15 @@
           chips:  String(s.chips),
           bet:    0
         };
+        // 富化:庄家 / 盲注金额
+        if (hand) {
+          if (Number(s.seatNo) === Number(hand.dealerSeat)) player.isDealer = true;
+          if (Number(s.seatNo) === Number(hand.sbSeat) && Number(hand.sbAmount) > 0) {
+            player.bet = Number(hand.sbAmount);
+          } else if (Number(s.seatNo) === Number(hand.bbSeat) && Number(hand.bbAmount) > 0) {
+            player.bet = Number(hand.bbAmount);
+          }
+        }
         if (myUserId !== null && Number(s.userId) === myUserId) {
           player.isMe = true;
           newOccupied['my'] = player;
@@ -33527,6 +33540,10 @@
         if (typeof renderSeats === 'function') {
           renderSeats(currentTableRoom);
         }
+        // ⭐ renderSeats 把 .blind-label(SB/BB 蓝橙小标)洗掉了,这里补回
+        //   animate=false:补挂关掉 popup 动画(头一次挂在 renderCurrentHand 里时已弹过)
+        if (hand && hand.sbSeat) attachB9BlindLabel(hand, hand.sbSeat, 'SB', false);
+        if (hand && hand.bbSeat) attachB9BlindLabel(hand, hand.bbSeat, 'BB', false);
         // ⭐ 2026-05-29:真桌模式下,my-seat 只在用户已入座时显示
         var mySeatEl = document.querySelector('#page-table .my-seat');
         if (mySeatEl) {
@@ -33563,6 +33580,9 @@
       var hand = (resp && resp.hand) || null;
       if (currentTableRoom && Number(currentTableRoom.id) === numericId) {
         currentTableRoom._currentHand = hand;
+        // ⭐ 暴露给 fetchAndRenderTableSeats 用,让 player.isDealer / player.bet 富化
+        //   解决 bug:renderSeats 5s 一次 innerHTML 重写,洗掉 setDealer 的 .dealer-mark
+        window._b9CurrentHand = hand;
         renderCurrentHand(hand);
       }
       return hand;
@@ -33723,10 +33743,20 @@
 
   // ⭐ 改用 demo 现成的 attachBlindLabel(seatId, labelText)
   // 优点:沿用 .blind-label / .label-sb / .label-bb / .my-seat .blind-label 的现成 CSS
-  function attachB9BlindLabel(hand, seatNo, labelText) {
+  // 幂等:如果该座位已有同文本的 .blind-label,跳过重建(避免 5s 轮询导致 popup 动画重播)
+  // animate=false:补挂时关掉 popup 动画(renderSeats 洗掉后再挂会动画重播,体验差)
+  function attachB9BlindLabel(hand, seatNo, labelText, animate) {
     var seatId = _b9SeatNoToId(seatNo, hand);
+    var seatEl = seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + seatId);
+    if (!seatEl) return;
+    var existing = seatEl.querySelector('.blind-label');
+    if (existing && existing.textContent === labelText) return;   // 已正确,不动
     if (typeof window.attachBlindLabel === 'function') {
       window.attachBlindLabel(seatId, labelText);
+      if (animate === false) {
+        var newEl = seatEl.querySelector('.blind-label');
+        if (newEl) newEl.style.animation = 'none';
+      }
     }
   }
 
@@ -33750,13 +33780,16 @@
   //   isRed ? 'red' : 'black'(都加类!不能只加 'red' 不加 'black')
   //   原 bug:黑色花色(♠/♣)缺 .black 类 → CSS .card.black{color:#000} 不生效
   //          → 文字颜色继承父级(白/浅色)→ 牌上看不见字
+  // ⭐ 2026-05-29 加固:span 也写 inline color,防 poker-color4 / 字体渲染异常
+  //   让 K♦ 的 K 也是红色(用户截图反馈:.card.red 居然只让 ♦ 红、K 黑)
   function _b9CardToHtml(card) {
     var suit = card.slice(-1);
     var rank = card.slice(0, -1);
     var isRed = (suit === '♥' || suit === '♦');
-    return '<div class="card ' + (isRed ? 'red' : 'black') + '" data-suit="' + suit + '">' +
-           '<span class="rank">' + rank + '</span>' +
-           '<span class="suit">' + suit + '</span></div>';
+    var color = isRed ? '#d33' : '#000';
+    return '<div class="card ' + (isRed ? 'red' : 'black') + '" data-suit="' + suit + '" style="color:' + color + ';">' +
+           '<span class="rank" style="color:' + color + ';">' + rank + '</span>' +
+           '<span class="suit" style="color:' + color + ';">' + suit + '</span></div>';
   }
 
   // 触发后端开局(POST /api/tables/:id/start-hand)
@@ -33800,6 +33833,9 @@
   }
   function stopTableSeatsPolling() {
     if (_tableSeatsPollTimer) { clearInterval(_tableSeatsPollTimer); _tableSeatsPollTimer = null; }
+    // 清掉牌局缓存,防下次进别的桌仍读到旧 hand 数据
+    window._b9CurrentHand = null;
+    window._b9AnimatedHandId = null;
   }
   window.startTableSeatsPolling = startTableSeatsPolling;
   window.stopTableSeatsPolling = stopTableSeatsPolling;

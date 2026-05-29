@@ -32636,9 +32636,9 @@
         // ⭐ P2.2 #12 #13:识别街转换(state preflop→flop→turn→river)
         //   后端 actions 路由街结束时改 hands.state + 发公牌 → 这里轮询拿到 state 变化
         //   派发:
-        //     1) POT_COLLECT → demo betChipsToPotAnimation:座位 .seat-bet 飞到底池中央
-        //     2) STREET_NEXT → demo handler:清动作气泡 + 停 acting + 推历史
-        //   公牌:hand.communityCards 已含新公牌,后面 renderCommunityCardsB9 渲染(P2.2 无飞牌动画,P3+ 加)
+        //     1) POT_COLLECT → betChipsToPotAnimation:座位 .seat-bet 飞到底池中央
+        //     2) STREET_NEXT → handler:清动作气泡 + 停 acting + 推历史
+        //     3) CARD_DEAL_BOARD → dealBoardAnimation:烧 1 + 飞公牌动画(Bug D fix 2026-05-29)
         if (hand && hand.state && hand.state !== window._b9LastSeenState) {
           var prevState = window._b9LastSeenState;
           window._b9LastSeenState = hand.state;
@@ -32651,6 +32651,16 @@
             window.handleServerEvent({
               type: WS_EVENTS.STREET_NEXT, data: { street: hand.state }
             });
+            // ⭐ Bug D fix(2026-05-29):街转换 → 发公牌动画(flop/turn/river)
+            //   原 bug:前端 polling 没派发 CARD_DEAL_BOARD,导致 dealBoardAnimation 永远没调
+            //   → 公牌 .community-cards 一直 [data-stage=""] 隐藏 → 用户看不见翻牌/转牌/河牌
+            //   修复:只要进入 flop/turn/river,派发对应 street 的发公牌事件
+            if (hand.state === 'flop' || hand.state === 'turn' || hand.state === 'river') {
+              window.handleServerEvent({
+                type: WS_EVENTS.CARD_DEAL_BOARD,
+                data: { street: hand.state, cards: hand.communityCards || [] }
+              });
+            }
           }
         }
 
@@ -33032,7 +33042,18 @@
       ccEl.innerHTML = '';
       return;
     }
-    ccEl.innerHTML = cards.map(_b9CardToHtml).join('');
+    // ⭐ Bug D fix(2026-05-29):必须挂 data-slot 属性,否则 CSS
+    //   `.community-cards[data-stage="flop"] .card[data-slot="1"]{opacity:1}` 永远不匹配
+    //   → 公牌不可见。原 _b9CardToHtml 不挂 data-slot 是 bug。
+    ccEl.innerHTML = cards.map(function(card, i) {
+      var suit = card.slice(-1);
+      var rank = card.slice(0, -1);
+      var isRed = (suit === '♥' || suit === '♦');
+      var VS15 = '︎';
+      return '<div class="card ' + (isRed ? 'red' : 'black') + '" data-suit="' + suit + '" data-slot="' + (i + 1) + '">' +
+             '<span class="rank">' + rank + '</span>' +
+             '<span class="suit">' + suit + VS15 + '</span></div>';
+    }).join('');
   }
 
   // ⭐ 跟 demo 行 18167 / 18517 的渲染逻辑对齐:

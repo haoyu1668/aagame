@@ -12413,34 +12413,6 @@
     <span class="admin-notify-text" id="admin-notify-text">待审申请 (0)</span>
   </div>
 
-  <!-- ⭐ v2.28.77 N9 DEV 测试面板(批次 4.5 第 1 步临时,B17 接通后整顿期删) -->
-  <!-- 位置:左下角小浮窗,避开主功能区,不影响主流程截图 -->
-  <!-- 用途:不熟悉 F12 Console 的用户也能测试 N9 通知胶囊 -->
-  <div id="dev-n9-panel" style="
-       position: absolute; bottom: 100px; left: 8px; z-index: 250;
-       background: rgba(0,0,0,0.85); padding: 8px; border-radius: 8px;
-       border: 1px solid #4dff4d; font-size: 10px; color: white;
-       width: 130px; line-height: 1.4;">
-    <div style="color:#4dff4d; font-weight:700; margin-bottom:4px;">🛠 DEV 测试面板</div>
-    <div style="opacity:0.7; margin-bottom:6px;">N9 通知胶囊(临时)</div>
-    <button id="dev-n9-trigger" style="
-         width:100%; padding:6px 0; margin-bottom:4px; border:none; border-radius:4px;
-         background:#ff5722; color:white; font-size:11px; font-weight:700; cursor:pointer;">
-      ① 模拟新申请(+1)
-    </button>
-    <button id="dev-n9-clear" style="
-         width:100%; padding:6px 0; margin-bottom:4px; border:none; border-radius:4px;
-         background:#666; color:white; font-size:11px; font-weight:700; cursor:pointer;">
-      ② 清空申请
-    </button>
-    <button id="dev-n9-hide-panel" style="
-         width:100%; padding:6px 0; border:none; border-radius:4px;
-         background:transparent; color:#888; font-size:10px; cursor:pointer;
-         border:1px solid #444;">
-      隐藏此面板
-    </button>
-  </div>
-
   <!-- 内容 -->
   <div class="content">
 
@@ -13123,183 +13095,12 @@
         <div class="seat-chips">1.4K</div>
       </div>
 
-      <!-- ⭐ v2.20.2 拆成 2 个独立可拖动的切换器
-           切换器 1(DEV-1):行动相关 4 段(轮到我/预选/滑杆/动作)
-           切换器 2(DEV-2):测试工具 3 段(阶段/座位7/座位9)
-           各自独立折叠 + 独立保存位置 -->
-
-      <!-- 切换器 1:行动相关 -->
-      <div class="dev-state-switcher" id="dev-switcher-1">
-        <div class="dev-header" id="dev-header-1">
-          <span class="dev-header-label">DEV-1</span>
-          <span class="dev-header-current" id="dev-header-current">P1</span>
-          <span class="dev-header-toggle dev-header-toggle-1">▼</span>
-        </div>
-        <div class="dev-body">
-          <!-- 段 1:轮到我 4 态 -->
-          <div class="dev-section open" data-dev-section="turn">
-            <div class="dev-section-header">
-              <span>轮到我</span>
-              <span class="dev-section-arrow">▼</span>
-            </div>
-            <div class="dev-section-body">
-              <button class="dev-state-btn active" data-dev-state="p1">P1 加注</button>
-              <button class="dev-state-btn" data-dev-state="p2">P2 下注</button>
-              <button class="dev-state-btn" data-dev-state="p3">P3 过牌-加注</button>
-              <button class="dev-state-btn" data-dev-state="p4">P4 All-In跟</button>
-            </div>
-          </div>
-          <!-- 段 2:预选 -->
-          <div class="dev-section" data-dev-section="pre">
-            <div class="dev-section-header">
-              <span>预选</span>
-              <span class="dev-section-arrow">▼</span>
-            </div>
-            <div class="dev-section-body">
-              <button class="dev-state-btn" data-dev-state="y1">Y1 跟注预选</button>
-              <button class="dev-state-btn" data-dev-state="y2">Y2 过牌预选</button>
-              <button class="dev-state-btn" data-dev-state="y3">Y3 过/弃预选</button>
-            </div>
-          </div>
-          <!-- 段 3:滑杆 -->
-          <div class="dev-section" data-dev-section="slider">
-            <div class="dev-section-header">
-              <span>滑杆</span>
-              <span class="dev-section-arrow">▼</span>
-            </div>
-            <div class="dev-section-body">
-              <button class="dev-state-btn" data-dev-state="s1">S1 加注滑杆</button>
-              <button class="dev-state-btn" data-dev-state="s2">S2 下注滑杆</button>
-            </div>
-          </div>
-          <!-- 段 4:动作 -->
-          <div class="dev-section" data-dev-section="action">
-            <div class="dev-section-header">
-              <span>动作</span>
-              <span class="dev-section-arrow">▼</span>
-            </div>
-            <div class="dev-section-body">
-              <button class="dev-state-btn" id="dev-sim-raise">模拟上家加注</button>
-              <button class="dev-state-btn" id="dev-acting-other">模拟他人行动</button>
-              <button class="dev-state-btn" id="dev-sim-rebuy">模拟手动补码</button>
-              <button class="dev-state-btn" id="dev-sim-lowbal">模拟余额不足</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 切换器 2:测试工具 -->
-      <div class="dev-state-switcher dev-switcher-2nd" id="dev-switcher-2">
-        <div class="dev-header" id="dev-header-2">
-          <span class="dev-header-label">DEV-2</span>
-          <span class="dev-header-current">工具</span>
-          <span class="dev-header-toggle dev-header-toggle-2">▼</span>
-        </div>
-        <div class="dev-body">
-          <!-- 段 1:阶段 -->
-          <div class="dev-section open" data-dev-section="stage">
-            <div class="dev-section-header">
-              <span>阶段</span>
-              <span class="dev-section-arrow">▼</span>
-            </div>
-            <div class="dev-section-body">
-              <button class="dev-state-btn" data-dev-stage="preflop">翻前 (0张)</button>
-              <button class="dev-state-btn" data-dev-stage="flop">翻牌 (3张)</button>
-              <button class="dev-state-btn" data-dev-stage="turn">转牌 (4张)</button>
-              <button class="dev-state-btn" data-dev-stage="river">河牌 (5张)</button>
-              <button class="dev-state-btn" data-dev-stage="showdown">摊牌</button>
-              <button class="dev-state-btn" id="dev-deal-hole">▶ 发底牌动画</button>
-              <button class="dev-state-btn" id="dev-deal-flop">▶ 发翻牌动画</button>
-              <button class="dev-state-btn" id="dev-deal-turn">▶ 发转牌动画</button>
-              <button class="dev-state-btn" id="dev-deal-river">▶ 发河牌动画</button>
-              <button class="dev-state-btn" id="dev-bet-to-pot">▶ 下注归底池</button>
-              <button class="dev-state-btn" id="dev-pot-to-winner">▶ 底池飞赢家</button>
-              <button class="dev-state-btn" id="dev-showdown">▶ 摊牌(翻底牌+牌型)</button>
-              <button class="dev-state-btn" id="dev-new-hand">▶ 新一手(全重置)</button>
-              <button class="dev-state-btn" id="dev-show-muck">▶ Show/Muck 弹窗</button>
-              <button class="dev-state-btn" id="dev-toggle-dealer">▶ 切换庄家D标</button>
-              <button class="dev-state-btn" id="dev-post-blinds">▶ 下盲注 SB/BB</button>
-              <button class="dev-state-btn" id="dev-post-straddle">▶ 抓头(Straddle)</button>
-              <button class="dev-state-btn" id="dev-run-round">▶ 单街行动轮</button>
-              <button class="dev-state-btn highlight-demo" id="dev-full-hand">▶▶ 完整一手演示</button>
-            </div>
-          </div>
-          <!-- 段 2:座位测试 7人桌 -->
-          <div class="dev-section" data-dev-section="seat7">
-            <div class="dev-section-header">
-              <span>座位测试 7人桌</span>
-              <span class="dev-section-arrow">▼</span>
-            </div>
-            <div class="dev-section-body">
-              <div class="dev-seat-row">
-                <button class="dev-seat-btn" data-dev-seats="1/7">1/7</button>
-                <button class="dev-seat-btn" data-dev-seats="2/7">2/7</button>
-                <button class="dev-seat-btn" data-dev-seats="3/7">3/7</button>
-                <button class="dev-seat-btn" data-dev-seats="4/7">4/7</button>
-              </div>
-              <div class="dev-seat-row">
-                <button class="dev-seat-btn" data-dev-seats="5/7">5/7</button>
-                <button class="dev-seat-btn" data-dev-seats="6/7">6/7</button>
-                <button class="dev-seat-btn" data-dev-seats="7/7">7/7</button>
-              </div>
-            </div>
-          </div>
-          <!-- 段 3:座位测试 9人桌 -->
-          <div class="dev-section" data-dev-section="seat9">
-            <div class="dev-section-header">
-              <span>座位测试 9人桌</span>
-              <span class="dev-section-arrow">▼</span>
-            </div>
-            <div class="dev-section-body">
-              <div class="dev-seat-row">
-                <button class="dev-seat-btn" data-dev-seats="0/9">0/9</button>
-                <button class="dev-seat-btn" data-dev-seats="1/9">1/9</button>
-                <button class="dev-seat-btn" data-dev-seats="2/9">2/9</button>
-                <button class="dev-seat-btn" data-dev-seats="3/9">3/9</button>
-              </div>
-              <div class="dev-seat-row">
-                <button class="dev-seat-btn" data-dev-seats="4/9">4/9</button>
-                <button class="dev-seat-btn" data-dev-seats="5/9">5/9</button>
-                <button class="dev-seat-btn" data-dev-seats="6/9">6/9</button>
-                <button class="dev-seat-btn" data-dev-seats="7/9">7/9</button>
-              </div>
-              <div class="dev-seat-row">
-                <button class="dev-seat-btn" data-dev-seats="8/9">8/9</button>
-                <button class="dev-seat-btn" data-dev-seats="9/9">9/9</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ⭐ v2.20.3 完整一手演示快捷按钮(独立浮动,不在切换器内)
-           始终可见,一键播放完整流程,可拖动调整位置 -->
-      <div class="dev-quick-demo" id="dev-quick-demo">
-        <div class="dev-quick-demo-grip" id="dev-quick-demo-grip">⋮⋮</div>
-        <button class="dev-quick-demo-btn" id="dev-quick-demo-btn">
-          <span class="dqd-icon">▶▶</span>
-          <span class="dqd-label">一手演示</span>
-        </button>
-      </div>
-
-      <!-- ⭐ v2.22 模式指示器(右上角小标签),点击可切换模式 -->
-      <div class="mode-indicator-wrap" id="mode-indicator-wrap">
-        <div class="mode-indicator mode-demo" id="mode-indicator">DEMO</div>
-        <div class="mode-indicator-menu" id="mode-indicator-menu">
-          <div class="mim-item" data-mode="demo">演示模式</div>
-          <div class="mim-item" data-mode="ws_mock">WS Mock</div>
-          <div class="mim-item" data-mode="ws_real">WS 真实</div>
-        </div>
-      </div>
-
       <!-- ⭐ v2.22 网络状态条(顶部 banner,断线时显示) -->
       <div class="net-banner" id="net-banner">
         <div class="net-banner-spinner"></div>
         <span class="net-banner-text" id="net-banner-text">正在连接...</span>
       </div>
 
-      <!-- ⭐ v2.22 WS Mock 启动按钮(只在 WS Mock 模式下显示,模拟后端推一手) -->
-      <button class="ws-mock-start-btn" id="ws-mock-start-btn">▶▶ 推一手 (Mock)</button>
       <div class="show-muck-modal" id="show-muck-modal">
         <div class="sm-card">
           <div class="sm-title">展示底牌?</div>
@@ -30231,24 +30032,6 @@
     });
   })();
 
-  // ⭐ v2.22 WS Mock 启动按钮(模拟后端推一手)
-  (function initWsMockBtn() {
-    const btn = document.getElementById('ws-mock-start-btn');
-    if (!btn) return;
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (appMode !== 'ws_mock') {
-        if (typeof showToast === 'function') showToast('请先切换到 WS Mock 模式');
-        return;
-      }
-      if (!wsClient.isConnected()) {
-        if (typeof showToast === 'function') showToast('未连接');
-        return;
-      }
-      wsClient.startMockHand();
-    });
-  })();
-
   // ⭐ v2.21 行动轮 JS(子项 1-6)
   // ═════════════════════════════════════════════════════════════════
   // 德州扑克标准:每街从 UTG(BB 左侧第一个,翻前)或 SB(翻后)开始,
@@ -39797,57 +39580,6 @@
   };
 
   // ════════════════════════════════════════════════════════════════════════
-  // ⭐ v2.28.77 N9 DEV 测试面板 — 按钮交互(临时,B17 接通后删)
-  //
-  // 为什么有这块:
-  //   - 不熟悉 F12 Console 的用户也要能测试 N9 通知胶囊
-  //   - 点①按钮 = 自动把第一个俱乐部设为 admin + 模拟新申请到达
-  //   - 点②按钮 = 清空申请池 + 隐藏胶囊
-  //   - 点"隐藏此面板"= DEV 面板自己消失(不影响主流程截图)
-  // ════════════════════════════════════════════════════════════════════════
-  const devN9Panel = document.getElementById('dev-n9-panel');
-  const devN9Trigger = document.getElementById('dev-n9-trigger');
-  const devN9Clear = document.getElementById('dev-n9-clear');
-  const devN9HidePanel = document.getElementById('dev-n9-hide-panel');
-
-  // ⭐ 2026-05-29 fix(N9 误触发 bug):
-  //   Telegram 实战模式(localStorage 有 JWT token)→ 隐藏 DEV 面板
-  //   demo 模式(浏览器无 token)→ 保留(开发者可手动测 N9)
-  //   原 bug:HB袁华启动 Mini App 看到左下角 DEV 面板,误点"① 模拟新申请(+1)" →
-  //          panel handler 强制 clubs[0].owner = true(假冒 admin)+ 注入 mock 申请 →
-  //          N9 胶囊 mock 显示"待审申请",但 caller 跟后端无关 → 行为错乱。
-  //   注:不删 DEV 面板(红线 1),仅在实战模式藏起来。等 B17 整顿期再删除。
-  if (devN9Panel && window.tokenStore && window.tokenStore.get()) {
-    devN9Panel.style.display = 'none';
-    console.log('[N9 DEV] 实战模式 → DEV 面板隐藏');
-  }
-
-  if (devN9Trigger) {
-    devN9Trigger.addEventListener('click', function() {
-      // 确保 clubs 数组有内容
-      if (!Array.isArray(clubs) || clubs.length === 0) {
-        alert('当前没有任何俱乐部,请先创建一个');
-        return;
-      }
-      // 把第一个俱乐部强制设为 admin(让通知胶囊可见的前提条件)
-      clubs[0].owner = true;
-      // 模拟新申请到达
-      window.__demoAddRequest(clubs[0].id);
-    });
-  }
-  if (devN9Clear) {
-    devN9Clear.addEventListener('click', function() {
-      window.__demoJoinRequests = [];
-      refreshAdminNotifyFromDemo();
-      console.log('[N9 DEV] 申请池已清空');
-    });
-  }
-  if (devN9HidePanel) {
-    devN9HidePanel.addEventListener('click', function() {
-      if (devN9Panel) devN9Panel.style.display = 'none';
-    });
-  }
-
   // ⭐ v2.17 Telegram Mini App 集成 + 自适应屏幕缩放
   // 双端兼容:
   //   - Telegram 里打开:调用 expand() 占满 Telegram WebView 可用区

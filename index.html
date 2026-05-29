@@ -37571,22 +37571,11 @@
   // 提币:记分牌提现流水(平台余额 → 客服人工),含审核中/失败状态 ⭐ F4 改造
   // 消耗:玩家牌局输赢(每局对应一条,正数为赢、负数为输)
   // Jackpot:中奖记录(击中大牌奖励,牌型 + 奖金)
+  // ⭐ 2026-05-29 大整顿:充币/提币改调真后端 GET /api/user/me/transfer-requests
+  //   消耗(牌局输赢)/ Jackpot 暂保留 mock(等 B16 派彩入 hand_seats + jackpot 接口)
   const billData = {
-    '充币': [
-      { name: '记分牌', time: '2026-05-16 14:53:01', amount: '1000.0', status: 'success' },
-      { name: '记分牌', time: '2026-05-16 06:53:01', amount: '20.0',   status: 'success' },
-      { name: '记分牌', time: '2026-05-16 06:15:47', amount: '1000.0', status: 'success' },
-      { name: '记分牌', time: '2026-05-16 01:55:07', amount: '500.0',  status: 'success' },
-      { name: '记分牌', time: '2026-05-15 19:30:38', amount: '300.0',  status: 'success' },
-      { name: '记分牌', time: '2026-05-15 19:25:13', amount: '200.0',  status: 'success' }
-    ],
-    '提币': [
-      { name: '记分牌', time: '2026-05-18 22:10:33', amount: '-500.0', status: 'success' },
-      { name: '记分牌', time: '2026-05-18 18:45:12', amount: '-200.0', status: 'pending', statusText: '审核中' },
-      { name: '记分牌', time: '2026-05-17 09:22:08', amount: '-1000.0', status: 'success' },
-      { name: '记分牌', time: '2026-05-16 11:08:55', amount: '-50.0',  status: 'failed', statusText: '失败' },
-      { name: '记分牌', time: '2026-05-15 23:17:41', amount: '-300.0', status: 'success' }
-    ],
+    '充币': [],   // 真后端动态填充(申请发放历史)
+    '提币': [],   // 真后端动态填充(申请回收历史)
     '消耗': [
       { name: '长牌 NL100', time: '2026-05-18 23:45:12', amount: '+125.5', status: 'success', statusText: '已结算' },
       { name: '短牌 SD50',  time: '2026-05-18 21:12:08', amount: '-80.0',  status: 'success', statusText: '已结算', neg: true },
@@ -37601,6 +37590,33 @@
       { name: '皇家同花顺',  time: '2026-05-13 19:33:42', amount: '+2000.0', status: 'success', statusText: '已发放' }
     ]
   };
+
+  // 拉真后端申请发放/回收历史(用户进充币/提币 Tab 时调)
+  function fetchMyTransferRequests() {
+    if (!window.apiClient || !window.tokenStore || !window.tokenStore.get()) return Promise.resolve();
+    return window.apiClient.get('/api/user/me/transfer-requests').then(function(resp) {
+      const list = (resp && resp.requests) || [];
+      // 分流:type='grant' → 充币,type='revoke' → 提币
+      const grant = list.filter(r => r.type === 'grant').map(formatTransferToBill);
+      const revoke = list.filter(r => r.type === 'revoke').map(formatTransferToBill);
+      billData['充币'] = grant;
+      billData['提币'] = revoke;
+    }).catch(function(err) {
+      console.warn('[bill] 拉转账历史失败:', err && err.message);
+    });
+  }
+
+  // 把后端 transfer_request 行映射成 billData 项
+  function formatTransferToBill(r) {
+    const isGrant = r.type === 'grant';
+    const amount = (isGrant ? '+' : '-') + Number(r.amount).toFixed(1);
+    const status = r.status === 'approved' ? 'success' : (r.status === 'pending' ? 'pending' : 'failed');
+    const statusText = r.status === 'approved' ? '已通过' : (r.status === 'pending' ? '审核中' : (r.status === 'rejected' ? '已拒绝' : r.status));
+    // 格式化时间为 YYYY-MM-DD HH:mm:ss
+    const t = r.createdAt ? new Date(r.createdAt) : null;
+    const time = t ? t.toISOString().slice(0,19).replace('T',' ') : '';
+    return { name: '记分牌', time, amount, status, statusText };
+  }
 
   // 当前选中的 Tab
   let currentBillTab = '充币';
@@ -37668,6 +37684,12 @@
     const tab = defaultTab || '充币';
     switchBillTab(tab);
     showSubPage('bill');
+    // ⭐ 进入账单页时刷一次真后端历史(充币/提币 Tab 用)
+    fetchMyTransferRequests().then(function() {
+      if (tab === '充币' || tab === '提币') {
+        renderBillList(tab);
+      }
+    });
   }
 
   // Tab 点击

@@ -15051,6 +15051,11 @@
             <div class="record-stat-value" id="record-stat-winrate">0.00%</div>
           </div>
         </div>
+        <!-- ⭐ 2026-05-29:总盈亏(跨当前时间窗,绿正红负)-->
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);text-align:center;">
+          <div style="font-size:11px;color:var(--gray);margin-bottom:4px;">盈亏(记分牌)</div>
+          <div id="record-stat-pnl" style="font-size:22px;font-weight:700;">--</div>
+        </div>
       </div>
     </div>
 
@@ -37321,6 +37326,13 @@
       handsEl.textContent = String(resp.hands || 0);
       vpipEl.textContent  = (resp.vpip || 0).toFixed(2) + '%';
       winEl.textContent   = (resp.winrate || 0).toFixed(2) + '%';
+      // ⭐ 总盈亏 — 正数绿色,负数红色,0 灰
+      const pnlEl = document.getElementById('record-stat-pnl');
+      if (pnlEl) {
+        const pnl = Number(resp.pnl) || 0;
+        pnlEl.textContent = (pnl > 0 ? '+' : '') + pnl.toFixed(0);
+        pnlEl.style.color = pnl > 0 ? '#4dff4d' : (pnl < 0 ? '#ff6b6b' : 'rgba(255,255,255,0.5)');
+      }
     }).catch(function(err) {
       console.warn('[record] 拉战绩失败:', err && err.message);
       gamesEl.textContent = '0';

@@ -33518,7 +33518,8 @@
           total: t.maxSeats,
           seatTotal: t.maxSeats,
           time: '00:00:00',               // 等 B9/B10 实时会话接入
-          buyin: t.minBuyin               // BB 倍数,B8 简化展示
+          buyin: t.minBuyin,              // BB 倍数,B8 简化展示
+          settings: t.settings || null    // ⭐ N4 表单 JSON(autoStartEnabled / autoStartMinPlayers 等)
         });
       });
       clubRooms[clubId] = mapped;
@@ -33780,27 +33781,32 @@
       // 重置守卫(下一手就被视为"第一次见")
       window._b9AnimatedHandId = null;
 
-      // 显示"开始牌局"按钮(条件:座位 ≥ 2 + 我已入座)
+      // ⭐ 2026-05-29 重新设计(原"开始牌局"按钮已删):
+      //   N4 表单已有"自动开局人数"(settings.autoStartEnabled / autoStartMinPlayers),
+      //   坐够人就自动开局,无需手动按钮。
+      //   - 满足条件 → setTimeout 2 秒后调 startHandViaBackend(让"本手结束"toast 有时间显示)
+      //   - cooldown:_b9AutoStartFired flag 防 5s 轮询重复触发;hand 真启动后重置
+      //   - 多客户端同时触发由后端 409 锁兜底(startHandViaBackend 静默吞 409)
       var occupied = currentTableRoom && currentTableRoom.occupiedSeats;
-      if (occupied) {
+      var tableSettings = currentTableRoom && currentTableRoom.settings;
+      if (occupied && tableSettings && tableSettings.autoStartEnabled && !window._b9AutoStartFired) {
         var occCount = Object.keys(occupied).length;
         var myIsSeated = !!occupied['my'];
-        if (occCount >= 2 && myIsSeated) {
-          var center = document.querySelector('#page-table .table-center');
-          if (center) {
-            var btn = document.createElement('button');
-            btn.id = 'b9-start-btn';
-            btn.className = 'b9-start-hand-btn';
-            btn.textContent = '开始牌局';
-            btn.addEventListener('click', function() {
+        var minPlayers = Number(tableSettings.autoStartMinPlayers || 2);
+        if (occCount >= minPlayers && myIsSeated) {
+          window._b9AutoStartFired = true;
+          console.log('[B9 auto-start] 触发 occCount=' + occCount + ' >= minPlayers=' + minPlayers + ',2 秒后开局');
+          setTimeout(function() {
+            if (currentTableRoom && Number(currentTableRoom.id)) {
               startHandViaBackend(Number(currentTableRoom.id));
-            });
-            center.appendChild(btn);
-          }
+            }
+          }, 2000);
         }
       }
       return;
     }
+    // 有牌局 → 重置自动开局 flag,下次 hand 结束又可触发
+    window._b9AutoStartFired = false;
 
     // 有牌局
     document.body.classList.add('hand-active');
@@ -33956,18 +33962,24 @@
   }
 
   // 触发后端开局(POST /api/tables/:id/start-hand)
+  // 触发后端开局
+  //   2026-05-29 改:不再有手动按钮,完全由自动开局触发(多客户端竞争由后端 409 锁兜底)
+  //   "牌局已有进行中"(409)→ 静默吞,不 toast 不刷新(对手已经触发了,我等下次轮询就会拿到 hand)
+  //   其他错误(余额不足 / 牌桌不存在等)→ 仍 toast 提示
   function startHandViaBackend(tableId) {
-    var btn = document.getElementById('b9-start-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '开局中...'; }
     return window.apiClient.post('/api/tables/' + tableId + '/start-hand', {}).then(function(resp) {
-      console.log('[B9] ✅ 开局成功:', resp);
-      if (typeof showToast === 'function') showToast('牌局 #' + resp.handNo + ' 已开始');
-      // 立即拉一次状态
+      console.log('[B9] ✅ 自动开局成功:', resp);
+      // 立即拉一次状态(不依赖 5s 轮询)
       fetchAndRenderCurrentHand(tableId);
     }).catch(function(err) {
-      console.warn('[B9] ❌ 开局失败:', err);
-      if (typeof showToast === 'function') showToast('开局失败:' + (err && err.message ? err.message : '未知错误'));
-      if (btn) { btn.disabled = false; btn.textContent = '开始牌局'; }
+      var msg = err && err.message;
+      // 409 该桌已有进行中的牌局 → 静默(对手已触发了)
+      if (msg && msg.indexOf('已有进行中') >= 0) {
+        console.log('[B9] 自动开局竞争:对手已先触发,等下次轮询');
+        return;
+      }
+      console.warn('[B9] ❌ 自动开局失败:', err);
+      if (typeof showToast === 'function') showToast('开局失败:' + (msg || '未知错误'));
     });
   }
   window.startHandViaBackend = startHandViaBackend;

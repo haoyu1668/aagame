@@ -31293,8 +31293,9 @@
       }
     }
 
-    // 烧完后 600ms 开始发
-    let burnDoneDelay = 600;
+    // 烧完后 1600ms 开始发(原 600ms,2026-05-31 用户要求加 1s 让烧牌/收筹码动画看得清)
+    //   总耗时:click → 公牌可见 从 ~2s 拉到 ~3s
+    let burnDoneDelay = 1600;
     const interval = 160; // 每张牌发出的间隔
 
     targetSlots.forEach((slot, i) => {

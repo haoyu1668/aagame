@@ -30386,8 +30386,15 @@
     for (let i = 1; i <= cardCount; i++) {
       const slot = cardsEl.querySelector(`.card[data-slot="${i}"]`);
       if (!slot) continue;
-      const rank = slot.querySelector('.rank').textContent;
-      const suit = slot.querySelector('.suit').textContent;
+      // ⭐ Bug 修复(2026-05-31):slot 可能是 dealBoardAnimation 创建的空占位
+      //   (`<div class="card" data-slot="N">` 内无 .rank/.suit,等飞牌到位才填 innerHTML)
+      //   原 bug:burnDoneDelay 1.6s 期间 highlightCurrentMyHand 调本函数 → null.textContent 崩
+      //   修复:slot 内 .rank 或 .suit 缺一即 continue,跳过未填好的占位
+      const rankEl = slot.querySelector('.rank');
+      const suitEl = slot.querySelector('.suit');
+      if (!rankEl || !suitEl) continue;
+      const rank = rankEl.textContent;
+      const suit = suitEl.textContent;
       board.push(rank + suit);
     }
     return board;
@@ -33402,11 +33409,16 @@
           var _myUidForDiag = window.currentUser && Number(window.currentUser.userId);
           var _myActiveSeat = hand && Array.isArray(hand.seats) ?
             hand.seats.find(function(s){ return Number(s.userId) === _myUidForDiag; }) : null;
+          // ⭐ 2026-05-31:waitbb=true 等大盲玩家不在 hand.seats[],原日志 'sundefined' 难看
+          //   改成 '(等大盲/旁观)',更清楚表达"本手不参与"的状态
+          var _mySeatLog = _myActiveSeat
+            ? ('s' + _myActiveSeat.seatNo + (_myActiveSeat.folded ? '(FOLDED)' : ''))
+            : '(等大盲/旁观)';
           console.log('[POLL hand]',
             'state=' + (hand && hand.state),
             'cc=' + (hand && hand.communityCards ? hand.communityCards.length : 0),
             'currentActor=s' + newActingSeatNo + (_myActiveSeat && Number(_myActiveSeat.seatNo) === Number(newActingSeatNo) ? '★MY_TURN' : ''),
-            'mySeat=s' + (_myActiveSeat && _myActiveSeat.seatNo) + (_myActiveSeat && _myActiveSeat.folded ? '(FOLDED)' : ''),
+            'mySeat=' + _mySeatLog,
             'changed?', (newActingSeatNo !== lastActingSeatNo) ? 'YES' : 'no');
         } catch (diagErr) {}
         if (newActingSeatNo !== lastActingSeatNo) {

@@ -33269,6 +33269,14 @@
 
     // 预填我的底牌(飞牌动画走完会让它显形)
     if (hand.myHoleCards && hand.myHoleCards.length === 2) {
+      // ⭐ Bug C 修复(2026-05-30):同步把真后端手牌写入 DEMO_HOLE_CARDS.my
+      //   原 bug:此处只 renderMyHoleCardsB9(写 DOM),但 highlightCurrentMyHand /
+      //     updateMyHandTypeLabel 读 DEMO_HOLE_CARDS.my(默认 ['K♥','10♦'])
+      //   → 实时牌型标签永远显示"三条 K"/"四条 K"(demo 假牌型)
+      //   修复:每次轮询拿到 myHoleCards 都更新 DEMO_HOLE_CARDS.my(幂等)
+      if (typeof DEMO_HOLE_CARDS !== 'undefined') {
+        DEMO_HOLE_CARDS.my = hand.myHoleCards;
+      }
       renderMyHoleCardsB9(hand.myHoleCards);
     }
 

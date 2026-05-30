@@ -17069,24 +17069,18 @@
     // ⭐ 2026-05-29:离表清 on-real-table class,DEV/DEMO 元素恢复显示
     document.body.classList.remove('on-real-table');
     if (tableEntryFrom === 'lobby') {
-      // ⭐ Bug 修复(2026-05-30):乐观更新,避免显示"2/9 stale"在 fetch 完成前
-      //   用户反馈:刚退桌进大厅时看到 2/9(自己刚离的桌人数没扣),
-      //     再点一次大厅就变 0/9(fetch 完成后)
-      //   修复:导航前在 clubRooms 本地把"我刚离开的桌"的 seats -1
-      //     这样导航瞬间显示就是正确数字,fetch 完成后再覆盖确认
+      // ⭐ Bug 修复 v2(2026-05-30):清空旧 cache,让大厅显示"loading"状态直到 fetch 完成
+      //   原 v1 乐观 -1 有问题:如果 cache stale,-1 后值不对(用户反馈数字混乱)
+      //   v2:不再乐观更新,而是清空 cache + 显示"loading"占位 → fetch 完成后填真值
       try {
-        if (window.currentTableRoom && currentClubInfoId && Array.isArray(clubRooms[currentClubInfoId])) {
-          var _myJustLeftId = Number(window.currentTableRoom.id);
-          clubRooms[currentClubInfoId].forEach(function(r) {
-            if (Number(r.id) === _myJustLeftId && typeof r.seats === 'number' && r.seats > 0) {
-              r.seats = r.seats - 1;
-            }
-          });
+        if (currentClubInfoId && Array.isArray(clubRooms[currentClubInfoId])) {
+          // 清空旧 cache(避免显示 stale)
+          clubRooms[currentClubInfoId] = [];
           if (typeof renderLobbyRooms === 'function') {
-            renderLobbyRooms(currentClubInfoId);
+            renderLobbyRooms(currentClubInfoId);   // 显示空列表(loading)
           }
         }
-      } catch (optErr) { console.warn('[leave 乐观更新失败]', optErr); }
+      } catch (clearErr) { console.warn('[leave clear cache 失败]', clearErr); }
 
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       const clubLobby = document.getElementById('page-club-lobby');
@@ -17095,10 +17089,6 @@
         clubLobby.scrollTop = 0;
       }
       // ⭐ 2026-05-29 Q1 fix:刷新大厅牌桌列表
-      //   解散牌桌后,管理员/被踢出的玩家返回大厅,不刷新会还看到已 archived 的桌
-      //   小修:这里再调一次 fetchClubTablesAndRender(currentClubInfoId)
-      //   后端 GET /clubs/:id/tables 只返 status='open' 的(table.js line 203),
-      //   所以解散后自然消失
       if (typeof fetchClubTablesAndRender === 'function' && currentClubInfoId) {
         fetchClubTablesAndRender(currentClubInfoId);
       }
@@ -32676,10 +32666,9 @@
     // 跳转到大厅子页面
     showSubPage('club-lobby');
 
-    // ⭐ Bug 修复(2026-05-30):大厅活跃时启动 polling,每 5s 刷新牌桌列表
-    //   原 bug:进大厅时拉一次后冻结,别的玩家离桌时我看到的人数不会更新
-    //   用户反馈:3 个号轮流退,1 号在大厅看到 2/9 永远不变(应该看 2→1→0)
-    //   修复:开 setInterval polling,离开大厅时清掉
+    // ⭐ Bug 修复(2026-05-30 v2):大厅活跃时启动 polling,每 2s 刷新牌桌列表
+    //   原 5s 太慢,用户连续退桌时数字滞后视觉混乱
+    //   2s 频率跟主牌桌 polling 同步,响应快
     if (window._lobbyPollingTimer) {
       clearInterval(window._lobbyPollingTimer);
       window._lobbyPollingTimer = null;
@@ -32695,7 +32684,7 @@
       if (typeof fetchClubTablesAndRender === 'function') {
         fetchClubTablesAndRender(clubId);
       }
-    }, 5000);
+    }, 2000);
   }
 
   let lobbyFilterType = '全部';

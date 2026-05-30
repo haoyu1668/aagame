@@ -31180,6 +31180,16 @@
           // 翻面 300ms 后,显示真正的公共牌位 + 移除飞行牌
           setTimeout(() => {
             fc.remove();
+            // ⭐ Bug 修复(2026-05-30):自填 slot 内容,不再依赖 renderCommunityCardsB9
+            //   现在 街判定 sync 设 dealtMap → renderCommunityCardsB9 跳过 →
+            //   slot 没人填 → 飞牌结束后 slot 是空的 → 看不到最终公牌
+            //   修复:dealBoardAnimation 自己在飞牌到位时填 slot 内容(用 createFlyingCard 传入的 card)
+            if (card && card.rank && card.suit) {
+              var isRed = (card.suit === '♥' || card.suit === '♦');
+              slot.className = 'card ' + (isRed ? 'red' : 'black');
+              slot.setAttribute('data-suit', card.suit);
+              slot.innerHTML = '<span class="rank">' + card.rank + '</span><span class="suit">' + card.suit + '︎</span>';
+            }
             // 触发真正公共牌阶段切换
             // 最后一张时统一 setStage,中间张暂时手动让 slot 显示
             slot.style.opacity = '1';
@@ -33008,14 +33018,17 @@
             var delay = 0;
             for (var si = highestDealtIdx + 1; si <= targetIdx; si++) {
               var streetName = STREETS_ORDER[si];
-              // ⭐ Bug 修复(2026-05-30):dealtMap[street] 不能在这里 sync 设
-              //   sync 设了 → 同 tick 的 renderCommunityCardsB9 守卫触发 → slot 没填
-              //   → 几 ms 后 setTimeout 派发的 dealBoardAnimation 找不到 slot 内容 → 看不见牌
-              //   修复:挪到 setTimeout 内部,在 renderCommunityCardsB9 跑完 + dealBoardAnimation
-              //         读完 slot 之后才标记,这样后续 polling 的守卫才生效
+              // ⭐ Bug 修复(2026-05-30 v2 真凶):dealtMap[sn] = true 必须 sync 设
+              //   原 v1 注释怕"slot 没填",但 dealBoardAnimation 现在自己飞牌时
+              //   通过 createFlyingCard(card) 把真后端牌带过来,不依赖 slot 内容
+              //   用户报告:"翻牌时发 3 张出现两次"= renderCommunityCardsB9 同 tick 触发
+              //     CSS 淡入(1st 视觉)+ dealBoardAnimation 飞牌(2nd 视觉)= 双发
+              //   修复:sync 设 dealtMap[sn] 让本 tick 的 renderCommunityCardsB9 守卫
+              //         立即跳过,不写 innerHTML 不触发 CSS 淡入 → 只剩飞牌动画一次
+              dealtMap[streetName] = true;
               (function(sn, d) {
                 setTimeout(function() {
-                  dealtMap[sn] = true;   // 标记移到这里:此时 slot 已被 renderCommunityCardsB9 填好
+                  // dealtMap[sn] 已 sync 设好,此处不再重复设
                   if (sn === 'showdown') {
                     // showdown 不发牌,只切 data-stage
                     if (typeof setStage === 'function') setStage('showdown');

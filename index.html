@@ -31928,9 +31928,29 @@
       }
       window._b9LastActionSent = { sig: sig, ts: nowTs };
 
-      var body = { action: action };
-      if (typeof amount === 'number' && amount > 0) body.amount = amount;
-      console.log('[B9 P2.1] → POST /actions', body);
+      // ⭐ Bug 修复(2026-05-30 v2):bet / allin 映射成 raise(后端只认 4 种 action)
+      //   - 后端 validActions = ['fold','check','call','raise']
+      //   - 前端 UI 仍用 bet(本街无人下注)/ allin(全押)语义,POST 时转
+      //   - bet → raise(amount 不变)
+      //   - allin → raise(amount = req.maxRaise = myChips+currentBet)
+      //   注:避开同 scope const req(line 31966)用 actReq
+      var realAction = action;
+      var realAmount = amount;
+      if (action === 'bet') {
+        realAction = 'raise';
+      } else if (action === 'allin') {
+        realAction = 'raise';
+        var actReq = window.currentActionRequest && window.currentActionRequest();
+        if (actReq && Number.isInteger(actReq.maxRaise) && actReq.maxRaise > 0) {
+          realAmount = actReq.maxRaise;
+        } else {
+          console.warn('[B9 P2.1] allin 转 raise 但拿不到 maxRaise,用 amount 兜底');
+        }
+      }
+
+      var body = { action: realAction };
+      if (typeof realAmount === 'number' && realAmount > 0) body.amount = realAmount;
+      console.log('[B9 P2.1] → POST /actions', body, '(原 action:' + action + ')');
       window.apiClient.post('/api/hands/' + handId + '/actions', body).then(function(resp) {
         console.log('[B9 P2.1] ✅ action 接收:', resp);
         // 立即拉一次最新 hand state,不等下次 5s 轮询(更跟手)
@@ -33261,7 +33281,11 @@
     //   _b9AnimatedHandId 在 page 进入时被重置为 null,导致每次重进都视为"首次"重放动画
     //   修复:只在 _b9FreshEntryHandUnseen=true(刚进+真没见过该 hand)时才动画
     //   有 hand 但是页面刚进入(_b9FreshPageEntry=true)→ 直接标记动画过,不播
-    var handAlreadyInProgress = (Array.isArray(hand.actions) && hand.actions.length > 0)
+    // ⭐ Bug 修复(2026-05-30 v2):straddle 是开局自动行动,不算"hand 已在进行中"
+    //   原 bug:3 人桌新一手 straddle 入 hand_actions → actions.length=1
+    //   → handAlreadyInProgress=true → 跳过洗牌+发牌动画 → 新一手无视觉开局
+    var nonStraddleActions = (Array.isArray(hand.actions) ? hand.actions : []).filter(function(a) { return a && a.action !== 'straddle'; });
+    var handAlreadyInProgress = nonStraddleActions.length > 0
       || (Array.isArray(hand.communityCards) && hand.communityCards.length > 0)
       || hand.state !== 'preflop';
     var freshPageEntryWithExistingHand = window._b9FreshPageEntry === true;

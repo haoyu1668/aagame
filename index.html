@@ -31178,8 +31178,20 @@
     const targetSlots = [];
     if (cardsEl) {
       for (let i = 0; i < info.count; i++) {
-        const slot = cardsEl.querySelector(`.card[data-slot="${info.startSlot + i + 1}"]`);
-        if (slot) targetSlots.push(slot);
+        const slotIdx = info.startSlot + i + 1;
+        let slot = cardsEl.querySelector(`.card[data-slot="${slotIdx}"]`);
+        // ⭐ Bug 修复(2026-05-30 v3):slot 不存在时自动创建(占位空 div)
+        //   原因:e5ff256 让 renderCommunityCardsB9 在 dealtMap sync 设后跳过
+        //         → DOM 里没 .card slot 元素 → targetSlots 空 → 没飞牌动画
+        //   修复:用占位空 div 先建 slot,dealBoardAnimation 末尾自填 innerHTML
+        if (!slot) {
+          slot = document.createElement('div');
+          slot.className = 'card';
+          slot.setAttribute('data-slot', String(slotIdx));
+          slot.style.opacity = '0';   // 飞牌到位前不显示
+          cardsEl.appendChild(slot);
+        }
+        targetSlots.push(slot);
       }
     }
 

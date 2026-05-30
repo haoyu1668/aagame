@@ -3416,9 +3416,10 @@
   .my-cards.muck-back .card .rank,
   .my-cards.muck-back .card .suit { visibility: hidden; }
   /* ⭐ 2026-05-31 延长看牌:settings.delayedRevealEnabled + 没轮到自己 → 显示牌背
-     轮到自己 → 移除 .delayed-back → 显示真牌面 */
+     轮到自己 → 移除 .delayed-back → 显示真牌面
+     颜色跟发牌动画的牌背 + .muck-back 一致(红色),保持统一视觉 */
   .my-cards.delayed-back .card {
-    background: linear-gradient(135deg, #1e88e5, #0d47a1);
+    background: linear-gradient(135deg, #d63232, #8a1818);
     border: 1.5px solid white;
     color: transparent;
   }
@@ -33236,27 +33237,26 @@
         }
 
         // ⭐ 2026-05-31 延长看牌(delayedRevealEnabled):
-        //   N4 设置开启时,玩家手牌默认显示牌背,轮到自己行动时才显示真牌面
-        //   实现:每次 polling 后看 settings + 当前 actor,加/去 .my-cards.delayed-back 类
+        //   用户要求:只在 preflop 第一圈没轮到自己时显示牌背
+        //   从 flop 开始就一直亮牌(玩家已"看过"自己的牌)
+        //   showdown 阶段当然也亮牌
         try {
           var _settings = (currentTableRoom && currentTableRoom.settings) || {};
           var _myCardsEl = document.querySelector('#page-table .my-seat .my-cards');
           if (_settings.delayedRevealEnabled && _myCardsEl && hand) {
-            // 自己当前是否被分到行动权 → 轮到自己亮牌
             var _myUidDR = window.currentUser && Number(window.currentUser.userId);
             var _mySeatDR = Array.isArray(hand.seats)
               ? hand.seats.find(function(s) { return Number(s.userId) === _myUidDR; })
               : null;
             var _myActing = !!(_mySeatDR && Number(hand.currentActionSeat) === Number(_mySeatDR.seatNo));
-            // showdown 阶段统一亮牌(不再盖)
-            var _isShowdown = (hand.state === 'showdown');
-            if (_myActing || _isShowdown) {
-              _myCardsEl.classList.remove('delayed-back');
-            } else {
+            var _isPreflopOnly = (hand.state === 'preflop');
+            // 只 preflop + 没轮到我 → 隐藏;其它任何情况(flop+/showdown/我行动)→ 亮牌
+            if (_isPreflopOnly && !_myActing) {
               _myCardsEl.classList.add('delayed-back');
+            } else {
+              _myCardsEl.classList.remove('delayed-back');
             }
           } else if (_myCardsEl) {
-            // 没开延长看牌或没 hand → 确保没残留 delayed-back 类
             _myCardsEl.classList.remove('delayed-back');
           }
         } catch (drErr) { console.warn('[延长看牌]', drErr); }

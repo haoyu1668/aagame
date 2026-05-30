@@ -36539,6 +36539,14 @@
   // 成员排序:创建者置顶 → 管理员按 adminSetAt 倒序 → 普通玩家按 lastOnline 倒序
   function sortMembers(members) {
     return members.slice().sort((a, b) => {
+      // ⭐ 0. 在线优先(2026-05-30 用户要求):在线 > 离线
+      //    无论 owner / admin / player,在线的都置顶
+      //    例:离线的 owner 仍排在所有在线玩家之后(用户明确要求"显示在线的自动往置顶位置排")
+      const aOnline = !!a.isOnline;
+      const bOnline = !!b.isOnline;
+      if (aOnline && !bOnline) return -1;
+      if (!aOnline && bOnline) return 1;
+      // 同 online 状态后再按原规则
       // 1. 创建者第一
       if (a.owner && !b.owner) return -1;
       if (!a.owner && b.owner) return 1;

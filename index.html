@@ -31178,31 +31178,46 @@
   }
 
   function getPotCenter() {
-    // ⭐ Bug A fix v2(2026-05-30):改用百分比坐标作可靠落点,杜绝飞到屏幕左上角
-    //   旧根因:.pot-label/.pot-chips 真桌时 display:none(仅 hand-active 才显示),
-    //     收筹码瞬间若元素不可见或在重渲间隙,getBoundingClientRect 返 {0,0,0,0}
-    //     或受 zoom+transform 影响 left 为负 → 坐标算成 ~{0,0} → 筹码飞到左上角。
-    //   修复:像牌堆起点一样直接按 page 宽高 + 百分比算,绕开隐藏元素与 zoom 偏差。
-    //     落点取 pageH * 0.30(对齐"底池: 金额"文字行,用户指定)。
+    // ⭐ Bug A fix v3(2026-05-30 第三轮):彻底杜绝飞到屏幕左上角
+    //   之前 v2 改用百分比兜底,但如果 page 当时 display:none(转场瞬间),
+    //   pageRect.width = 0 → pageW = 0 → x = 0 → 筹码仍飞 (0,0) ≈ hamburger 位置。
+    //   修复:任何路径下 if x/y 小于"已知最小合理值"就退到硬编码 195/253。
     const page = document.getElementById('page-table');
-    const pctFallback = (function () {
-      if (!page) return { x: 195, y: 250 };
-      const r = page.getBoundingClientRect();
-      const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
-      const pageW = r.width / zoom;
-      const pageH = r.height / zoom;
-      return { x: pageW * 0.5, y: pageH * 0.30 };
-    })();
-    // DOM 测量仅在"明确有效"(可见 + 坐标非负)时采用,否则一律走百分比
-    const labelEl = document.querySelector('.table-center .pot-label');
-    if (labelEl) {
-      const lr = labelEl.getBoundingClientRect();
-      const pr = page ? page.getBoundingClientRect() : null;
-      if (lr.width > 0 && lr.height > 0 && pr && lr.left >= pr.left && lr.top >= pr.top) {
-        return getRelativeCenter(labelEl);
+    // 硬编码合理默认值(390x844 设计宽高 → 中心约 195, 0.3 * 844 = 253)
+    const HARD_DEFAULT = { x: 195, y: 253 };
+
+    function isReasonable(pos) {
+      return pos && pos.x > 60 && pos.y > 60 && isFinite(pos.x) && isFinite(pos.y);
+    }
+
+    // 1. 试 .pot-label DOM 测量(最准,若可见)
+    if (page) {
+      const labelEl = document.querySelector('.table-center .pot-label');
+      if (labelEl) {
+        const lr = labelEl.getBoundingClientRect();
+        const pr = page.getBoundingClientRect();
+        if (lr.width > 0 && lr.height > 0 && pr.width > 0 && lr.left >= pr.left && lr.top >= pr.top) {
+          const m = getRelativeCenter(labelEl);
+          if (isReasonable(m)) return m;
+        }
       }
     }
-    return pctFallback;
+
+    // 2. 百分比兜底:基于 page-table 宽高 * 系数
+    if (page) {
+      const r = page.getBoundingClientRect();
+      if (r.width > 100 && r.height > 100) {
+        const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
+        const pageW = r.width / zoom;
+        const pageH = r.height / zoom;
+        const pctPos = { x: pageW * 0.5, y: pageH * 0.30 };
+        if (isReasonable(pctPos)) return pctPos;
+      }
+    }
+
+    // 3. 终极硬编码 — 永远不返回 (0,0) / 左上角
+    console.warn('[getPotCenter] 所有 DOM 测量+百分比都失败,用硬编码 (195, 253)');
+    return HARD_DEFAULT;
   }
 
   // ⭐ Task 3.1(2026-05-29):下注 / 跟注 / 加注 / All-in 时,筹码从座位头像飞向自己 .seat-bet

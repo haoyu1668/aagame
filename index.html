@@ -32629,10 +32629,22 @@
     // 成员数显示:真实数据 + 5000 虚高(营销/社交证明,2026-05-30 用户指定)
     //   例:真实 6 人 → 显示 5006
     //   过滤黑名单玩家
-    const realCount = clubMembersData.filter(m => !m.blacklist).length;
     const _MEMBER_VANITY_OFFSET = 5000;
-    const _baseCount = realCount || club.members || 0;
-    document.getElementById('lobby-members').textContent = (_baseCount + _MEMBER_VANITY_OFFSET);
+    function _refreshMembersBtn() {
+      const realCount = clubMembersData.filter(m => !m.blacklist).length;
+      const _baseCount = realCount || club.members || 0;
+      document.getElementById('lobby-members').textContent = (_baseCount + _MEMBER_VANITY_OFFSET);
+    }
+    _refreshMembersBtn();   // 用本地 cache 先显示
+    // ⭐ Bug 修复(2026-05-30):lobby 也异步拉真后端成员数,避免 clubMembersData 只有 1 项
+    //   原 bug:openClubLobby 不调 fetchClubMembersAndRefresh,realCount 永远是 1
+    //     → 即使俱乐部有 6 人,按钮也只显示 5001
+    //   修复:openClubLobby 时 fire-and-forget 拉真成员数据,完成后刷新按钮
+    if (typeof fetchClubMembersAndRefresh === 'function' && window.apiClient && window.tokenStore && window.tokenStore.get()) {
+      fetchClubMembersAndRefresh(clubId).then(function() {
+        _refreshMembersBtn();   // 真数据回来后再刷一次
+      }).catch(function(err) { console.warn('[成员数拉取失败]', err); });
+    }
     document.getElementById('lobby-usdt').textContent = userPlatformBalance;
 
     // ⭐ 2026-05-29 fix:大厅顶部"记分牌"接通真后端钱包余额

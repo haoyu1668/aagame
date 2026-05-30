@@ -16852,10 +16852,19 @@
         const buyinBb = bbValue > 0 ? Math.round(amount / bbValue) : 0;
         showToast('已入座 ' + buyinBb + ' BB,等待新一手开始');
       }
-      // 入局方式选择(延迟 0.8s 让入座动画播完)
-      setTimeout(() => {
-        if (typeof openEntryModal === 'function') openEntryModal('my');
-      }, 800);
+      // ⭐ 2026-05-30 用户要求:不再弹"入局方式"窗,默认等大盲(后端入座时已设 waitbb=true)
+      //   原:0.8s 后 openEntryModal('my') 弹窗让用户选 等待大盲 / 立即下注大盲
+      //   新:直接默认等大盲,跳过弹窗 — 用户想立即入局可等下一手大盲位轮到
+      //   保留 openEntryModal 函数(以后想加"立即下注"入口可重启用)
+      try {
+        if (currentTableRoom && currentTableRoom.occupiedSeats && currentTableRoom.occupiedSeats.my) {
+          var _myPlayer = currentTableRoom.occupiedSeats.my;
+          _myPlayer.waitbb = true;
+          _myPlayer.action = 'waitbb';
+          _myPlayer.actionLabel = '等大盲';
+          if (typeof renderSeats === 'function') renderSeats(currentTableRoom);
+        }
+      } catch (defaultEntryErr) { console.warn('[默认等大盲]', defaultEntryErr); }
     });
   }
 

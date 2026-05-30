@@ -3405,15 +3405,13 @@
   .my-cards.muck-back .card .rank,
   .my-cards.muck-back .card .suit { visibility: hidden; }
 
-  /* ⭐ 2026-05-30:延迟看牌 — 点击 my-cards 切换展示/盖牌
-     默认(无 .show-cards 类)= 盖牌,其他玩家看不到
-     点击加 .show-cards 类 = 红色描边 = 展示给其他玩家 */
-  .my-cards.can-toggle-show .card {
-    cursor: pointer;
-    transition: box-shadow 0.18s ease;
-  }
-  .my-cards.show-cards .card {
-    box-shadow: 0 0 0 2.5px #ff3030, 0 0 10px rgba(255, 48, 48, 0.55);
+  /* ⭐ 2026-05-30:摊牌时点手牌"展示"——红色描边(亮边)= 结算时亮给别人看 */
+  .my-cards.reveal-selectable .card { cursor: pointer; }
+  .my-cards.reveal-armed .card {
+    outline: 2px solid #ff3b3b;
+    outline-offset: 1px;
+    box-shadow: 0 0 10px 2px rgba(255,59,59,0.7);
+    border-radius: 5px;
   }
   .card {
     width: 44px;
@@ -30659,19 +30657,59 @@
   let showMuckTimer = null;
   let showMuckTimerSecs = 8;
 
+  // ⭐ 2026-05-30 改版:去掉"展示底牌?"模态弹窗,改成"点手牌亮边 = 展示"
+  //   交互:摊牌且自己 not-folded → 手牌进入可点击态(.reveal-selectable)
+  //     · 点一下 → 红色描边(.reveal-armed) + _b9RevealArmed=true(标记"要展示")
+  //     · 再点 → 取消描边 + _b9RevealArmed=false
+  //     · 不点 → 默认不展示(结算时自然 muck)
+  //   关键:点击只标记意图,不立即发后端;结算时 finalizeShowMuck 才按 armed 发 reveal。
   function openShowMuckModal() {
+    const myCardsEl = document.querySelector('.my-seat .my-cards');
+    if (!myCardsEl) return;
+    window._b9RevealArmed = false;
+    myCardsEl.classList.add('reveal-selectable');
+    myCardsEl.classList.remove('reveal-armed', 'muck-back');
+    if (window._b9RevealClickHandler) {
+      myCardsEl.removeEventListener('click', window._b9RevealClickHandler);
+    }
+    window._b9RevealClickHandler = function () {
+      window._b9RevealArmed = !window._b9RevealArmed;
+      myCardsEl.classList.toggle('reveal-armed', window._b9RevealArmed);
+      if (typeof showToast === 'function') {
+        showToast(window._b9RevealArmed ? '本手将展示底牌' : '本手不展示');
+      }
+    };
+    myCardsEl.addEventListener('click', window._b9RevealClickHandler);
+  }
+
+  // 结算时调用:按 armed 状态发后端 reveal + 收尾视觉,并解除可点击态
+  function finalizeShowMuck() {
+    const myCardsEl = document.querySelector('.my-seat .my-cards');
+    const armed = !!window._b9RevealArmed;
+    if (myCardsEl) {
+      myCardsEl.classList.remove('reveal-selectable');
+      if (window._b9RevealClickHandler) {
+        myCardsEl.removeEventListener('click', window._b9RevealClickHandler);
+        window._b9RevealClickHandler = null;
+      }
+    }
+    chooseShowMuck(armed ? 'show' : 'muck');
+    window._b9RevealArmed = false;
+  }
+  window.finalizeShowMuck = finalizeShowMuck;
+
+  // 旧弹窗逻辑保留(_legacyOpenShowMuckModal),备用 / 回退用,不删
+  function _legacyOpenShowMuckModal() {
     const modal = document.getElementById('show-muck-modal');
     if (!modal) return;
     modal.classList.add('show');
     showMuckTimerSecs = 8;
     updateShowMuckTimer();
-    // 启动倒计时
     clearInterval(showMuckTimer);
     showMuckTimer = setInterval(() => {
       showMuckTimerSecs--;
       updateShowMuckTimer();
       if (showMuckTimerSecs <= 0) {
-        // 超时默认 Muck
         chooseShowMuck('muck');
       }
     }, 1000);
@@ -31139,54 +31177,32 @@
     return chip;
   }
 
-  // 找到底池中心点 — 用户钉死的落点是"底池: N"文字行
-  // ⭐ Bug 2 真凶根除(2026-05-30 第二轮):前几版用 .pot-label 失效
-  //   原因:.pot-label 在某些 race 下 getBoundingClientRect 返 0,0(可能 display:none 或未挂载)
-  //         → 退回 .table-center 整个容器中心 → 几何中心偏下,但 transform:translateX(-50%) 让 left=0
-  //         → 用户看见筹码飞到屏幕左上角(hamburger 附近)
-  //   修复:总是用 .table-center 的 left+rect.width/2 作 X(正确居中),
-  //         Y 用 rect.top + 30px(.table-center 内 .pot-chips 高 24 + 6 间距,
-  //         pot-label 在那下面约 30px 处 — 用户期望落点)
-  //         如果 .table-center 都失效,降级到 page 几何中心(永远不是左上角)
   function getPotCenter() {
+    // ⭐ Bug A fix v2(2026-05-30):改用百分比坐标作可靠落点,杜绝飞到屏幕左上角
+    //   旧根因:.pot-label/.pot-chips 真桌时 display:none(仅 hand-active 才显示),
+    //     收筹码瞬间若元素不可见或在重渲间隙,getBoundingClientRect 返 {0,0,0,0}
+    //     或受 zoom+transform 影响 left 为负 → 坐标算成 ~{0,0} → 筹码飞到左上角。
+    //   修复:像牌堆起点一样直接按 page 宽高 + 百分比算,绕开隐藏元素与 zoom 偏差。
+    //     落点取 pageH * 0.30(对齐"底池: 金额"文字行,用户指定)。
     const page = document.getElementById('page-table');
-    const pageRect = page && page.getBoundingClientRect();
-    const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
-
-    // 1. 首选 .pot-label(若有 size,直接用其中心)
-    const label = document.querySelector('.table-center .pot-label');
-    if (label && pageRect) {
-      const lr = label.getBoundingClientRect();
-      if (lr.width > 0 && lr.height > 0) {
-        return {
-          x: (lr.left - pageRect.left + lr.width / 2) / zoom,
-          y: (lr.top  - pageRect.top  + lr.height / 2) / zoom
-        };
+    const pctFallback = (function () {
+      if (!page) return { x: 195, y: 250 };
+      const r = page.getBoundingClientRect();
+      const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
+      const pageW = r.width / zoom;
+      const pageH = r.height / zoom;
+      return { x: pageW * 0.5, y: pageH * 0.30 };
+    })();
+    // DOM 测量仅在"明确有效"(可见 + 坐标非负)时采用,否则一律走百分比
+    const labelEl = document.querySelector('.table-center .pot-label');
+    if (labelEl) {
+      const lr = labelEl.getBoundingClientRect();
+      const pr = page ? page.getBoundingClientRect() : null;
+      if (lr.width > 0 && lr.height > 0 && pr && lr.left >= pr.left && lr.top >= pr.top) {
+        return getRelativeCenter(labelEl);
       }
     }
-
-    // 2. 次选 .table-center + Y 固定偏移到 pot-label 位置
-    const center = document.querySelector('.table-center');
-    if (center && pageRect) {
-      const cr = center.getBoundingClientRect();
-      if (cr.width > 0) {
-        // .table-center 内布局: pot-chips (24px) + margin (6px) + pot-label
-        // pot-label 中心 ≈ table-center top + 24 + 6 + 7 ≈ 37px
-        return {
-          x: (cr.left - pageRect.left + cr.width / 2) / zoom,
-          y: (cr.top  - pageRect.top  + 37) / zoom
-        };
-      }
-    }
-
-    // 3. 终极兜底:用 page 几何中心(永远不是左上角)
-    if (pageRect) {
-      return {
-        x: (pageRect.width / 2) / zoom,
-        y: (pageRect.height * 0.3) / zoom
-      };
-    }
-    return { x: 195, y: 253 };
+    return pctFallback;
   }
 
   // ⭐ Task 3.1(2026-05-29):下注 / 跟注 / 加注 / All-in 时,筹码从座位头像飞向自己 .seat-bet
@@ -32721,6 +32737,10 @@
         var prevHand = window._b9PrevHand;
         if (prevHand && !hand) {
           // 本手结束
+          // ⭐ 2026-05-30:结算时按"手牌是否亮边"决定展示/盖牌(等结算才亮给别人)
+          if (typeof window.finalizeShowMuck === 'function' && document.querySelector('.my-seat .my-cards.reveal-selectable')) {
+            window.finalizeShowMuck();
+          }
           if (Array.isArray(prevHand.seats)) {
             var myUidEnd = window.currentUser && Number(window.currentUser.userId);
             var notFolded = prevHand.seats.filter(function(s) { return !s.folded; });
@@ -32868,12 +32888,10 @@
             }).join(' / ');
             if (typeof showToast === 'function') showToast(winnerLabels + ' 赢');
           }
-          // ⭐ 用户改需求(2026-05-30):展示底牌不弹窗
-          //   改成点击手牌切换展示/盖牌:
-          //   - 默认(不点)= 盖牌 muck,其他玩家看不到
-          //   - 点击 my-cards = 加红色描边 .show-cards 类 = 展示 show,POST reveal
-          //   - 再点一次 = 去掉描边 = 切回 muck,POST reveal show=false
-          //   只在 settings.delayedRevealEnabled=true 且我在 showdown 时启用
+          // ⭐ B11 延迟看牌(2026-05-30 工单版):settings.delayedRevealEnabled 时启用亮边交互
+          //   openShowMuckModal 现在不是弹窗 — 它给 my-cards 加 .reveal-selectable
+          //   玩家点击切换 .reveal-armed(红边) + _b9RevealArmed 标志
+          //   本手结算时 finalizeShowMuck 才按 armed POST 后端 reveal
           var settings = currentTableRoom && currentTableRoom.settings;
           if (settings && settings.delayedRevealEnabled) {
             var myUid = window.currentUser && Number(window.currentUser.userId);
@@ -32881,26 +32899,8 @@
               var sd_seat = (hand.seats || []).find(function(hs) { return hs.seatNo === p.seatNo; });
               return sd_seat && Number(sd_seat.userId) === myUid;
             });
-            if (iAmInShowdown) {
-              // 启用 my-cards 点击切换(.can-toggle-show 类标记 + click handler)
-              var myCardsEl = document.querySelector('#page-table .my-seat .my-cards');
-              if (myCardsEl && !myCardsEl.dataset.toggleHooked) {
-                myCardsEl.dataset.toggleHooked = '1';
-                myCardsEl.classList.add('can-toggle-show');
-                myCardsEl.addEventListener('click', function() {
-                  var willShow = !myCardsEl.classList.contains('show-cards');
-                  myCardsEl.classList.toggle('show-cards', willShow);
-                  // POST 真后端
-                  if (window._b9CurrentHand && window._b9CurrentHand.id && window.apiClient) {
-                    window.apiClient.post('/api/hands/' + window._b9CurrentHand.id + '/reveal', { show: willShow })
-                      .then(function(r) { console.log('[reveal toggle]', willShow ? 'show' : 'muck', r); })
-                      .catch(function(e) { console.warn('[reveal toggle] 失败', e.message); });
-                  }
-                  if (typeof showToast === 'function') {
-                    showToast(willShow ? '已展示底牌(其他玩家可见)' : '已盖牌');
-                  }
-                });
-              }
+            if (iAmInShowdown && typeof window.openShowMuckModal === 'function') {
+              window.openShowMuckModal();
             }
           }
         }
@@ -33305,14 +33305,35 @@
   function renderCommunityCardsB9(cards) {
     var ccEl = document.getElementById('community-cards');
     if (!ccEl) return;
+    // ⭐ Bug fix v3(2026-05-30 工单):根治翻牌双发 — 改用"持久标志"守卫,而非 3 秒动画锁
+    //   旧漏洞:守卫只看 _b9DealBoardActiveStages(3 秒动画锁),但轮询是 5 秒一次。
+    //     第 3 秒锁解 → 第 5 秒轮询守卫失效 → innerHTML 重写一次 → 牌二次淡入 = 双发。
+    //   根治:只要当前手当前张数对应的街已被飞牌动画处理过(_b9DealtStreets 记录),
+    //     就永不再 innerHTML 重写。飞牌动画写进 slot 的牌即最终渲染,轮询不再碰它。
+    //   1) 动画正在跑 → 直接跳过(保留)
+    if (window._b9DealBoardActiveStages) {
+      var _anyAnimating = Object.keys(window._b9DealBoardActiveStages).some(function (k) {
+        return window._b9DealBoardActiveStages[k];
+      });
+      if (_anyAnimating) return;
+    }
+    //   2) 这条街已被飞牌动画飞过(持久) → 永不重写,杜绝 5 秒轮询二次淡入
+    try {
+      var _hid = (window._b9CurrentHand && window._b9CurrentHand.id) ||
+                 (window._b9LastSeenHandId);
+      var _dealt = _hid && window._b9DealtStreets && window._b9DealtStreets[_hid];
+      if (_dealt) {
+        var _n = Array.isArray(cards) ? cards.length : 0;
+        var _streetByCount = (_n >= 5) ? 'river' : (_n === 4) ? 'turn' : (_n === 3) ? 'flop' : null;
+        if (_streetByCount && _dealt[_streetByCount]) {
+          return;   // 该街动画已飞过 → slot 已是最终牌,轮询不再重渲
+        }
+      }
+    } catch (e) { /* 守卫失败则继续走原渲染,不致命 */ }
     if (cards.length === 0) {
       if (ccEl.innerHTML) ccEl.innerHTML = '';
       return;
     }
-    // ⭐ Bug 3 真因 v2(2026-05-30):防 polling 每 2 秒重渲触发 360ms CSS 淡入再播
-    //   原 bug:每次 polling 都 innerHTML 全部 replace,新 DOM 元素 opacity:0 → 触发 CSS transition
-    //   → 用户看到"翻牌动画播完,2 秒后又一次淡入" → 误认为"发牌发了两次"
-    //   修复:对比 ccEl 里现有 .card 元素跟 cards 数组是否完全一致 → 一致就直接 return
     var existing = ccEl.querySelectorAll('.card');
     if (existing.length === cards.length) {
       var allSame = true;

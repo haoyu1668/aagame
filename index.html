@@ -3294,15 +3294,8 @@
   }
   .b9-start-hand-btn:active { transform: scale(0.97); }
   /* (旧 .dealer-button.b9-marker 已删除 — B9 改调 demo 现成 setDealer() 复用 .dealer-mark CSS) */
-  /* 真桌中央"等待开局"占位文字(JS 不动 DOM,纯 CSS 用 ::before 加上) */
-  body.on-real-table .table-center::before {
-    content: '等待开局...';
-    display: block;
-    text-align: center;
-    color: rgba(255,255,255,0.4);
-    font-size: 14px;
-    padding: 12px 0 4px;
-  }
+  /* ⭐ 2026-05-31:用户要求删掉"等待开局..."占位文字(跟 N4 设置展示重叠)
+     原 CSS ::before 已删,JS 端的 b9-wait-hint 创建块也同步删了 */
   .dev-quick-demo-btn .dqd-icon {
     font-size: 10px;
     letter-spacing: -1px;
@@ -33660,28 +33653,9 @@
         }
       }
 
-      // ⭐ 2026-05-29 UX:中央显示"等待 X/Y 人开局"提示
-      //   占用 .table-center::before 位置(原 CSS 已有"等待开局..."占位,这里覆盖成具体人数)
-      var center = document.querySelector('#page-table .table-center');
-      if (center && occupied && tableSettings) {
-        var occCountWait = Object.keys(occupied).length;
-        // ⭐ 2026-05-31:用 effectiveMin 跟 auto-start 触发条件一致
-        var configuredMinWait = Number(tableSettings.autoStartMinPlayers || 2);
-        var minPlayersWait = window._b9TableHadHand ? 2 : configuredMinWait;
-        var oldWait = document.getElementById('b9-wait-hint');
-        if (oldWait) oldWait.remove();
-        var waitDiv = document.createElement('div');
-        waitDiv.id = 'b9-wait-hint';
-        waitDiv.style.cssText = 'position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);text-align:center;color:rgba(255,255,255,0.55);font-size:13px;pointer-events:none;z-index:3;';
-        if (occCountWait < minPlayersWait) {
-          waitDiv.innerHTML = '等待玩家入座<br><span style="font-size:18px;color:var(--green-main);font-weight:700;">' + occCountWait + ' / ' + minPlayersWait + '</span>';
-        } else if (window._b9AutoStartFired) {
-          waitDiv.innerHTML = '准备开局...<span style="color:var(--green-main);">2 秒后开始</span>';
-        } else {
-          waitDiv.innerHTML = '等待开局...';
-        }
-        center.appendChild(waitDiv);
-      }
+      // ⭐ 2026-05-31:用户要求删掉"等待玩家入座 X/Y"和"等待开局..."文字
+      //   原 task #26 加的中央提示跟 N4 设置(盲注/止损/抽水)重叠,UI 不好看
+      //   保留 b9-wait-hint 清理逻辑(下方 line ~33693)防止旧 DOM 残留
       return;
     }
     // 有牌局 → 重置自动开局 flag,下次 hand 结束又可触发

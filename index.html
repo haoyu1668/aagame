@@ -30826,6 +30826,11 @@
   function createFlyingCard(type, card, startX, startY, endX, endY, doFlip, onArrive) {
     const page = document.getElementById('page-table');
     if (!page) return;
+    // ⭐ 诊断:打印飞牌起止 + 牌面
+    var cardDesc = card ? (card.rank + card.suit) : '🔥burn';
+    console.log('[🃏飞牌' + (type === 'hole' ? '底' : '公') + '] ' + cardDesc + ' start=(' +
+                Math.round(startX) + ',' + Math.round(startY) + ') end=(' +
+                Math.round(endX) + ',' + Math.round(endY) + ')');
     const fc = document.createElement('div');
     fc.className = 'flying-card target-' + type;
     fc.innerHTML = `
@@ -31170,6 +31175,9 @@
   function createFlyingChip(startX, startY, endX, endY, amount, onArrive) {
     const page = document.getElementById('page-table');
     if (!page) return null;
+    // ⭐ 诊断:打印起止坐标
+    console.log('[💰飞筹码] start=(' + Math.round(startX) + ',' + Math.round(startY) +
+                ') end=(' + Math.round(endX) + ',' + Math.round(endY) + ') amount=' + (amount || '-'));
     const chip = document.createElement('div');
     chip.className = 'flying-chip';
     chip.innerHTML = amount ? `<div class="fc-amount">+${amount}</div>` : '';
@@ -31215,7 +31223,10 @@
         const pr = page.getBoundingClientRect();
         if (lr.width > 0 && lr.height > 0 && pr.width > 0 && lr.left >= pr.left && lr.top >= pr.top) {
           const m = getRelativeCenter(labelEl);
-          if (isReasonable(m)) return m;
+          if (isReasonable(m)) {
+            console.log('[🎯底池中心] DOM=.pot-label → (' + Math.round(m.x) + ',' + Math.round(m.y) + ')');
+            return m;
+          }
         }
       }
     }
@@ -31228,7 +31239,10 @@
         const pageW = r.width / zoom;
         const pageH = r.height / zoom;
         const pctPos = { x: pageW * 0.5, y: pageH * 0.30 };
-        if (isReasonable(pctPos)) return pctPos;
+        if (isReasonable(pctPos)) {
+          console.log('[🎯底池中心] 百分比兜底 → (' + Math.round(pctPos.x) + ',' + Math.round(pctPos.y) + ')');
+          return pctPos;
+        }
       }
     }
 
@@ -39990,10 +40004,11 @@
     }
   })();
 
-  // ⭐ 2026-05-30:全屏诊断悬浮日志(透明 / 不阻挡操作)
+  // ⭐ 2026-05-30 v2:全屏诊断悬浮日志(可滑动 + 可复制)
   //   屏幕右上半透明绿字条,实时显示 console.log/warn/error
-  //   pointer-events:none → 不影响游戏操作
-  //   双击标题"💬"切换显示/收起
+  //   header(顶部条)pointer-events:auto → 可点按钮 / 双击折叠
+  //   body 可滑动 + 可选中复制(pointer-events:auto)
+  //   按钮:📋 复制 / 🗑️ 清空 / 双击 header 收起
   //   稳定后可整段删除
   (function setupDiagOverlay() {
     'use strict';
@@ -40005,36 +40020,81 @@
         'position:fixed',
         'top:0',
         'right:0',
-        'width:55vw',
-        'max-height:50vh',
-        'background:rgba(0,0,0,0.55)',
+        'width:60vw',
+        'max-height:60vh',
+        'background:rgba(0,0,0,0.65)',
         'color:#7fff7f',
         'font:10px/1.25 monospace',
-        'padding:3px 5px',
-        'overflow-y:auto',
-        'z-index:2147483647',     // 顶层
-        'pointer-events:none',    // 不挡交互
+        'padding:0',
+        'z-index:2147483647',
         'word-break:break-all',
-        'border-bottom-left-radius:6px'
+        'border-bottom-left-radius:6px',
+        'display:flex',
+        'flex-direction:column',
+        'pointer-events:none'         // 整体不挡;子元素 header/body 各自打开
       ].join(';');
-      // 顶部小标题(可双击切换收起)
+      // 顶部条(可点 / 可双击)
       var header = document.createElement('div');
-      header.textContent = '💬 LOG (双击切换)';
-      header.style.cssText = 'color:#ffd54a;border-bottom:1px solid #555;padding:1px 0;margin-bottom:2px;font-weight:bold;pointer-events:auto;cursor:pointer';
+      header.style.cssText = [
+        'color:#ffd54a',
+        'border-bottom:1px solid #555',
+        'padding:3px 5px',
+        'font-weight:bold',
+        'pointer-events:auto',
+        'cursor:pointer',
+        'display:flex',
+        'gap:6px',
+        'align-items:center',
+        'background:rgba(0,0,0,0.85)',
+        'flex-shrink:0'
+      ].join(';');
+      var titleSpan = document.createElement('span');
+      titleSpan.textContent = '💬 LOG';
+      titleSpan.style.flex = '1';
+      var copyBtn = document.createElement('button');
+      copyBtn.textContent = '📋复制';
+      copyBtn.style.cssText = 'background:#4a8;color:white;border:none;border-radius:3px;padding:2px 5px;font:10px monospace;cursor:pointer';
+      var clearBtn = document.createElement('button');
+      clearBtn.textContent = '🗑️清';
+      clearBtn.style.cssText = 'background:#a44;color:white;border:none;border-radius:3px;padding:2px 5px;font:10px monospace;cursor:pointer';
+      header.appendChild(titleSpan);
+      header.appendChild(copyBtn);
+      header.appendChild(clearBtn);
+
+      // body 可滑动 + 可选中复制
       var body = document.createElement('div');
       body.id = 'b9-diag-body';
+      body.style.cssText = [
+        'flex:1',
+        'overflow-y:auto',
+        'overflow-x:hidden',
+        '-webkit-overflow-scrolling:touch',
+        'pointer-events:auto',
+        'user-select:text',
+        '-webkit-user-select:text',
+        'padding:3px 5px'
+      ].join(';');
       overlay.appendChild(header);
       overlay.appendChild(body);
       document.body.appendChild(overlay);
+
+      // 双击 header 折叠
       var collapsed = false;
       header.addEventListener('dblclick', function() {
         collapsed = !collapsed;
         body.style.display = collapsed ? 'none' : '';
-        overlay.style.maxHeight = collapsed ? '20px' : '50vh';
+        overlay.style.maxHeight = collapsed ? '26px' : '60vh';
       });
 
-      var MAX = 60;
+      var MAX = 500;   // 提升到 500 行,够一整手
       var entries = [];
+      var autoScroll = true;
+      // 用户主动滑离底部 → 暂停 autoScroll;滑回底部 → 恢复
+      body.addEventListener('scroll', function() {
+        var atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
+        autoScroll = atBottom;
+      });
+
       function add(level, args) {
         try {
           var msg = Array.prototype.map.call(args, function(a) {
@@ -40048,27 +40108,71 @@
                     : (level === 'info')  ? '#80d8ff'
                     : '#7fff7f';
           var time = (new Date()).toLocaleTimeString().split(' ')[0] || '';
-          entries.push({ msg: msg.slice(0, 250), color: color, time: time });
+          entries.push({ msg: msg.slice(0, 400), color: color, time: time });
           if (entries.length > MAX) entries.shift();
           body.innerHTML = entries.map(function(e) {
             return '<div style="color:' + e.color + '"><span style="color:#888">' + e.time + '</span> ' +
                    e.msg.replace(/</g, '&lt;') + '</div>';
           }).join('');
-          body.scrollTop = body.scrollHeight;
+          if (autoScroll) body.scrollTop = body.scrollHeight;
         } catch (err) { /* swallow */ }
       }
+
+      // 复制全部日志到剪贴板
+      copyBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var text = entries.map(function(en) { return '[' + en.time + '] ' + en.msg; }).join('\n');
+        var done = function(ok) {
+          var orig = copyBtn.textContent;
+          copyBtn.textContent = ok ? '✅已复制' : '❌失败';
+          setTimeout(function() { copyBtn.textContent = orig; }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function() { done(true); }).catch(function() {
+            // 兜底:textarea + execCommand
+            try {
+              var ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.position = 'fixed'; ta.style.top = '-9999px';
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              ta.remove();
+              done(true);
+            } catch (err) { done(false); }
+          });
+        } else {
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed'; ta.style.top = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+            done(true);
+          } catch (err) { done(false); }
+        }
+      });
+
+      // 清空日志
+      clearBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        entries.length = 0;
+        body.innerHTML = '';
+      });
+
       ['log', 'warn', 'error', 'info'].forEach(function(level) {
         var orig = console[level].bind(console);
         console[level] = function() { add(level, arguments); orig.apply(console, arguments); };
       });
-      // 捕全局未捕获错误
       window.addEventListener('error', function(e) {
         add('error', ['[uncaught] ' + e.message + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?')]);
       });
       window.addEventListener('unhandledrejection', function(e) {
         add('error', ['[unhandled rejection] ' + (e.reason && e.reason.message || e.reason)]);
       });
-      console.log('[diag overlay] ready');
+      console.log('[diag overlay v2] ready,可滑动 + 复制 + 清空 + 双击折叠');
     }
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', init);

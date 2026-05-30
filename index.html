@@ -33840,7 +33840,8 @@
           blacklist: !!m.blacklist,
           avatar: m.photoUrl || null,
           isOnline: !!m.isOnline,                                     // ⭐ 2026-05-30:真后端 isOnline(60s 内活动 = 在线)
-          lastOnline: Date.now(),                                     // 兼容旧 mock
+          lastActiveAt: m.lastActiveAt ? new Date(m.lastActiveAt).getTime() : null,   // ⭐ 真后端时间戳(用于"X分钟前"文案)
+          lastOnline: m.lastActiveAt ? new Date(m.lastActiveAt).getTime() : Date.now(), // 兼容旧逻辑 + 排序
           joinDate: (function(iso) {
             if (!iso) return '';
             var d = new Date(iso);
@@ -33937,10 +33938,9 @@
     const sorted = sortMembers(filtered);
     list.innerHTML = sorted.map(m => {
       const isMe = m.uid === currentUser.uid;
-      // ⭐ 2026-05-30:优先用真后端 isOnline,fallback 到旧 lastOnline 时间戳
-      const onlineInfo = (typeof m.isOnline === 'boolean')
-        ? { text: m.isOnline ? '在线' : '离线', online: m.isOnline }
-        : formatOnlineStatus(m.lastOnline);
+      // ⭐ 2026-05-30:用 lastActiveAt(真后端时间戳)走细化档位
+      //   在线/N分钟前/N小时前/N天前/N周前/N个月前
+      const onlineInfo = formatOnlineStatus(m.lastActiveAt || m.lastOnline);
 
       // 划币按钮显示规则:
       // 当前阶段(演示):所有成员都显示划币按钮
@@ -35984,10 +35984,8 @@
     filtered = sortMembers(filtered);
 
     list.innerHTML = filtered.map(m => {
-      // ⭐ 2026-05-30:优先用真后端 isOnline,fallback 到旧 lastOnline 时间戳
-      const onlineInfo = (typeof m.isOnline === 'boolean')
-        ? { text: m.isOnline ? '在线' : '离线', online: m.isOnline }
-        : formatOnlineStatus(m.lastOnline);
+      // ⭐ 2026-05-30:用 lastActiveAt 走细化档位(在线/X分钟前/X小时前/...)
+      const onlineInfo = formatOnlineStatus(m.lastActiveAt || m.lastOnline);
       const statusHtml = `<span class="cmm-status ${onlineInfo.online ? 'online' : ''}">${onlineInfo.text}</span>`;
 
       // owner 徽章
@@ -36523,17 +36521,20 @@
   }
 
   // 按 adminType 应用默认值到 member.permissions(如未设置)
-  // 在线状态文案(5档,基于 lastOnline 时间戳)
-  // 等后端:用 server 时间替代 Date.now()
+  // 在线状态文案(细化档位)— 基于 last_active_at 时间戳
+  // ⭐ 2026-05-30 用户要求:别外的号关闭小程序后应显示"X 分钟前"而不只是"离线"
   function formatOnlineStatus(lastOnline) {
     if (!lastOnline) return { text: '-', online: false };
     const diff = Date.now() - lastOnline;
-    const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * HOUR, MONTH = 30 * DAY;
-    if (diff <= 5 * MIN)  return { text: '在线',     online: true };
-    if (diff <= HOUR)     return { text: '5分钟前',  online: false };
-    if (diff <= DAY)      return { text: '1小时前',  online: false };
-    if (diff <= MONTH)    return { text: '1天前',    online: false };
-    return                        { text: '1个月前', online: false };
+    const SEC = 1000, MIN = 60 * SEC, HOUR = 60 * MIN, DAY = 24 * HOUR, MONTH = 30 * DAY;
+    if (diff <= 60 * SEC)  return { text: '在线',          online: true  };
+    if (diff <  5 * MIN)   return { text: Math.max(1, Math.floor(diff / MIN)) + '分钟前在线', online: false };
+    if (diff < 30 * MIN)   return { text: Math.floor(diff / MIN) + '分钟前在线', online: false };
+    if (diff < HOUR)       return { text: '半小时前在线',  online: false };
+    if (diff < DAY)        return { text: Math.floor(diff / HOUR) + '小时前在线', online: false };
+    if (diff < 7 * DAY)    return { text: Math.floor(diff / DAY) + '天前在线',  online: false };
+    if (diff < MONTH)      return { text: Math.floor(diff / (7 * DAY)) + '周前在线', online: false };
+    return                          { text: Math.floor(diff / MONTH) + '个月前在线', online: false };
   }
 
   // 成员排序:创建者置顶 → 管理员按 adminSetAt 倒序 → 普通玩家按 lastOnline 倒序

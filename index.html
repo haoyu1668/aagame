@@ -32599,10 +32599,13 @@
     // (业务方案B:不再有俱乐部币,所有俱乐部共用平台记分牌余额)
     document.getElementById('lobby-name').textContent = club.name;
     document.getElementById('lobby-id').textContent = club.id;
-    // 成员数显示真实数据(过滤黑名单)
-    // 等后端:按 clubId 取对应俱乐部的成员数
+    // 成员数显示:真实数据 + 5000 虚高(营销/社交证明,2026-05-30 用户指定)
+    //   例:真实 6 人 → 显示 5006
+    //   过滤黑名单玩家
     const realCount = clubMembersData.filter(m => !m.blacklist).length;
-    document.getElementById('lobby-members').textContent = realCount || club.members || 0;
+    const _MEMBER_VANITY_OFFSET = 5000;
+    const _baseCount = realCount || club.members || 0;
+    document.getElementById('lobby-members').textContent = (_baseCount + _MEMBER_VANITY_OFFSET);
     document.getElementById('lobby-usdt').textContent = userPlatformBalance;
 
     // ⭐ 2026-05-29 fix:大厅顶部"记分牌"接通真后端钱包余额

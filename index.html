@@ -32985,8 +32985,25 @@
             }
           });
 
-          // 需要补播的街:从 highestDealtIdx+1 到 targetIdx
-          if (targetIdx > highestDealtIdx) {
+          // ⭐ Bug 修复(2026-05-30):中途进入牌桌时,跳过补播动画 — 直接 static 渲染最终公牌
+          //   原 bug:中途进入时,街判定连续 dispatch flop + turn(可能还有 river)动画
+          //     用户视觉看到"burn + 3 张 → burn + 1 张" → 像翻 2 次牌
+          //   德州扑克规范:中途进入应直接静态显示当前公牌,不播追赶动画
+          //   只在 fresh page entry + 需要补 ≥ 1 街时跳过;新一手开始(targetIdx=0)正常播
+          var isFreshMidHandEntry = (window._b9FreshPageEntry === true) && (targetIdx > highestDealtIdx) && (targetIdx >= 1);
+          if (isFreshMidHandEntry) {
+            console.log('[B9 街判定] 中途进入,跳过补播动画,static 渲染到 ' + targetStreet + '(ccCount=' + ccCount + ')');
+            // static 渲染所有公牌
+            if (typeof window.renderCommunityCardsB9 === 'function') {
+              window.renderCommunityCardsB9(hand.communityCards || []);
+            }
+            if (typeof setStage === 'function') setStage(targetStreet);
+            // 标记所有已到达的街"已飞过"(防后续 polling 重渲)
+            ['flop','turn','river'].forEach(function(s) {
+              if (STREETS_ORDER.indexOf(s) <= targetIdx) dealtMap[s] = true;
+            });
+            if (hand.state) window._b9LastSeenState = hand.state;
+          } else if (targetIdx > highestDealtIdx) {
             console.log('[B9 街判定] 已到:' + highestDealtIdx + '(' + STREETS_ORDER[highestDealtIdx] + '),应到:' + targetIdx + '(' + targetStreet + '),ccCount=' + ccCount);
             var delay = 0;
             for (var si = highestDealtIdx + 1; si <= targetIdx; si++) {

@@ -1448,6 +1448,10 @@
   }
   .ct-segment-btn.active { background: #1a1d24; color: #fff; }
   .ct-segment-big .ct-segment-btn { padding: 12px 0; font-size: 14px; }
+  /* ⭐ 2026-05-31:自动开局人数 — 选中态前缀白点 ●(原 HTML 只 2 有,改 CSS 让 3/4/5 也显示)*/
+  .ct-segment-icons .ct-segment-btn.active::before {
+    content: '● ';
+  }
   /* 底部"创建自动开局任务"+ 提交 */
   .ct-footer-strip {
     margin: 20px 0 10px;
@@ -14877,7 +14881,8 @@
         </div>
         <div class="ct-sub" id="ct-autostart-row">
           <div class="ct-segment ct-segment-icons" data-target="ct-autostart-min">
-            <div class="ct-segment-btn active" data-value="2">● 2 👤</div>
+            <!-- ⭐ 2026-05-31:白点 ● 移到 CSS .active::before,任意选中都显示;HTML 文本去掉 ● -->
+            <div class="ct-segment-btn active" data-value="2">2 👤</div>
             <div class="ct-segment-btn" data-value="3">3 👤</div>
             <div class="ct-segment-btn" data-value="4">4 👤</div>
             <div class="ct-segment-btn" data-value="5">5 👤</div>

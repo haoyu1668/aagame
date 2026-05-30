@@ -32675,6 +32675,27 @@
 
     // 跳转到大厅子页面
     showSubPage('club-lobby');
+
+    // ⭐ Bug 修复(2026-05-30):大厅活跃时启动 polling,每 5s 刷新牌桌列表
+    //   原 bug:进大厅时拉一次后冻结,别的玩家离桌时我看到的人数不会更新
+    //   用户反馈:3 个号轮流退,1 号在大厅看到 2/9 永远不变(应该看 2→1→0)
+    //   修复:开 setInterval polling,离开大厅时清掉
+    if (window._lobbyPollingTimer) {
+      clearInterval(window._lobbyPollingTimer);
+      window._lobbyPollingTimer = null;
+    }
+    window._lobbyPollingTimer = setInterval(function() {
+      var lobbyEl = document.getElementById('page-club-lobby');
+      // 只在大厅页面 active 时 poll(切到别的页就停)
+      if (!lobbyEl || !lobbyEl.classList.contains('active')) {
+        clearInterval(window._lobbyPollingTimer);
+        window._lobbyPollingTimer = null;
+        return;
+      }
+      if (typeof fetchClubTablesAndRender === 'function') {
+        fetchClubTablesAndRender(clubId);
+      }
+    }, 5000);
   }
 
   let lobbyFilterType = '全部';

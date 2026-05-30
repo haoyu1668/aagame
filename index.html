@@ -29254,40 +29254,37 @@
         //   → 视觉:"飞的牌"和"DOM 里看到的牌"是两套,看起来像"翻牌发两次还不一样"
         if (data.street) dealBoardAnimation(data.street, data.cards);
         // ⭐ 2026-05-31 修同步:声音对齐每张牌"落地"时刻,跟 dealBoardAnimation 内部时序一致
-        //   原 bug:声音 0/120/240ms 播,但 burnDoneDelay=1600 后牌才开始飞,1980ms 才落地
-        //     → 声音比视觉早 ~2 秒(用户反馈"声音和发牌不同步")
-        //   公式:burnDoneDelay(1600) + i*interval(160) + 飞行(380) = 1980/2140/2300ms
+        //   公式:burnDoneDelay(1000) + i*interval(160) + 飞行(380) = 1380/1540/1700ms
         //   ⚠️ 这 3 个常量跟 dealBoardAnimation line 31297/31298/2897 对应,改其中一处要同步改这里
         if (window.soundEngine) {
           const n = data.street === 'flop' ? 3 : 1;
-          const BURN_DELAY = 1600, CARD_INTERVAL = 160, CARD_FLIGHT = 380;
+          const BURN_DELAY = 1000, CARD_INTERVAL = 160, CARD_FLIGHT = 380;
           for (let i = 0; i < n; i++) {
             setTimeout(() => window.soundEngine.play('dealBoard'), BURN_DELAY + i * CARD_INTERVAL + CARD_FLIGHT);
           }
         }
-        // ⭐ v2.28.9 + v2.28.12 + v2.28.13:发牌动画完成后实时检查命中高亮 + 更新牌型标签
-        // 翻牌 3 张:烧牌 600ms + 3张×160ms 间隔 + 翻面 300ms ≈ 1380ms,但 setStage 还有过渡
-        //          → 主调 2400ms 给足时间,再 1200ms 补一次防 timing 漂移
-        // 转牌/河牌 1 张 ≈ 1000ms,主调 1500ms,再 600ms 补一次
+        // ⭐ 2026-05-31 同步:burnDoneDelay 1000 后,牌型亮跟公牌落地对齐
+        //   flop:第 3 张可见 = 1000+320+380+320 = 2020ms,主调 2050ms(刚好后 30ms 防 race)
+        //   turn/river:1000+380+320 = 1700ms,主调 1730ms
+        //   都再 1200ms 后补一次防 timing 漂移
         if (data.street === 'flop') {
           setTimeout(() => {
             if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
             if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
-          }, 2400);
-          // 补救:1200ms 后再调一次
+          }, 2050);
           setTimeout(() => {
             if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
             if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
-          }, 3600);
+          }, 3250);
         } else {
           setTimeout(() => {
             if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
             if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
-          }, 1500);
+          }, 1730);
           setTimeout(() => {
             if (typeof highlightCurrentMyHand === 'function') highlightCurrentMyHand();
             if (typeof updateMyHandTypeLabel === 'function') updateMyHandTypeLabel();
-          }, 2100);
+          }, 2330);
         }
         if (typeof showToast === 'function') showToast('发 ' + data.street);
         break;
@@ -29308,10 +29305,11 @@
 
       case WS_EVENTS.ACTION_EXEC: {
         // 任意玩家(包括我自己)的行动结果广播
-        // ⭐ 2026-05-31:标记动画时间戳(包括筹码飞 + 行动气泡),弹窗节流用
-        //   call/raise/bet/allin 都触发飞筹码 → 下家弹窗需等动画落地
+        // ⭐ 2026-05-31 改:标记动画时间戳 + 时长(飞筹码 480ms,留缓冲 600ms)
+        //   call/raise/bet/allin 触发飞筹码 → 下家弹窗等动画落地 + 短停顿再弹
         if (data.action && data.action !== 'check' && data.action !== 'fold') {
           window._b9LastAnimationTs = Date.now();
+          window._b9CurrentAnimationDuration = 600;
         }
         setActingSeat(data.seatId);   // 头像绿环
         const labelMap = {
@@ -29386,6 +29384,9 @@
 
       case WS_EVENTS.POT_COLLECT: {
         // 筹码归底池(每街结束触发)
+        // ⭐ 2026-05-31:标记收筹码动画时长 800ms(多个 50ms 错峰 + 480ms 飞行)
+        window._b9LastAnimationTs = Date.now();
+        window._b9CurrentAnimationDuration = 800;
         betChipsToPotAnimation();
         break;
       }
@@ -31140,6 +31141,10 @@
   // 发底牌动画:每人 2 张,逐张分发(每张间隔 80ms,共 2N×80ms + 380ms 飞行)
   // 模式:第一轮先给每人 1 张,第二轮再 1 张(德州标准发牌顺序)
   function dealHoleCardsAnimation() {
+    // ⭐ 2026-05-31:标记动画时长给弹窗节流用,N 座位 × 80ms × 2 轮 + 120ms 间隔 + 380ms 飞行
+    //   5 座位估算:5×80×2 + 120 + 380 = 1300ms。多座位时略保守按 1300ms 设
+    window._b9LastAnimationTs = Date.now();
+    window._b9CurrentAnimationDuration = 1300;
     // 1. 切到 preflop:清空公共牌
     setStage('preflop');
     // 2. 显示牌堆
@@ -31227,8 +31232,12 @@
       console.warn('[dealBoardAnimation] throttle:正在跑 ' + stage + ',跳过');
       return;
     }
-    // ⭐ 2026-05-31:标记最近动画时间戳,供 ACTION_REQUEST/PRESELECT 弹窗节流用
+    // ⭐ 2026-05-31:标记动画时间戳 + 实际时长,供 ACTION_REQUEST/PRESELECT 弹窗节流用
+    //   公式 = burnDoneDelay(1000) + (n-1)*interval(160) + 飞行(380) + 显示(320)
+    //   flop(3 张) = 1000+320+380+320 = 2020ms;turn/river(1 张) = 1000+380+320 = 1700ms
     window._b9LastAnimationTs = Date.now();
+    var _nCards = stage === 'flop' ? 3 : 1;
+    window._b9CurrentAnimationDuration = 1000 + (_nCards - 1) * 160 + 380 + 320;
     if (!window._b9DealBoardActiveStages) window._b9DealBoardActiveStages = {};
     window._b9DealBoardActiveStages[stage] = true;
     setTimeout(function() {
@@ -31307,9 +31316,10 @@
       }
     }
 
-    // 烧完后 1600ms 开始发(原 600ms,2026-05-31 用户要求加 1s 让烧牌/收筹码动画看得清)
-    //   总耗时:click → 公牌可见 从 ~2s 拉到 ~3s
-    let burnDoneDelay = 1600;
+    // ⭐ 2026-05-31 微调:1600→1000ms(原 600,task #116 加到 1600 太拖)
+    //   理由:烧牌动画本身才 ~400ms,1000ms 留足"烧完气口"且总时长 ~2s 跟竞品节奏一致
+    //   总耗时:flop ~2020ms / turn/river ~1700ms(从 click 到第一张公牌可见)
+    let burnDoneDelay = 1000;
     const interval = 160; // 每张牌发出的间隔
 
     targetSlots.forEach((slot, i) => {
@@ -33369,18 +33379,20 @@
             //   旧 WS-mock 路径在 line 29465 已用,polling 真后端路径之前没接通
             // ⭐ 2026-05-31 修同步:派彩声音同步 — winMine/winOther 跟筹码飞行同步播
             //   原 bug:polling 路径接通了 potToWinnerAnimation 但没补声音,WS 路径有(line 29478)
+            // ⭐ 2026-05-31 Phase 3.2:派彩动画延时 500→1500ms
+            //   理由:摊牌一瞬间就派彩玩家来不及看清对手底牌 + 牌型,1.5s 缓冲后再飞筹码
             var _myUidWin = window.currentUser && Number(window.currentUser.userId);
             sd.winners.forEach(function(w) {
               var sid = _b9SeatNoToId(w.seatNo, hand);
               if (typeof window.potToWinnerAnimation === 'function') {
-                setTimeout(function() { window.potToWinnerAnimation(sid); }, 500);
+                setTimeout(function() { window.potToWinnerAnimation(sid); }, 1500);
               }
               if (window.soundEngine) {
                 var _winnerSeat = (hand.seats || []).find(function(s) { return Number(s.seatNo) === Number(w.seatNo); });
                 var _isMe = _winnerSeat && Number(_winnerSeat.userId) === _myUidWin;
                 setTimeout(function() {
                   window.soundEngine.play(_isMe ? 'winMine' : 'winOther');
-                }, 500);
+                }, 1500);
               }
             });
           }
@@ -33492,9 +33504,14 @@
               //   原 bug:翻牌没发完 popup 已弹;别人筹码没落 popup 已弹
               //   修复:track 最近动画事件 _b9LastAnimationTs,弹窗前看是否在 1.8s 内
               //     若是 → setTimeout 延迟到动画完成再弹
+              // ⭐ 2026-05-31 改:节流窗口按"当前动画时长"动态算,而非固定 1800ms
+              //   每个动画 fn 调用时设 _b9CurrentAnimationDuration = 实际时长(ms)
+              //   底牌 ~1300 / 公牌(flop) ~2020 / 公牌(turn/river) ~1700 / 飞筹码 ~600
+              //   原 bug:burnDoneDelay 600→1600 后,公牌落地 ~1980ms,但节流死写 1800 → 弹窗早 180ms
               var _animEventTs = Number(window._b9LastAnimationTs || 0);
+              var _animDuration = Number(window._b9CurrentAnimationDuration || 1800);
               var _msSinceAnim = Date.now() - _animEventTs;
-              var _popupDelay = (_msSinceAnim < 1800) ? Math.max(50, 1800 - _msSinceAnim) : 0;
+              var _popupDelay = (_msSinceAnim < _animDuration) ? Math.max(50, _animDuration - _msSinceAnim) : 0;
               var _actionReqPayload = {
                 type: WS_EVENTS.ACTION_REQUEST,
                 data: {

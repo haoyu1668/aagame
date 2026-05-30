@@ -12495,13 +12495,15 @@
           <div class="filter-tab" data-filter-type="短牌">短牌</div>
         </div>
         <div class="filter-sort" data-sort-scope="game">
-          <span class="sort-label">初级</span>
+          <span class="sort-label">全级别</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M7 4v12M7 16l-3-3M7 16l3-3"/>
             <path d="M17 20V8M17 8l-3 3M17 8l3 3"/>
           </svg>
           <div class="sort-dropdown">
-            <div class="sort-option active" data-sort-value="初级">初级</div>
+            <!-- ⭐ 2026-05-31:新增'全级别'为默认 active,不过滤显示所有牌桌 -->
+            <div class="sort-option active" data-sort-value="全级别">全级别</div>
+            <div class="sort-option" data-sort-value="初级">初级</div>
             <div class="sort-option" data-sort-value="高级">高级</div>
             <div class="sort-option" data-sort-value="空座">空座</div>
           </div>
@@ -12897,13 +12899,15 @@
             <div class="filter-tab" data-filter-type="短牌">短牌</div>
           </div>
           <div class="filter-sort" data-sort-scope="lobby">
-            <span class="sort-label">初级</span>
+            <span class="sort-label">全级别</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
               <path d="M7 4v12M7 16l-3-3M7 16l3-3"/>
               <path d="M17 20V8M17 8l-3 3M17 8l3 3"/>
             </svg>
             <div class="sort-dropdown">
-              <div class="sort-option active" data-sort-value="初级">初级</div>
+              <!-- ⭐ 2026-05-31:新增'全级别'为默认 active,不过滤显示所有牌桌 -->
+              <div class="sort-option active" data-sort-value="全级别">全级别</div>
+              <div class="sort-option" data-sort-value="初级">初级</div>
               <div class="sort-option" data-sort-value="高级">高级</div>
               <div class="sort-option" data-sort-value="空座">空座</div>
             </div>
@@ -16113,7 +16117,7 @@
 
   // 渲染房间列表
   let gameFilterType = '全部';
-  let gameSortType = '初级'; // 等级筛选
+  let gameSortType = '全级别'; // ⭐ 2026-05-31:默认从'初级'改'全级别',显示所有牌桌
 
   // 从盲注字符串提取大盲(括号里的数字)
   // 例如: "0.5/1/2(2)" -> 2, "10/20(20)" -> 20
@@ -16123,7 +16127,9 @@
   }
 
   // 房间是否匹配等级筛选
+  //   ⭐ 2026-05-31:新增 '全级别' 为默认,不过滤;'空座'保留
   function matchLevel(room, level) {
+    if (level === '全级别') return true;
     if (level === '初级') return getBigBlind(room.blinds) <= 10;
     if (level === '高级') return getBigBlind(room.blinds) > 10;
     if (level === '空座') return room.seats < room.total;
@@ -32758,7 +32764,7 @@
   }
 
   let lobbyFilterType = '全部';
-  let lobbySortType = '初级';
+  let lobbySortType = '全级别';   // ⭐ 2026-05-31:默认从'初级'改'全级别',显示所有牌桌
   // 渲染大厅房间列表(复用游戏页的房间渲染样式)
   function renderLobbyRooms(clubId) {
     const list = document.getElementById('lobby-room-list');

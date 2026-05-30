@@ -33105,6 +33105,18 @@
               : (winnerNames.join(' / ') + ' 平分本手');
             console.log('[B9 P2.1] 本手结束:', endMsg);
             if (typeof showToast === 'function') showToast(endMsg);
+            // ⭐ 2026-05-31:派彩动画(B 路径:last-standing 无摊牌)
+            //   showdown 路径已在 line 33296 处理 → 这里加 prevHand.state!=='showdown' 防双触发
+            //   场景:全场弃牌剩 1 家 / 全 all-in fast-forward 后 / hand-end 兜底
+            if (prevHand.state !== 'showdown') {
+              winnerSeatNos.forEach(function(sn) {
+                var seat = prevHand.seats.find(function(s) { return Number(s.seatNo) === sn; });
+                var sid = (seat && Number(seat.userId) === myUidEnd) ? 'my' : ('s' + sn);
+                if (typeof window.potToWinnerAnimation === 'function') {
+                  setTimeout(function() { window.potToWinnerAnimation(sid); }, 300);
+                }
+              });
+            }
           }
         }
         window._b9PrevHand = hand;
@@ -33236,10 +33248,10 @@
           if (hand.state) window._b9LastSeenState = hand.state;
         }
 
-        // ⭐ 2026-05-31 延长看牌(delayedRevealEnabled):
-        //   用户要求:只在 preflop 第一圈没轮到自己时显示牌背
-        //   从 flop 开始就一直亮牌(玩家已"看过"自己的牌)
-        //   showdown 阶段当然也亮牌
+        // ⭐ 2026-05-31 延长看牌 v2(delayedRevealEnabled):
+        //   用户要求(覆盖 v1):首次轮到我之前盖牌 → 一旦轮过我,本手剩余全部亮牌(到摊牌)
+        //   关键变化:之前 v1 只 preflop 盖,flop+ 自动亮;v2 是"看过即明"持久标志
+        //   _b9SeenCardsArmed:本手是否已经轮到过我;_b9SeenCardsHandId:对应 hand.id(切手重置)
         try {
           var _settings = (currentTableRoom && currentTableRoom.settings) || {};
           var _myCardsEl = document.querySelector('#page-table .my-seat .my-cards');
@@ -33249,9 +33261,15 @@
               ? hand.seats.find(function(s) { return Number(s.userId) === _myUidDR; })
               : null;
             var _myActing = !!(_mySeatDR && Number(hand.currentActionSeat) === Number(_mySeatDR.seatNo));
-            var _isPreflopOnly = (hand.state === 'preflop');
-            // 只 preflop + 没轮到我 → 隐藏;其它任何情况(flop+/showdown/我行动)→ 亮牌
-            if (_isPreflopOnly && !_myActing) {
+            // 新手 → 重置 armed 标志
+            if (window._b9SeenCardsHandId !== hand.id) {
+              window._b9SeenCardsHandId = hand.id;
+              window._b9SeenCardsArmed = false;
+            }
+            // 一旦轮到我,本手剩余全亮(armed = true 持久)
+            if (_myActing) window._b9SeenCardsArmed = true;
+            // 还没轮过 + 现在也没轮到 → 盖;否则亮
+            if (!window._b9SeenCardsArmed && !_myActing) {
               _myCardsEl.classList.add('delayed-back');
             } else {
               _myCardsEl.classList.remove('delayed-back');
@@ -33288,6 +33306,14 @@
               return name + typeName;
             }).join(' / ');
             if (typeof showToast === 'function') showToast(winnerLabels + ' 赢');
+            // ⭐ 2026-05-31:派彩动画 — 底池筹码飞向赢家座位 + 头像金光高亮
+            //   旧 WS-mock 路径在 line 29465 已用,polling 真后端路径之前没接通
+            sd.winners.forEach(function(w) {
+              var sid = _b9SeatNoToId(w.seatNo, hand);
+              if (typeof window.potToWinnerAnimation === 'function') {
+                setTimeout(function() { window.potToWinnerAnimation(sid); }, 500);
+              }
+            });
           }
           // ⭐ B11 延迟看牌(2026-05-30 工单版):settings.delayedRevealEnabled 时启用亮边交互
           //   openShowMuckModal 现在不是弹窗 — 它给 my-cards 加 .reveal-selectable

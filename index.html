@@ -14159,9 +14159,9 @@
             </div>
             <!-- 5 个快捷买入个数 -->
             <div class="buyin-quick-row">
-              <button class="buyin-quick-btn" data-buyins="1">1个</button>
+              <button class="buyin-quick-btn active" data-buyins="1">1个</button>
               <button class="buyin-quick-btn" data-buyins="3">3个</button>
-              <button class="buyin-quick-btn active" data-buyins="5">5个</button>
+              <button class="buyin-quick-btn" data-buyins="5">5个</button>
               <button class="buyin-quick-btn" data-buyins="10">10个</button>
               <button class="buyin-quick-btn" data-buyins="max">最大</button>
             </div>
@@ -16584,7 +16584,7 @@
       bb,
       perUnit,
       maxUnits,
-      currentUnits: maxUnits === 0 ? 0 : Math.min(5, maxUnits)  // 默认 5 个,余额不够就取上限
+      currentUnits: maxUnits === 0 ? 0 : Math.min(1, maxUnits)  // ⭐ 2026-05-30 用户要求:默认 1 个买入(原为 5 个)
     };
 
     // 更新弹窗显示

@@ -16969,13 +16969,10 @@
         //   hand 结束时 cleanupPendingLeaveSeats 退筹码 + 删座位
         //   前端 polling /seats 发现自己已不在 → 自动 doReturnToLobby + toast
         if (err && err.status === 409 && err.data && err.data.inHand && err.data.folded === false) {
-          const confirmed = window.confirm(
-            '牌局进行中,你还未弃牌。\n\n申请退出说明:\n• 本手继续看牌(不立即弃牌)\n• 轮到你时自动弃牌\n• 本手结束自动离桌,筹码退回钱包\n• 申请后不可反悔\n\n是否确认?'
-          );
-          if (!confirmed) {
-            console.log('[Task 2] 用户取消申请退出,留桌');
-            return;
-          }
+          // ⭐ 2026-05-30 用户要求:不弹确认窗,直接申请退出(本手自动弃牌)
+          //   原:window.confirm('申请退出说明...') 阻断 UI
+          //   新:静默 force=true 重试,等于用户已"默认确认"
+          console.log('[Task 2] 牌局进行中 → 静默申请退出(default confirm)');
           try {
             const resp2 = await callLeaveApi(true);
             console.log('[Task 2] ✅ 申请退出成功,后端返:', resp2);

@@ -30392,13 +30392,19 @@
     const board = (typeof getCurrentBoard === 'function') ? getCurrentBoard() : [];
 
     // 计算最佳牌型(2 张底牌也能算 — evaluateBestHand 不足 5 张时也会评估)
+    // ⭐ Bug C v2 诊断(2026-05-30):打印实参确认输入
     let evalResult = null;
+    var _evalInLabel = myCards.concat(board);
     try {
-      evalResult = evaluateBestHand(myCards.concat(board));
+      evalResult = evaluateBestHand(_evalInLabel);
     } catch (e) {
+      console.warn('[hand-label eval ERROR]', e, 'input:', _evalInLabel);
       return;
     }
     if (!evalResult) return;
+    try {
+      console.log('[hand-label eval IN]', JSON.stringify(_evalInLabel), '→ type:', evalResult.type);
+    } catch (e) {}
 
     // 翻前特殊处理(只有 2 张牌,evaluateBestHand 返回 strength=-1 "不足5张")
     let label = '';
@@ -30521,13 +30527,25 @@
     }
 
     // 翻牌/转牌/河牌:计算最佳牌型
+    // ⭐ Bug C v2 诊断(2026-05-30):用户日志显示 8♠ 8♦ + 10♦ K♣ 4♥ → 算出"葫芦"
+    //   不可能,evaluateBestHand 一定有 bug 或输入污染。先打实参再修。
     let evalResult = null;
+    var _evalInput = myCards.concat(board);
     try {
-      evalResult = evaluateBestHand(myCards.concat(board));
+      evalResult = evaluateBestHand(_evalInput);
     } catch (e) {
+      console.warn('[live-hit eval ERROR]', e, 'input:', _evalInput);
       return;
     }
-    if (!evalResult || !evalResult.cards) return;
+    if (!evalResult || !evalResult.cards) {
+      console.log('[live-hit eval NULL]', 'input:', JSON.stringify(_evalInput), 'result:', evalResult);
+      return;
+    }
+    // 诊断:打印真实输入 + evalResult 5 张 + type/strength
+    try {
+      var _resultRanks = (evalResult.cards || []).map(function(c){return c.rank+c.suit;}).join(',');
+      console.log('[live-hit eval IN]', JSON.stringify(_evalInput), '→ type:', evalResult.type, 'strength:', evalResult.strength, 'cards:', _resultRanks);
+    } catch (e) {}
     // 翻牌/转牌:高牌不亮(strength=0);河牌:即便高牌也亮
     if (!isRiver && evalResult.strength < 1) {
       console.log('[live-hit] 翻牌/转牌高牌,不亮');
@@ -31928,23 +31946,41 @@
       }
       window._b9LastActionSent = { sig: sig, ts: nowTs };
 
-      // ⭐ Bug 修复(2026-05-30 v2):bet / allin 映射成 raise(后端只认 4 种 action)
+      // ⭐ Bug 修复(2026-05-30 v3):bet / allin 智能映射到后端 4 种 action
       //   - 后端 validActions = ['fold','check','call','raise']
-      //   - 前端 UI 仍用 bet(本街无人下注)/ allin(全押)语义,POST 时转
       //   - bet → raise(amount 不变)
-      //   - allin → raise(amount = req.maxRaise = myChips+currentBet)
-      //   注:避开同 scope const req(line 31966)用 actReq
+      //   - allin 分两种情况:
+      //     · 全押额 ≤ callAmount(短筹码,连 call 都不够)→ 改发 call(后端 call 分支
+      //       自动 partial all-in,actualPay=min(needCall,callerChips))
+      //     · 全押额 > callAmount(够 call 且有富余)→ 发 raise(amount=maxRaise),
+      //       后端短筹码 all-in 例外接受即使 < minRaise
+      //   背景:hand 143 用户 myChips=25, callAmount=393 → allin 应走 call
       var realAction = action;
       var realAmount = amount;
       if (action === 'bet') {
         realAction = 'raise';
       } else if (action === 'allin') {
-        realAction = 'raise';
         var actReq = window.currentActionRequest && window.currentActionRequest();
-        if (actReq && Number.isInteger(actReq.maxRaise) && actReq.maxRaise > 0) {
-          realAmount = actReq.maxRaise;
+        if (actReq) {
+          var _callAmt = Number(actReq.callAmount || 0);
+          var _myChipsReq = Number(actReq.myChips || 0);
+          var _maxRaiseReq = Number(actReq.maxRaise || 0);
+          if (_myChipsReq <= _callAmt) {
+            // 短筹码:全押不够 call → 走 call(后端自动 partial all-in)
+            realAction = 'call';
+            realAmount = _callAmt;
+            console.log('[B9 P2.1] allin 短筹码(myChips ' + _myChipsReq + ' ≤ callAmount ' + _callAmt + '),改发 call(后端会 partial all-in)');
+          } else if (_maxRaiseReq > 0) {
+            // 够 call 且有富余 → 真 raise(short all-in 也走 raise,后端接受)
+            realAction = 'raise';
+            realAmount = _maxRaiseReq;
+          } else {
+            console.warn('[B9 P2.1] allin 异常:拿不到 maxRaise,fallback raise');
+            realAction = 'raise';
+          }
         } else {
-          console.warn('[B9 P2.1] allin 转 raise 但拿不到 maxRaise,用 amount 兜底');
+          realAction = 'raise';
+          console.warn('[B9 P2.1] allin 拿不到 actReq,fallback raise(无 amount)');
         }
       }
 

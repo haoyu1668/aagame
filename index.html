@@ -32138,6 +32138,18 @@
       console.log('[B9 P2.1] → POST /actions', body, '(原 action:' + action + ')');
       window.apiClient.post('/api/hands/' + handId + '/actions', body).then(function(resp) {
         console.log('[B9 P2.1] ✅ action 接收:', resp);
+        // ⭐ 2026-05-31 Bug 修复:响应里若带 winnerSeat(last-standing 自愈结束)缓存供 HAND END 用
+        //   场景:对手 pending_leave 在我行动时被 advancePastPendingLeave auto-fold → 我成单赢家
+        //   原 bug:前端 HAND END 用 prevHand.seats(stale)→ 显示"X / Y 平分本手"误判
+        //   修复:把 resp.winnerSeat 缓存到 _b9LastHandWinnerSeat,HAND END 优先用
+        if (resp && resp.ended === true && typeof resp.winnerSeat === 'number') {
+          window._b9LastHandWinnerSeat = {
+            handId: Number(handId),
+            winnerSeat: resp.winnerSeat,
+            winAmount: resp.winAmount,
+            reason: resp.reason
+          };
+        }
         // 立即拉一次最新 hand state,不等下次 5s 轮询(更跟手)
         if (typeof window.fetchAndRenderCurrentHand === 'function' && window.currentTableRoom) {
           window.fetchAndRenderCurrentHand(Number(window.currentTableRoom.id));
@@ -33045,6 +33057,13 @@
     if (!Number.isInteger(numericId) || numericId <= 0) return Promise.resolve(null);
     return window.apiClient.get('/api/tables/' + numericId + '/current-hand').then(function(resp) {
       var hand = (resp && resp.hand) || null;
+      // ⭐ 2026-05-31 Bug 修复:抓 recentEnd 给 HAND END 判定用(timeout 自愈结束路径)
+      //   场景:对手 15s 超时被 expireTimedOutActor 自愈 fold → hand 直接 ended,前端 polling
+      //     只能看到 hand=null,prevHand 又是 stale("X / Y 平分"误判)
+      //   修复:后端 GET /current-hand 给 ended hand 3s 窗口,把 recentEnd 缓存到全局
+      if (resp && resp.recentEnd) {
+        window._b9RecentEnd = resp.recentEnd;
+      }
       if (currentTableRoom && Number(currentTableRoom.id) === numericId) {
         currentTableRoom._currentHand = hand;
         // ⭐ 暴露给 fetchAndRenderTableSeats 用,让 player.isDealer / player.bet 富化
@@ -33081,17 +33100,26 @@
                 'showdown?', !!prevHand.showdown,
                 'winners?', prevHand.showdown && prevHand.showdown.winners ? prevHand.showdown.winners.map(function(w){return 's'+w.seatNo+'('+w.handName+')';}).join(',') : 'NO_SHOWDOWN_DATA');
             } catch (snapErr) { console.warn('[HAND END snapshot ERROR]', snapErr); }
-            // ⭐ Bug 修复(2026-05-30):优先用 prevHand.showdown.winners(真赢家)
-            //   原 bug:用 not-folded 玩家做"赢家"判断 → 2 人摊牌只 1 人赢时也显"平分"
-            //   修复:若 showdown 数据可用,用真 winners 列表;否则 fallback 到 not-folded
+            // ⭐ Bug 修复(2026-05-31):4 步优先级,杜绝"X / Y 平分本手"误判
+            //   优先级:
+            //     1) prevHand.showdown.winners(摊牌真赢家)
+            //     2) action 响应缓存 _b9LastHandWinnerSeat(action 自愈,pending_leave 等)
+            //     3) polling 响应 _b9RecentEnd(timeout 自愈,超时 fold 等)
+            //     4) prevHand.seats.filter(!folded)(stale 兜底,可能错但保留)
             var winnerSeatNos;
             if (prevHand.showdown && Array.isArray(prevHand.showdown.winners) && prevHand.showdown.winners.length > 0) {
               winnerSeatNos = prevHand.showdown.winners.map(function(w) { return Number(w.seatNo); });
               console.log('[HAND END] 使用 showdown.winners');
+            } else if (window._b9LastHandWinnerSeat && Number(window._b9LastHandWinnerSeat.handId) === Number(prevHand.id)) {
+              winnerSeatNos = [Number(window._b9LastHandWinnerSeat.winnerSeat)];
+              console.log('[HAND END] 使用 action 响应缓存 winnerSeat=' + winnerSeatNos[0]);
+            } else if (window._b9RecentEnd && Number(window._b9RecentEnd.handId) === Number(prevHand.id)) {
+              winnerSeatNos = [Number(window._b9RecentEnd.winnerSeat)];
+              console.log('[HAND END] 使用 polling recentEnd winnerSeat=' + winnerSeatNos[0]);
             } else {
-              // Fallback: 没摊牌(folded out)就剩谁谁赢
+              // 兜底:没摊牌也没自愈数据,用 stale prevHand 过滤(可能错)
               winnerSeatNos = prevHand.seats.filter(function(s) { return !s.folded; }).map(function(s) { return Number(s.seatNo); });
-              console.log('[HAND END] fallback to not-folded,winners=' + winnerSeatNos.join(','));
+              console.log('[HAND END] fallback to not-folded(stale),winners=' + winnerSeatNos.join(','));
             }
             var winnerNames = winnerSeatNos.map(function(sn) {
               var seat = prevHand.seats.find(function(s) { return Number(s.seatNo) === sn; });

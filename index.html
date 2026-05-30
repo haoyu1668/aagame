@@ -33839,7 +33839,8 @@
           role: m.role === 'admin' ? 'admin' : 'player',             // 'member' → 'player'(mock 约定)
           blacklist: !!m.blacklist,
           avatar: m.photoUrl || null,
-          lastOnline: Date.now(),                                     // 占位,等"在线状态"接口
+          isOnline: !!m.isOnline,                                     // ⭐ 2026-05-30:真后端 isOnline(60s 内活动 = 在线)
+          lastOnline: Date.now(),                                     // 兼容旧 mock
           joinDate: (function(iso) {
             if (!iso) return '';
             var d = new Date(iso);
@@ -33936,7 +33937,10 @@
     const sorted = sortMembers(filtered);
     list.innerHTML = sorted.map(m => {
       const isMe = m.uid === currentUser.uid;
-      const onlineInfo = formatOnlineStatus(m.lastOnline);
+      // ⭐ 2026-05-30:优先用真后端 isOnline,fallback 到旧 lastOnline 时间戳
+      const onlineInfo = (typeof m.isOnline === 'boolean')
+        ? { text: m.isOnline ? '在线' : '离线', online: m.isOnline }
+        : formatOnlineStatus(m.lastOnline);
 
       // 划币按钮显示规则:
       // 当前阶段(演示):所有成员都显示划币按钮
@@ -35980,8 +35984,10 @@
     filtered = sortMembers(filtered);
 
     list.innerHTML = filtered.map(m => {
-      // 在线状态文案(5档,仅"在线"绿色)
-      const onlineInfo = formatOnlineStatus(m.lastOnline);
+      // ⭐ 2026-05-30:优先用真后端 isOnline,fallback 到旧 lastOnline 时间戳
+      const onlineInfo = (typeof m.isOnline === 'boolean')
+        ? { text: m.isOnline ? '在线' : '离线', online: m.isOnline }
+        : formatOnlineStatus(m.lastOnline);
       const statusHtml = `<span class="cmm-status ${onlineInfo.online ? 'online' : ''}">${onlineInfo.text}</span>`;
 
       // owner 徽章

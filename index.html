@@ -3263,6 +3263,12 @@
   body.on-real-table.hand-active #community-cards { display: flex !important; }
   body.on-real-table.hand-active .my-seat .my-cards { display: flex !important; }
   body.on-real-table.hand-active .table-center::before { display: none; }
+  /* ⭐ Bug 真凶(2026-05-30 终极):真桌时 .seat-bet 永远 display:none(line 3221-3222),
+     handactive override 漏了它 → flyChipsToSeatBet/betChipsToPotAnimation 算 getRelativeCenter
+     一律返 (0,0,0,0) → 筹码飞向屏幕 (0,0) 即左上角 hamburger 区域
+     修复:hand-active 时 .seat-bet 也要 display:flex,跟默认 CSS 一致 */
+  body.on-real-table.hand-active .my-seat .seat-bet { display: flex !important; }
+  body.on-real-table.hand-active .seat .seat-bet { display: flex !important; }
   /* ⭐ B9"开始牌局"按钮(无 active hand + 玩家入座 ≥ 2 时显示) */
   .b9-start-hand-btn {
     display: block;

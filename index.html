@@ -28705,6 +28705,32 @@
       checkAmount.textContent = (state === 'p2') ? formatMoney(callAmt) : '';
     }
 
+    // ⭐ Bug 修复(2026-05-30):5 个快捷加注 tile 金额按真 potSize/myChips 动态算
+    //   原 bug:HTML 写死 82/110/250/145/1245.92(demo 占位),只在点"加注"按钮时才更新
+    //   但 tile 在 p1/p2/p3 态下就可见 —— 用户根本看不到对的数字
+    //   用户日志直接证据:截图 1/3 底池=110, 1/2 底池=145, 1/5 底池=82 → 数学不一致(不可能同一底池)
+    //   修复:ACTION_REQUEST 来时立刻按真 potSize/myChips 算 5 个 tile 金额
+    try {
+      var rPotReq = Math.max(0, Math.round(Number(data.potSize) || 0));
+      var rMyChipsReq = Math.max(0, Math.round(Number(data.myChips) || 0));
+      var tileCalcReq = {
+        '1/5':    Math.round(rPotReq / 5),
+        '1/3':    Math.round(rPotReq / 3),
+        '1/2':    Math.round(rPotReq / 2),
+        '1':      rPotReq,
+        'all-in': rMyChipsReq
+      };
+      document.querySelectorAll('.ab-tile').forEach(function(t) {
+        var key = t.dataset.raiseTile;
+        if (tileCalcReq[key] !== undefined) {
+          var amt = tileCalcReq[key];
+          t.dataset.amount = amt;
+          var amountEl = t.querySelector('.t-amount');
+          if (amountEl) amountEl.textContent = amt;
+        }
+      });
+    } catch (tileErr) { console.warn('[ACTION_REQUEST tile 金额]', tileErr); }
+
     // 4. 加注按钮 raise/bet 切换:P2 显"下注"(有人下注的回应仍叫加注…但德扑标准:面对下注时按钮叫"加注";本街首次主动下注叫"下注")
     //    项目锁死:本街尚无下注 → "下注";已有下注 → "加注"
     const raiseBtn = document.getElementById('ab-raise-btn');

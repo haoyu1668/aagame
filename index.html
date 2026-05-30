@@ -16423,8 +16423,25 @@
     const pageRect = pageTable.getBoundingClientRect();
     const avatarRect = seatAvatar.getBoundingClientRect();
     const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
-    const targetX = (avatarRect.left - pageRect.left + avatarRect.width / 2) / zoom;
-    const targetY = (avatarRect.top - pageRect.top + avatarRect.height / 2) / zoom;
+    let targetX = (avatarRect.left - pageRect.left + avatarRect.width / 2) / zoom;
+    let targetY = (avatarRect.top - pageRect.top + avatarRect.height / 2) / zoom;
+
+    // ⭐ Bug fix (2026-05-30):seat-avatar 在 rotateToMySeat 刚跑完时可能 rect=(0,0,0,0)
+    //   → targetX/targetY 算成 0 → 飞入头像出现在 (-24, -200) 左上角 = 用户看到的"账号坐下图标"
+    //   修复:rect 不合理(width=0 或 targetX/Y 太小) → setTimeout 100ms 重试,最多 3 次
+    if (avatarRect.width === 0 || avatarRect.height === 0 || targetX < 30 || targetY < 30) {
+      const _retries = playSeatInAnimation._retries || 0;
+      if (_retries < 3) {
+        playSeatInAnimation._retries = _retries + 1;
+        console.log('[seat-in] avatar rect 还没就位,100ms 后重试 #' + (_retries + 1));
+        setTimeout(function() { playSeatInAnimation(seatId, player); }, 100);
+      } else {
+        console.warn('[seat-in] 3 次重试后 avatar 仍未就位,跳过动画(避免左上角异常)');
+        playSeatInAnimation._retries = 0;
+      }
+      return;
+    }
+    playSeatInAnimation._retries = 0;
 
     // 1. 创建飞入头像 DOM(从顶部飞下来)
     const flying = document.createElement('div');
@@ -39945,6 +39962,93 @@
       document.addEventListener('DOMContentLoaded', attachHook);
     } else {
       attachHook();
+    }
+  })();
+
+  // ⭐ 2026-05-30:全屏诊断悬浮日志(透明 / 不阻挡操作)
+  //   屏幕右上半透明绿字条,实时显示 console.log/warn/error
+  //   pointer-events:none → 不影响游戏操作
+  //   双击标题"💬"切换显示/收起
+  //   稳定后可整段删除
+  (function setupDiagOverlay() {
+    'use strict';
+    function init() {
+      if (document.getElementById('b9-diag-overlay')) return;
+      var overlay = document.createElement('div');
+      overlay.id = 'b9-diag-overlay';
+      overlay.style.cssText = [
+        'position:fixed',
+        'top:0',
+        'right:0',
+        'width:55vw',
+        'max-height:50vh',
+        'background:rgba(0,0,0,0.55)',
+        'color:#7fff7f',
+        'font:10px/1.25 monospace',
+        'padding:3px 5px',
+        'overflow-y:auto',
+        'z-index:2147483647',     // 顶层
+        'pointer-events:none',    // 不挡交互
+        'word-break:break-all',
+        'border-bottom-left-radius:6px'
+      ].join(';');
+      // 顶部小标题(可双击切换收起)
+      var header = document.createElement('div');
+      header.textContent = '💬 LOG (双击切换)';
+      header.style.cssText = 'color:#ffd54a;border-bottom:1px solid #555;padding:1px 0;margin-bottom:2px;font-weight:bold;pointer-events:auto;cursor:pointer';
+      var body = document.createElement('div');
+      body.id = 'b9-diag-body';
+      overlay.appendChild(header);
+      overlay.appendChild(body);
+      document.body.appendChild(overlay);
+      var collapsed = false;
+      header.addEventListener('dblclick', function() {
+        collapsed = !collapsed;
+        body.style.display = collapsed ? 'none' : '';
+        overlay.style.maxHeight = collapsed ? '20px' : '50vh';
+      });
+
+      var MAX = 60;
+      var entries = [];
+      function add(level, args) {
+        try {
+          var msg = Array.prototype.map.call(args, function(a) {
+            if (typeof a === 'string') return a;
+            if (a && a.message) return '[Err] ' + a.message;
+            try { return JSON.stringify(a); }
+            catch (e) { return String(a); }
+          }).join(' ');
+          var color = (level === 'error') ? '#ff7070'
+                    : (level === 'warn')  ? '#ffd54a'
+                    : (level === 'info')  ? '#80d8ff'
+                    : '#7fff7f';
+          var time = (new Date()).toLocaleTimeString().split(' ')[0] || '';
+          entries.push({ msg: msg.slice(0, 250), color: color, time: time });
+          if (entries.length > MAX) entries.shift();
+          body.innerHTML = entries.map(function(e) {
+            return '<div style="color:' + e.color + '"><span style="color:#888">' + e.time + '</span> ' +
+                   e.msg.replace(/</g, '&lt;') + '</div>';
+          }).join('');
+          body.scrollTop = body.scrollHeight;
+        } catch (err) { /* swallow */ }
+      }
+      ['log', 'warn', 'error', 'info'].forEach(function(level) {
+        var orig = console[level].bind(console);
+        console[level] = function() { add(level, arguments); orig.apply(console, arguments); };
+      });
+      // 捕全局未捕获错误
+      window.addEventListener('error', function(e) {
+        add('error', ['[uncaught] ' + e.message + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?')]);
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        add('error', ['[unhandled rejection] ' + (e.reason && e.reason.message || e.reason)]);
+      });
+      console.log('[diag overlay] ready');
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
     }
   })();
 

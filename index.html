@@ -28757,6 +28757,7 @@
     const timeoutMs = (Number(data.timeoutSec) || 15) * 1000;
     if (typeof startTimer === 'function') {
       startTimer(timeoutMs);
+      console.log('[timer START] ' + timeoutMs + 'ms (state=' + state + ')');
     }
 
     // 8. 提示
@@ -28766,6 +28767,39 @@
     }
 
     console.log('[action-request]', state, currentActionRequest);
+
+    // ⭐ Bug 诊断(2026-05-30):验证 popup 是否真在屏幕上显示
+    //   原因:用户报告"没弹窗但听见 tick 声音",需要日志判断 UI 是否真渲染
+    setTimeout(function() {
+      try {
+        var areaEl = document.getElementById('action-area');
+        var foldBtn = document.getElementById('ab-fold-btn');
+        var checkBtn = document.getElementById('ab-check-btn');
+        var raiseBtn = document.getElementById('ab-raise-btn');
+        var pageTbl = document.getElementById('page-table');
+        function visInfo(el) {
+          if (!el) return 'null';
+          var r = el.getBoundingClientRect();
+          var cs = window.getComputedStyle(el);
+          return 'w=' + Math.round(r.width) + ' h=' + Math.round(r.height) +
+                 ' display=' + cs.display + ' visibility=' + cs.visibility + ' opacity=' + cs.opacity;
+        }
+        console.log('[UI popup VISIBLE check] state=' + state +
+                    ' area-state=' + (areaEl && areaEl.dataset.state) +
+                    ' page-state-classes=' + (pageTbl ? (pageTbl.className.match(/state-\w+/g) || []).join(',') : 'null'));
+        console.log('[UI button:fold]  ' + visInfo(foldBtn));
+        console.log('[UI button:check] ' + visInfo(checkBtn));
+        console.log('[UI button:raise] ' + visInfo(raiseBtn));
+        var tilesVis = [];
+        document.querySelectorAll('.ab-tile').forEach(function(t) {
+          var r = t.getBoundingClientRect();
+          tilesVis.push((t.dataset.raiseTile || '?') + '=' + Math.round(r.width) + 'x' + Math.round(r.height));
+        });
+        console.log('[UI tiles] ' + tilesVis.join(' | '));
+      } catch (uiErr) {
+        console.warn('[UI VISIBLE check ERROR]', uiErr);
+      }
+    }, 50);
   }
   window.showActionPopupFromRequest = showActionPopupFromRequest;
 
@@ -32943,15 +32977,31 @@
           }
           if (Array.isArray(prevHand.seats)) {
             var myUidEnd = window.currentUser && Number(window.currentUser.userId);
+            // ⭐ Bug 诊断(2026-05-30):打印 prevHand 全状态,判断"平分"决策
+            try {
+              var _seatsSummary = prevHand.seats.map(function(s) {
+                return 's' + s.seatNo + (s.folded ? '(folded)' : '(active)') + (s.userId === myUidEnd ? '★me' : '');
+              }).join(' | ');
+              console.log('[HAND END snapshot]',
+                'handId=' + prevHand.id,
+                'state=' + prevHand.state,
+                'currentActionSeat=' + prevHand.currentActionSeat,
+                'pot=' + prevHand.potMain,
+                'seats:', _seatsSummary,
+                'showdown?', !!prevHand.showdown,
+                'winners?', prevHand.showdown && prevHand.showdown.winners ? prevHand.showdown.winners.map(function(w){return 's'+w.seatNo+'('+w.handName+')';}).join(',') : 'NO_SHOWDOWN_DATA');
+            } catch (snapErr) { console.warn('[HAND END snapshot ERROR]', snapErr); }
             // ⭐ Bug 修复(2026-05-30):优先用 prevHand.showdown.winners(真赢家)
             //   原 bug:用 not-folded 玩家做"赢家"判断 → 2 人摊牌只 1 人赢时也显"平分"
             //   修复:若 showdown 数据可用,用真 winners 列表;否则 fallback 到 not-folded
             var winnerSeatNos;
             if (prevHand.showdown && Array.isArray(prevHand.showdown.winners) && prevHand.showdown.winners.length > 0) {
               winnerSeatNos = prevHand.showdown.winners.map(function(w) { return Number(w.seatNo); });
+              console.log('[HAND END] 使用 showdown.winners');
             } else {
               // Fallback: 没摊牌(folded out)就剩谁谁赢
               winnerSeatNos = prevHand.seats.filter(function(s) { return !s.folded; }).map(function(s) { return Number(s.seatNo); });
+              console.log('[HAND END] fallback to not-folded,winners=' + winnerSeatNos.join(','));
             }
             var winnerNames = winnerSeatNos.map(function(sn) {
               var seat = prevHand.seats.find(function(s) { return Number(s.seatNo) === sn; });
@@ -33168,6 +33218,18 @@
         //     - currentActionSeat 变 null(hand 结束/暂停)→ 清环 + 关弹窗
         var newActingSeatNo = hand && hand.currentActionSeat;
         var lastActingSeatNo = window._b9LastActingSeatNo;
+        // ⭐ Bug 诊断(2026-05-30):每次轮询打 currentActionSeat,判断后端是否正确派牌权
+        try {
+          var _myUidForDiag = window.currentUser && Number(window.currentUser.userId);
+          var _myActiveSeat = hand && Array.isArray(hand.seats) ?
+            hand.seats.find(function(s){ return Number(s.userId) === _myUidForDiag; }) : null;
+          console.log('[POLL hand]',
+            'state=' + (hand && hand.state),
+            'cc=' + (hand && hand.communityCards ? hand.communityCards.length : 0),
+            'currentActor=s' + newActingSeatNo + (_myActiveSeat && Number(_myActiveSeat.seatNo) === Number(newActingSeatNo) ? '★MY_TURN' : ''),
+            'mySeat=s' + (_myActiveSeat && _myActiveSeat.seatNo) + (_myActiveSeat && _myActiveSeat.folded ? '(FOLDED)' : ''),
+            'changed?', (newActingSeatNo !== lastActingSeatNo) ? 'YES' : 'no');
+        } catch (diagErr) {}
         if (newActingSeatNo !== lastActingSeatNo) {
           window._b9LastActingSeatNo = newActingSeatNo;
           // 清旧 popup(可能是上一手或上一轮我的)

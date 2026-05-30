@@ -30159,8 +30159,15 @@
         el.querySelector('.rank').textContent = c.rank;
         el.querySelector('.suit').textContent = c.suit;
       });
-    } else {
-      // 只清 inline style(让 CSS 接管显隐),不动文本/类
+    } else if (stage === 'preflop') {
+      // ⭐ Bug 3 真凶根除(2026-05-30 第三轮):只在 preflop 时清 inline opacity
+      //   原 bug:任何 stage 都清 inline → dealBoardAnimation 刚设的 opacity:1 被清
+      //   → computed opacity 临时降到 CSS default 0(此时 data-stage 还是旧的)
+      //   → 触发 360ms 淡出
+      //   → setAttribute 后 CSS rule 又给 opacity:1 → 触发 360ms 淡入
+      //   → 用户看到"3 张牌淡出再淡入" = 误以为第二次发牌
+      //   修复:flop/turn/river/showdown 时不动 inline,保留 dealBoardAnimation 的 opacity:1
+      //         只 preflop 时清,让 CSS 默认 0 接管隐藏(新一手重置)
       slots.forEach((el) => {
         el.style.opacity = '';
         el.style.transform = '';

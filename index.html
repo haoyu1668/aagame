@@ -28787,9 +28787,10 @@
 
     // 4. 加注按钮 raise/bet 切换:P2 显"下注"(有人下注的回应仍叫加注…但德扑标准:面对下注时按钮叫"加注";本街首次主动下注叫"下注")
     //    项目锁死:本街尚无下注 → "下注";已有下注 → "加注"
+    //    ⭐ 2026-05-31 Texas 审计 #1:opts 现在按 callAmt 包含 'bet' 或 'raise'(不再永远 'raise')
     const raiseBtn = document.getElementById('ab-raise-btn');
     if (raiseBtn) {
-      raiseBtn.dataset.action = (callAmt === 0 && opts.includes('raise')) ? 'bet' : 'raise';
+      raiseBtn.dataset.action = (callAmt === 0 && (opts.includes('bet') || opts.includes('raise'))) ? 'bet' : 'raise';
     }
 
     // 5. P3 大盲位常用 → 显示 Y3 风格的"过/弃"合并按钮?
@@ -32127,8 +32128,7 @@
       window._b9LastActionSent = { sig: sig, ts: nowTs };
 
       // ⭐ Bug 修复(2026-05-30 v3):bet / allin 智能映射到后端 4 种 action
-      //   - 后端 validActions = ['fold','check','call','raise']
-      //   - bet → raise(amount 不变)
+      //   - bet:保留 'bet' 发后端(2026-05-31 Texas 审计 #1 后端已接受 bet)
       //   - allin 分两种情况:
       //     · 全押额 ≤ callAmount(短筹码,连 call 都不够)→ 改发 call(后端 call 分支
       //       自动 partial all-in,actualPay=min(needCall,callerChips))
@@ -32137,9 +32137,7 @@
       //   背景:hand 143 用户 myChips=25, callAmount=393 → allin 应走 call
       var realAction = action;
       var realAmount = amount;
-      if (action === 'bet') {
-        realAction = 'raise';
-      } else if (action === 'allin') {
+      if (action === 'allin') {
         var actReq = window.currentActionRequest && window.currentActionRequest();
         if (actReq) {
           var _callAmt = Number(actReq.callAmount || 0);
@@ -33480,8 +33478,16 @@
               var canCheck = (callAmount === 0);
               var options = ['fold'];
               if (canCheck) options.push('check'); else options.push('call');
-              options.push('raise');
-              var minRaise = Math.max(Number(streetMax) * 2, Number(streetMax) + 1);
+              // ⭐ 2026-05-31 Texas 审计 #1:无人下注 → bet(下注),有下注 → raise(加注)
+              //   原 bug:options 永远是 'raise',即使是街首下注也叫"加注",违反 Texas 术语
+              options.push(streetMax === 0 ? 'bet' : 'raise');
+              // ⭐ 2026-05-31 Texas 审计 #4+#5:minRaise 公式改 Texas 标准
+              //   bet(streetMax=0):最小开下注 = BB amount(原公式给 1,违反)
+              //   raise:最小加注 = max(streetMax * 2, streetMax + BB)(保守,接近 Texas 标准)
+              var bbAmount = Number(hand.bbAmount || 2);
+              var minRaise = (streetMax === 0)
+                ? bbAmount
+                : Math.max(Number(streetMax) * 2, Number(streetMax) + bbAmount);
               var maxRaise = Number(mySeat.chips || 0) + Number(mySeat.currentBet || 0);
 
               // ⭐ 规格 F2(2026-05-30):预选金额变化失效校验

@@ -1716,6 +1716,11 @@
     font-weight: 500;
     flex-shrink: 0;
   }
+  /* ⭐ 2026-05-30:离线时间(X分钟前/X小时前等)字号小一点 */
+  .member-date:not(.online) {
+    font-size: 11px;
+    font-weight: 400;
+  }
   .member-date.online {
     color: var(--green-main);
   }
@@ -36527,14 +36532,15 @@
     if (!lastOnline) return { text: '-', online: false };
     const diff = Date.now() - lastOnline;
     const SEC = 1000, MIN = 60 * SEC, HOUR = 60 * MIN, DAY = 24 * HOUR, MONTH = 30 * DAY;
-    if (diff <= 60 * SEC)  return { text: '在线',          online: true  };
-    if (diff <  5 * MIN)   return { text: Math.max(1, Math.floor(diff / MIN)) + '分钟前在线', online: false };
-    if (diff < 30 * MIN)   return { text: Math.floor(diff / MIN) + '分钟前在线', online: false };
-    if (diff < HOUR)       return { text: '半小时前在线',  online: false };
-    if (diff < DAY)        return { text: Math.floor(diff / HOUR) + '小时前在线', online: false };
-    if (diff < 7 * DAY)    return { text: Math.floor(diff / DAY) + '天前在线',  online: false };
-    if (diff < MONTH)      return { text: Math.floor(diff / (7 * DAY)) + '周前在线', online: false };
-    return                          { text: Math.floor(diff / MONTH) + '个月前在线', online: false };
+    // ⭐ 2026-05-30 用户要求:除"在线"外其它档位不带"在线"后缀
+    if (diff <= 60 * SEC)  return { text: '在线',                online: true  };
+    if (diff <  5 * MIN)   return { text: Math.max(1, Math.floor(diff / MIN)) + '分钟前', online: false };
+    if (diff < 30 * MIN)   return { text: Math.floor(diff / MIN) + '分钟前', online: false };
+    if (diff < HOUR)       return { text: '半小时前',            online: false };
+    if (diff < DAY)        return { text: Math.floor(diff / HOUR) + '小时前', online: false };
+    if (diff < 7 * DAY)    return { text: Math.floor(diff / DAY) + '天前',  online: false };
+    if (diff < MONTH)      return { text: Math.floor(diff / (7 * DAY)) + '周前', online: false };
+    return                          { text: Math.floor(diff / MONTH) + '个月前', online: false };
   }
 
   // 成员排序:创建者置顶 → 管理员按 adminSetAt 倒序 → 普通玩家按 lastOnline 倒序

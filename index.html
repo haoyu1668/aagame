@@ -13219,7 +13219,7 @@
         </button>
         <button class="ab-btn ab-raise" id="ab-raise-btn" data-action="raise"><span class="ab-raise-text-raise">加注</span><span class="ab-raise-text-bet">下注</span></button>
         <button class="ab-btn ab-check" id="ab-check-btn">
-          <span class="ab-check-amount" id="ab-check-amount">40</span>
+          <span class="ab-check-amount" id="ab-check-amount"></span>
           <span class="ab-check-label" id="ab-check-label">跟注</span>
           <span class="ab-check-label-check">过牌</span>
           <!-- ⭐ v2.18.4 P4 All-In 跟注文案 -->
@@ -28814,10 +28814,12 @@
       timestamp: Date.now()
     };
 
-    // 3. 填充按钮金额(Y1 跟注按钮显示预选金额)
+    // 3. 填充按钮金额(Y1 跟注按钮显示预选金额;Y2/Y3 清空避免残留旧 callAmount)
+    // ⭐ Bug 修复(2026-05-30):用户每手看到"跟注 4"卡住,因为旧版只 Y1 设 amount,
+    //   Y2/Y3 不清空 → 上一手 Y1 set 的"4"残留显示 → 每手都"跟注 4"
     const checkAmount = document.getElementById('ab-check-amount');
-    if (checkAmount && yState === 'y1') {
-      checkAmount.textContent = formatPotMoney(expectedCall);
+    if (checkAmount) {
+      checkAmount.textContent = (yState === 'y1') ? formatPotMoney(expectedCall) : '';
     }
 
     // 4. 切 action-area 状态
@@ -32004,8 +32006,13 @@
         // ⭐ 409"还没轮到你行动"通常是预选+手动重复触发或时序错,静默不 toast 用户
         var msg = (err && err.message) || '';
         var is409NotYourTurn = (err && err.status === 409) && msg.indexOf('还没轮到') >= 0;
+        // ⭐ Bug 修复(2026-05-30):404"牌局不存在或已结束"= 后端 timeout 已 auto-fold,
+        //   我的 POST 晚了 → 静默吞,不弹 toast(否则误导玩家以为出错)
+        var is404HandEnded = (err && err.status === 404) && (msg.indexOf('不存在') >= 0 || msg.indexOf('已结束') >= 0);
         if (is409NotYourTurn) {
           console.warn('[B9 P2.1] 静默忽略 409(重复触发?):', msg);
+        } else if (is404HandEnded) {
+          console.warn('[B9 P2.1] 静默忽略 404(timeout 已 auto-fold,race):', msg);
         } else {
           console.warn('[B9 P2.1] ❌ action 失败:', err);
           if (typeof showToast === 'function') {
@@ -32885,13 +32892,24 @@
           }
           if (Array.isArray(prevHand.seats)) {
             var myUidEnd = window.currentUser && Number(window.currentUser.userId);
-            var notFolded = prevHand.seats.filter(function(s) { return !s.folded; });
-            var winnerNames = notFolded.map(function(s) {
-              var sid = (Number(s.userId) === myUidEnd) ? 'my' : ('s' + s.seatNo);
+            // ⭐ Bug 修复(2026-05-30):优先用 prevHand.showdown.winners(真赢家)
+            //   原 bug:用 not-folded 玩家做"赢家"判断 → 2 人摊牌只 1 人赢时也显"平分"
+            //   修复:若 showdown 数据可用,用真 winners 列表;否则 fallback 到 not-folded
+            var winnerSeatNos;
+            if (prevHand.showdown && Array.isArray(prevHand.showdown.winners) && prevHand.showdown.winners.length > 0) {
+              winnerSeatNos = prevHand.showdown.winners.map(function(w) { return Number(w.seatNo); });
+            } else {
+              // Fallback: 没摊牌(folded out)就剩谁谁赢
+              winnerSeatNos = prevHand.seats.filter(function(s) { return !s.folded; }).map(function(s) { return Number(s.seatNo); });
+            }
+            var winnerNames = winnerSeatNos.map(function(sn) {
+              var seat = prevHand.seats.find(function(s) { return Number(s.seatNo) === sn; });
+              if (!seat) return ('座位 ' + sn);
+              var sid = (Number(seat.userId) === myUidEnd) ? 'my' : ('s' + sn);
               var occ = currentTableRoom && currentTableRoom.occupiedSeats && currentTableRoom.occupiedSeats[sid];
-              return (occ && occ.name) || ('座位 ' + s.seatNo);
+              return (occ && occ.name) || ('座位 ' + sn);
             });
-            var endMsg = (notFolded.length === 1)
+            var endMsg = (winnerNames.length === 1)
               ? (winnerNames[0] + ' 赢得本手')
               : (winnerNames.join(' / ') + ' 平分本手');
             console.log('[B9 P2.1] 本手结束:', endMsg);

@@ -3404,6 +3404,17 @@
   }
   .my-cards.muck-back .card .rank,
   .my-cards.muck-back .card .suit { visibility: hidden; }
+
+  /* ⭐ 2026-05-30:延迟看牌 — 点击 my-cards 切换展示/盖牌
+     默认(无 .show-cards 类)= 盖牌,其他玩家看不到
+     点击加 .show-cards 类 = 红色描边 = 展示给其他玩家 */
+  .my-cards.can-toggle-show .card {
+    cursor: pointer;
+    transition: box-shadow 0.18s ease;
+  }
+  .my-cards.show-cards .card {
+    box-shadow: 0 0 0 2.5px #ff3030, 0 0 10px rgba(255, 48, 48, 0.55);
+  }
   .card {
     width: 44px;
     height: 60px;
@@ -31121,38 +31132,54 @@
     return chip;
   }
 
-  // 找到底池中心点
-  // ⭐ Bug A 真因修复(2026-05-30):优先用 .pot-label("底池: N"文字行)作锚点
-  //   原 bug:用 .pot-chips,但真桌某些时刻它 display:none → getBoundingClientRect 0,0
-  //   退回 .table-center 整个容器中心 — 容器布局"筹码堆 → 文字 → 边池列表",
-  //   几何中心偏下 → 筹码飞到底池下方(用户报告"飞偏了")
-  //   修复:.pot-label 始终 display:block 位置稳定,正是用户期待的落点
+  // 找到底池中心点 — 用户钉死的落点是"底池: N"文字行
+  // ⭐ Bug 2 真凶根除(2026-05-30 第二轮):前几版用 .pot-label 失效
+  //   原因:.pot-label 在某些 race 下 getBoundingClientRect 返 0,0(可能 display:none 或未挂载)
+  //         → 退回 .table-center 整个容器中心 → 几何中心偏下,但 transform:translateX(-50%) 让 left=0
+  //         → 用户看见筹码飞到屏幕左上角(hamburger 附近)
+  //   修复:总是用 .table-center 的 left+rect.width/2 作 X(正确居中),
+  //         Y 用 rect.top + 30px(.table-center 内 .pot-chips 高 24 + 6 间距,
+  //         pot-label 在那下面约 30px 处 — 用户期望落点)
+  //         如果 .table-center 都失效,降级到 page 几何中心(永远不是左上角)
   function getPotCenter() {
-    // 1. 首选 .pot-label("底池: N"文字行)
-    const label = document.querySelector('.table-center .pot-label');
-    if (label) {
-      const rect = label.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) return getRelativeCenter(label);
-    }
-    // 2. 次选 .pot-chips(筹码堆;可见时)
-    const potEl = document.querySelector('.table-center .pot-chips');
-    if (potEl) {
-      const rect = potEl.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) return getRelativeCenter(potEl);
-    }
-    // 3. 兜底:.table-center 整体中心
-    const center = document.querySelector('.table-center');
-    if (center) {
-      const rect = center.getBoundingClientRect();
-      if (rect.width > 0) return getRelativeCenter(center);
-    }
     const page = document.getElementById('page-table');
-    if (page) {
-      const r = page.getBoundingClientRect();
-      const zoom = getZoomFactor();
-      return { x: (r.width / 2) / zoom, y: (r.height * 0.3) / zoom };
+    const pageRect = page && page.getBoundingClientRect();
+    const zoom = (typeof getZoomFactor === 'function') ? getZoomFactor() : 1;
+
+    // 1. 首选 .pot-label(若有 size,直接用其中心)
+    const label = document.querySelector('.table-center .pot-label');
+    if (label && pageRect) {
+      const lr = label.getBoundingClientRect();
+      if (lr.width > 0 && lr.height > 0) {
+        return {
+          x: (lr.left - pageRect.left + lr.width / 2) / zoom,
+          y: (lr.top  - pageRect.top  + lr.height / 2) / zoom
+        };
+      }
     }
-    return { x: 195, y: 250 };
+
+    // 2. 次选 .table-center + Y 固定偏移到 pot-label 位置
+    const center = document.querySelector('.table-center');
+    if (center && pageRect) {
+      const cr = center.getBoundingClientRect();
+      if (cr.width > 0) {
+        // .table-center 内布局: pot-chips (24px) + margin (6px) + pot-label
+        // pot-label 中心 ≈ table-center top + 24 + 6 + 7 ≈ 37px
+        return {
+          x: (cr.left - pageRect.left + cr.width / 2) / zoom,
+          y: (cr.top  - pageRect.top  + 37) / zoom
+        };
+      }
+    }
+
+    // 3. 终极兜底:用 page 几何中心(永远不是左上角)
+    if (pageRect) {
+      return {
+        x: (pageRect.width / 2) / zoom,
+        y: (pageRect.height * 0.3) / zoom
+      };
+    }
+    return { x: 195, y: 253 };
   }
 
   // ⭐ Task 3.1(2026-05-29):下注 / 跟注 / 加注 / All-in 时,筹码从座位头像飞向自己 .seat-bet
@@ -32834,8 +32861,12 @@
             }).join(' / ');
             if (typeof showToast === 'function') showToast(winnerLabels + ' 赢');
           }
-          // ⭐ B11 延迟看牌:settings.delayedRevealEnabled=true 时弹 muck-modal 让自己选
-          //   我必须是 not-folded 玩家才有意义(已弃牌的不需要选)
+          // ⭐ 用户改需求(2026-05-30):展示底牌不弹窗
+          //   改成点击手牌切换展示/盖牌:
+          //   - 默认(不点)= 盖牌 muck,其他玩家看不到
+          //   - 点击 my-cards = 加红色描边 .show-cards 类 = 展示 show,POST reveal
+          //   - 再点一次 = 去掉描边 = 切回 muck,POST reveal show=false
+          //   只在 settings.delayedRevealEnabled=true 且我在 showdown 时启用
           var settings = currentTableRoom && currentTableRoom.settings;
           if (settings && settings.delayedRevealEnabled) {
             var myUid = window.currentUser && Number(window.currentUser.userId);
@@ -32843,8 +32874,26 @@
               var sd_seat = (hand.seats || []).find(function(hs) { return hs.seatNo === p.seatNo; });
               return sd_seat && Number(sd_seat.userId) === myUid;
             });
-            if (iAmInShowdown && typeof window.openShowMuckModal === 'function') {
-              window.openShowMuckModal();
+            if (iAmInShowdown) {
+              // 启用 my-cards 点击切换(.can-toggle-show 类标记 + click handler)
+              var myCardsEl = document.querySelector('#page-table .my-seat .my-cards');
+              if (myCardsEl && !myCardsEl.dataset.toggleHooked) {
+                myCardsEl.dataset.toggleHooked = '1';
+                myCardsEl.classList.add('can-toggle-show');
+                myCardsEl.addEventListener('click', function() {
+                  var willShow = !myCardsEl.classList.contains('show-cards');
+                  myCardsEl.classList.toggle('show-cards', willShow);
+                  // POST 真后端
+                  if (window._b9CurrentHand && window._b9CurrentHand.id && window.apiClient) {
+                    window.apiClient.post('/api/hands/' + window._b9CurrentHand.id + '/reveal', { show: willShow })
+                      .then(function(r) { console.log('[reveal toggle]', willShow ? 'show' : 'muck', r); })
+                      .catch(function(e) { console.warn('[reveal toggle] 失败', e.message); });
+                  }
+                  if (typeof showToast === 'function') {
+                    showToast(willShow ? '已展示底牌(其他玩家可见)' : '已盖牌');
+                  }
+                });
+              }
             }
           }
         }

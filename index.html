@@ -32870,9 +32870,14 @@
             var delay = 0;
             for (var si = highestDealtIdx + 1; si <= targetIdx; si++) {
               var streetName = STREETS_ORDER[si];
-              dealtMap[streetName] = true;
+              // ⭐ Bug 修复(2026-05-30):dealtMap[street] 不能在这里 sync 设
+              //   sync 设了 → 同 tick 的 renderCommunityCardsB9 守卫触发 → slot 没填
+              //   → 几 ms 后 setTimeout 派发的 dealBoardAnimation 找不到 slot 内容 → 看不见牌
+              //   修复:挪到 setTimeout 内部,在 renderCommunityCardsB9 跑完 + dealBoardAnimation
+              //         读完 slot 之后才标记,这样后续 polling 的守卫才生效
               (function(sn, d) {
                 setTimeout(function() {
+                  dealtMap[sn] = true;   // 标记移到这里:此时 slot 已被 renderCommunityCardsB9 填好
                   if (sn === 'showdown') {
                     // showdown 不发牌,只切 data-stage
                     if (typeof setStage === 'function') setStage('showdown');

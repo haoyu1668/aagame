@@ -17069,6 +17069,25 @@
     // ⭐ 2026-05-29:离表清 on-real-table class,DEV/DEMO 元素恢复显示
     document.body.classList.remove('on-real-table');
     if (tableEntryFrom === 'lobby') {
+      // ⭐ Bug 修复(2026-05-30):乐观更新,避免显示"2/9 stale"在 fetch 完成前
+      //   用户反馈:刚退桌进大厅时看到 2/9(自己刚离的桌人数没扣),
+      //     再点一次大厅就变 0/9(fetch 完成后)
+      //   修复:导航前在 clubRooms 本地把"我刚离开的桌"的 seats -1
+      //     这样导航瞬间显示就是正确数字,fetch 完成后再覆盖确认
+      try {
+        if (window.currentTableRoom && currentClubInfoId && Array.isArray(clubRooms[currentClubInfoId])) {
+          var _myJustLeftId = Number(window.currentTableRoom.id);
+          clubRooms[currentClubInfoId].forEach(function(r) {
+            if (Number(r.id) === _myJustLeftId && typeof r.seats === 'number' && r.seats > 0) {
+              r.seats = r.seats - 1;
+            }
+          });
+          if (typeof renderLobbyRooms === 'function') {
+            renderLobbyRooms(currentClubInfoId);
+          }
+        }
+      } catch (optErr) { console.warn('[leave 乐观更新失败]', optErr); }
+
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       const clubLobby = document.getElementById('page-club-lobby');
       if (clubLobby) {

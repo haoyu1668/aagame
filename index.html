@@ -29285,6 +29285,11 @@
 
       case WS_EVENTS.ACTION_EXEC: {
         // 任意玩家(包括我自己)的行动结果广播
+        // ⭐ 2026-05-31:标记动画时间戳(包括筹码飞 + 行动气泡),弹窗节流用
+        //   call/raise/bet/allin 都触发飞筹码 → 下家弹窗需等动画落地
+        if (data.action && data.action !== 'check' && data.action !== 'fold') {
+          window._b9LastAnimationTs = Date.now();
+        }
         setActingSeat(data.seatId);   // 头像绿环
         const labelMap = {
           fold:  { cls: 'action-fold',  text: '弃牌' },
@@ -31192,6 +31197,8 @@
       console.warn('[dealBoardAnimation] throttle:正在跑 ' + stage + ',跳过');
       return;
     }
+    // ⭐ 2026-05-31:标记最近动画时间戳,供 ACTION_REQUEST/PRESELECT 弹窗节流用
+    window._b9LastAnimationTs = Date.now();
     if (!window._b9DealBoardActiveStages) window._b9DealBoardActiveStages = {};
     window._b9DealBoardActiveStages[stage] = true;
     setTimeout(function() {
@@ -33346,21 +33353,34 @@
               } catch (psErr) { console.warn('[F2 预选校验]', psErr); }
 
               console.log('[B9 P2.1] 派发 ACTION_REQUEST(轮到我):', { options: options, callAmount: callAmount, minRaise: minRaise, maxRaise: maxRaise });
+              // ⭐ 2026-05-31 用户要求:发牌/筹码动画完成后再弹 popup(1-2s 延迟)
+              //   原 bug:翻牌没发完 popup 已弹;别人筹码没落 popup 已弹
+              //   修复:track 最近动画事件 _b9LastAnimationTs,弹窗前看是否在 1.8s 内
+              //     若是 → setTimeout 延迟到动画完成再弹
+              var _animEventTs = Number(window._b9LastAnimationTs || 0);
+              var _msSinceAnim = Date.now() - _animEventTs;
+              var _popupDelay = (_msSinceAnim < 1800) ? Math.max(50, 1800 - _msSinceAnim) : 0;
+              var _actionReqPayload = {
+                type: WS_EVENTS.ACTION_REQUEST,
+                data: {
+                  handNo:     hand.id,
+                  seatId:     'my',
+                  options:    options,
+                  callAmount: callAmount,
+                  minRaise:   minRaise,
+                  maxRaise:   maxRaise,
+                  myChips:    Number(mySeat.chips || 0),
+                  timeoutSec: 15,
+                  potSize:    Number(hand.potMain || 0)
+                }
+              };
               if (typeof window.handleServerEvent === 'function' && typeof WS_EVENTS !== 'undefined') {
-                window.handleServerEvent({
-                  type: WS_EVENTS.ACTION_REQUEST,
-                  data: {
-                    handNo:     hand.id,
-                    seatId:     'my',
-                    options:    options,
-                    callAmount: callAmount,
-                    minRaise:   minRaise,
-                    maxRaise:   maxRaise,
-                    myChips:    Number(mySeat.chips || 0),
-                    timeoutSec: 15,
-                    potSize:    Number(hand.potMain || 0)
-                  }
-                });
+                if (_popupDelay > 0) {
+                  console.log('[弹窗节流] 延迟 ' + _popupDelay + 'ms(动画刚发生 ' + _msSinceAnim + 'ms 前)');
+                  setTimeout(function() { window.handleServerEvent(_actionReqPayload); }, _popupDelay);
+                } else {
+                  window.handleServerEvent(_actionReqPayload);
+                }
               }
             } else {
               // ⭐ 规格 F1(2026-05-30):别人的回合 → 派发 PRESELECT 给我(Y 态)
@@ -33387,14 +33407,23 @@
                   }
                   var iAmBB = (hand.bbSeat && Number(hand.bbSeat) === Number(mySeatData.seatNo));
                   if (typeof window.showPreselectFromContext === 'function') {
-                    window.showPreselectFromContext({
+                    // ⭐ 同 ACTION_REQUEST 也做动画延迟,让 chip/card 动画完成后再弹预选
+                    var _preAnimTs = Number(window._b9LastAnimationTs || 0);
+                    var _msPre = Date.now() - _preAnimTs;
+                    var _preDelay = (_msPre < 1800) ? Math.max(50, 1800 - _msPre) : 0;
+                    var _prePayload = {
                       seatId: 'my',
                       expectedCallAmount: expectedCall,
                       allowedActions: allowed,
                       isBigBlind: iAmBB,
                       myChips: Number(mySeatData.chips || 0),
                       potSize: Number(hand.potMain || 0)
-                    });
+                    };
+                    if (_preDelay > 0) {
+                      setTimeout(function() { window.showPreselectFromContext(_prePayload); }, _preDelay);
+                    } else {
+                      window.showPreselectFromContext(_prePayload);
+                    }
                   }
                 }
               } catch (preErr) { console.warn('[F1 PRESELECT 派发]', preErr); }

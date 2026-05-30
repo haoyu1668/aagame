@@ -31121,19 +31121,26 @@
     return chip;
   }
 
-  // 找到底池中心点(.pot-chips)
+  // 找到底池中心点
+  // ⭐ Bug A 真因修复(2026-05-30):优先用 .pot-label("底池: N"文字行)作锚点
+  //   原 bug:用 .pot-chips,但真桌某些时刻它 display:none → getBoundingClientRect 0,0
+  //   退回 .table-center 整个容器中心 — 容器布局"筹码堆 → 文字 → 边池列表",
+  //   几何中心偏下 → 筹码飞到底池下方(用户报告"飞偏了")
+  //   修复:.pot-label 始终 display:block 位置稳定,正是用户期待的落点
   function getPotCenter() {
+    // 1. 首选 .pot-label("底池: N"文字行)
+    const label = document.querySelector('.table-center .pot-label');
+    if (label) {
+      const rect = label.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return getRelativeCenter(label);
+    }
+    // 2. 次选 .pot-chips(筹码堆;可见时)
     const potEl = document.querySelector('.table-center .pot-chips');
-    // ⭐ Bug 2 fix(2026-05-29):potEl 可能存在但 display:none 时
-    //   getBoundingClientRect 返 {0,0,0,0} → 飞行筹码飞到屏幕左上角
-    //   修复:检查实际 size,无 size 时用兜底
     if (potEl) {
       const rect = potEl.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        return getRelativeCenter(potEl);
-      }
+      if (rect.width > 0 && rect.height > 0) return getRelativeCenter(potEl);
     }
-    // 兜底:中央(用 .table-center 元素位置,比纯 page 算更准)
+    // 3. 兜底:.table-center 整体中心
     const center = document.querySelector('.table-center');
     if (center) {
       const rect = center.getBoundingClientRect();
@@ -31143,7 +31150,6 @@
     if (page) {
       const r = page.getBoundingClientRect();
       const zoom = getZoomFactor();
-      // ⭐ v2.28.24:兜底也要除以 zoom 因子
       return { x: (r.width / 2) / zoom, y: (r.height * 0.3) / zoom };
     }
     return { x: 195, y: 250 };
@@ -32728,64 +32734,76 @@
           window._b9ShowdownShownForHandId = null;
         }
 
-        // ⭐ P2.2 #12 #13:识别街转换(state preflop→flop→turn→river)
-        //   后端 actions 路由街结束时改 hands.state + 发公牌 → 这里轮询拿到 state 变化
-        //   派发:
-        //     1) POT_COLLECT → betChipsToPotAnimation:座位 .seat-bet 飞到底池中央
-        //     2) STREET_NEXT → handler:清动作气泡 + 停 acting + 推历史
-        //     3) CARD_DEAL_BOARD → dealBoardAnimation:烧 1 + 飞公牌动画(Bug D fix 2026-05-29)
-        if (hand && hand.state && hand.state !== window._b9LastSeenState) {
-          var prevState = window._b9LastSeenState;
-          window._b9LastSeenState = hand.state;
-          // 非"首次见 hand 当前 state"才派发(避免初次见 preflop 时误派发)
-          if (prevState && prevState !== hand.state && typeof window.handleServerEvent === 'function' && typeof WS_EVENTS !== 'undefined') {
-            console.log('[B9 P2.2] 街转换:' + prevState + ' → ' + hand.state);
-            window.handleServerEvent({
-              type: WS_EVENTS.POT_COLLECT, data: {}
-            });
-            window.handleServerEvent({
-              type: WS_EVENTS.STREET_NEXT, data: { street: hand.state }
-            });
-            // ⭐ Bug D fix v3(2026-05-29):街转换 + fast-forward + 防重复派发
-            //   1. 街转换 → 发公牌动画 dispatching CARD_DEAL_BOARD
-            //   2. 全 all-in fast-forward 时跨多条街跳跃,顺次播
-            //   3. Bug 3 fix:每条街只能 dispatch 一次,防止重叠/重播
-            //      用 window._b9DealtStreets[handId] = Set 记录已派发的街
-            var STREETS = ['preflop','flop','turn','river','showdown'];
-            var prevIdx = STREETS.indexOf(prevState);
-            var newIdx = STREETS.indexOf(hand.state);
-            if (prevIdx >= 0 && newIdx > prevIdx) {
-              // 初始化每手的"已派发的街"记录
-              if (!window._b9DealtStreets) window._b9DealtStreets = {};
-              if (!window._b9DealtStreets[hand.id]) window._b9DealtStreets[hand.id] = {};
-              var dealt = window._b9DealtStreets[hand.id];
-              var lastStreetToAnimate = Math.min(newIdx, STREETS.indexOf('river'));
-              var delay = 0;
-              for (var si = prevIdx + 1; si <= lastStreetToAnimate; si++) {
-                var streetName = STREETS[si];
-                if (dealt[streetName]) continue;   // 防重复派发(Bug 3)
-                dealt[streetName] = true;
-                (function(sn, d) {
-                  setTimeout(function() {
-                    window.handleServerEvent({
-                      type: WS_EVENTS.CARD_DEAL_BOARD,
-                      data: { street: sn, cards: hand.communityCards || [] }
-                    });
-                  }, d);
-                })(streetName, delay);
-                delay += (streetName === 'flop') ? 1800 : 1200;
-              }
-              if (hand.state === 'showdown') {
+        // ⭐ Bug B+C 真因修复(2026-05-30):街判定改用 communityCards.length(幂等事实)
+        //   原 bug:_b9LastSeenState 多处被重置 undefined → 追踪链断裂
+        //     - 断裂后再见 flop → 当成"undefined→flop 新转换"重派 → 翻牌发两次(Bug B)
+        //     - flop→turn 之间被重置 → prevState=undefined → if (prevState && ...) 跳过
+        //       → turn 不发(Bug C)
+        //   修复:丢追踪链,用 hand.communityCards.length 直接判街:
+        //     0=preflop / 3=flop / 4=turn / 5=river,showdown 由 hand.state 判
+        //     _b9DealtStreets[hand.id] 记本手已飞过的街
+        //     对"目标街 > 已飞过的最高街"的每条街顺次补播
+        //     已飞过的街绝不重播(根治 B)+ 中间漏掉的街必被牌数推断补上(根治 C)
+        if (hand && typeof window.handleServerEvent === 'function' && typeof WS_EVENTS !== 'undefined') {
+          var ccCount = (hand.communityCards || []).length;
+          var STREETS_ORDER = ['preflop','flop','turn','river','showdown'];
+          var STREET_CARD_COUNT = { preflop:0, flop:3, turn:4, river:5 };
+          // 算出"目标街"(本手最新应到达的街)
+          var targetStreet = 'preflop';
+          if (hand.state === 'showdown') targetStreet = 'showdown';
+          else if (ccCount >= 5) targetStreet = 'river';
+          else if (ccCount === 4) targetStreet = 'turn';
+          else if (ccCount === 3) targetStreet = 'flop';
+          // else preflop
+          var targetIdx = STREETS_ORDER.indexOf(targetStreet);
+
+          // 初始化本手已飞过街的记录
+          if (!window._b9DealtStreets) window._b9DealtStreets = {};
+          if (!window._b9DealtStreets[hand.id]) window._b9DealtStreets[hand.id] = {};
+          var dealtMap = window._b9DealtStreets[hand.id];
+
+          // 算出"已飞过的最高街索引"
+          var highestDealtIdx = 0;  // 默认 preflop
+          ['flop','turn','river','showdown'].forEach(function(s) {
+            if (dealtMap[s]) {
+              var idx = STREETS_ORDER.indexOf(s);
+              if (idx > highestDealtIdx) highestDealtIdx = idx;
+            }
+          });
+
+          // 需要补播的街:从 highestDealtIdx+1 到 targetIdx
+          if (targetIdx > highestDealtIdx) {
+            console.log('[B9 街判定] 已到:' + highestDealtIdx + '(' + STREETS_ORDER[highestDealtIdx] + '),应到:' + targetIdx + '(' + targetStreet + '),ccCount=' + ccCount);
+            var delay = 0;
+            for (var si = highestDealtIdx + 1; si <= targetIdx; si++) {
+              var streetName = STREETS_ORDER[si];
+              dealtMap[streetName] = true;
+              (function(sn, d) {
                 setTimeout(function() {
-                  if (typeof setStage === 'function') setStage('showdown');
-                  else {
-                    var ccEl = document.getElementById('community-cards');
-                    if (ccEl) ccEl.setAttribute('data-stage', 'showdown');
+                  if (sn === 'showdown') {
+                    // showdown 不发牌,只切 data-stage
+                    if (typeof setStage === 'function') setStage('showdown');
+                    else {
+                      var ccEl = document.getElementById('community-cards');
+                      if (ccEl) ccEl.setAttribute('data-stage', 'showdown');
+                    }
+                    return;
                   }
-                }, delay + 200);
-              }
+                  // 真街转换 → 派发 POT_COLLECT + STREET_NEXT + CARD_DEAL_BOARD
+                  window.handleServerEvent({ type: WS_EVENTS.POT_COLLECT, data: {} });
+                  window.handleServerEvent({ type: WS_EVENTS.STREET_NEXT, data: { street: sn } });
+                  window.handleServerEvent({
+                    type: WS_EVENTS.CARD_DEAL_BOARD,
+                    data: { street: sn, cards: hand.communityCards || [] }
+                  });
+                  console.log('[B9 街判定] 补播 ' + sn);
+                }, d);
+              })(streetName, delay);
+              delay += (streetName === 'flop') ? 1800 : (streetName === 'showdown' ? 200 : 1200);
             }
           }
+          // 兼容:保留 _b9LastSeenState 更新(其它逻辑读它的话不受影响)
+          if (hand.state) window._b9LastSeenState = hand.state;
         }
 
         // ⭐ P2.3 #17:showdown 摊牌处理(state='showdown' 第一次见)

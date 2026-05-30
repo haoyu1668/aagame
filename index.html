@@ -31217,6 +31217,13 @@
 
     // 3. 终极硬编码 — 永远不返回 (0,0) / 左上角
     console.warn('[getPotCenter] 所有 DOM 测量+百分比都失败,用硬编码 (195, 253)');
+    // ⭐ 诊断 toast:让手机用户也能看到走到了哪个分支(无需 DevTools)
+    //   只在 dev 诊断期可见;稳定后删此 toast
+    if (typeof showToast === 'function' && !window._potCenterDebugShown) {
+      window._potCenterDebugShown = true;
+      setTimeout(function() { window._potCenterDebugShown = false; }, 3000);  // 3s 内不重复弹
+      showToast('[诊断] 底池坐标走硬编码兜底 — 请截屏告诉开发者');
+    }
     return HARD_DEFAULT;
   }
 

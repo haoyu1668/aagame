@@ -28858,9 +28858,12 @@
       pageTable.classList.add('state-' + yState);
     }
 
-    // 5. ⭐ v2.28 批次 D1:同时显示 Y4(跟任何)和 Y5(全下任何)入口
-    //    无论 Y1/Y2/Y3 哪个态,Y4/Y5 都作为"额外选项"挂在右侧
-    showCallAnyAllInAnyOptions(yState);
+    // 5. ⭐ Bug 修复(2026-05-30):用户要求去掉"跟任何/全下"浮动按钮组
+    //    原因:这两个 preselect 按钮跟普通的 弃牌/跟注/加注/全下 弹窗功能重叠
+    //    decision:不再显示(函数保留以备将来需要重新启用)
+    // showCallAnyAllInAnyOptions(yState);   // 已禁用
+    var _preselectExtras = document.getElementById('preselect-extras');
+    if (_preselectExtras) _preselectExtras.style.display = 'none';
 
     console.log('[preselect-show]', yState, currentPreselectContext);
   }

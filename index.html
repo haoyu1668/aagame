@@ -17092,6 +17092,24 @@
       if (typeof fetchClubTablesAndRender === 'function' && currentClubInfoId) {
         fetchClubTablesAndRender(currentClubInfoId);
       }
+      // ⭐ Bug 修复(2026-05-30 v3 真凶):从牌桌返回大厅时也启动 2s polling
+      //   原 bug:polling 只在 openClubLobby 启动,doReturnToLobby 不启动
+      //   → 用户从牌桌退到大厅后,polling 没跑 → 数字 stale
+      if (window._lobbyPollingTimer) {
+        clearInterval(window._lobbyPollingTimer);
+        window._lobbyPollingTimer = null;
+      }
+      window._lobbyPollingTimer = setInterval(function() {
+        var lobbyElCheck = document.getElementById('page-club-lobby');
+        if (!lobbyElCheck || !lobbyElCheck.classList.contains('active')) {
+          clearInterval(window._lobbyPollingTimer);
+          window._lobbyPollingTimer = null;
+          return;
+        }
+        if (typeof fetchClubTablesAndRender === 'function') {
+          fetchClubTablesAndRender(currentClubInfoId);
+        }
+      }, 2000);
     } else {
       if (typeof showMainPage === 'function') showMainPage('game');
     }

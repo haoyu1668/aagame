@@ -29966,6 +29966,13 @@
   // 解析单张牌 "K♥" → { rank: 'K', suit: '♥', value: 13, red: true }
   function parseCard(cardStr) {
     if (!cardStr) return null;
+    // ⭐ Bug C 真因修复(2026-05-30):剥离 VS15(U+FE0E)/VS16(U+FE0F)变体选择符
+    //   背景:dealBoardAnimation 给花色文本加了 '︎' 让 renderCommunityCardsB9 比对一致;
+    //         但 getCurrentBoard 从 DOM 读 suit textContent 拿到 "♦︎"(含 VS15),
+    //         然后 cardStr.replace(suit,'') 只剥单个 ♦ 字符,VS15 跟随 rank → rank="K︎"
+    //         → RANK_VALUES["K︎"]=undefined → value=0 → 3 张公牌 value=0 → 假"三条"
+    //   用户日志:["10♠","8♦","K♦︎","Q♦︎","6♠︎"] 算出"三条" — 实际应"高牌 K"
+    cardStr = cardStr.replace(/[︎️]/g, '');
     // ⭐ v2.28.4 Bug 1 修复:遇到 '?' 或非法卡(没有花色)→ 返回安全 fallback,而不是 null
     // 否则 revealSeatCards 渲染时 c.rank 是空字符串,显示成"白卡缺数字"
     if (cardStr === '?' || cardStr === '??' || cardStr === '?♠' || cardStr === '?♥' || cardStr === '?♦' || cardStr === '?♣') {

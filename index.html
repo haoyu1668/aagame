@@ -31895,6 +31895,19 @@
     //   响应不立即触发动画 — 5s 轮询会拿到新 hand state 后派发 ACTION_EXEC(P2.1 #5)
     if (window._b9CurrentHand && window._b9CurrentHand.id && window.apiClient && typeof window.apiClient.post === 'function') {
       var handId = window._b9CurrentHand.id;
+      // ⭐ Bug 修复(2026-05-30):1.5s 内重复点同 action 静默忽略(防预选+手动双发)
+      //   场景:Y3 预选自动 POST 成功 → 玩家又手动点 fold → 第二次 POST 被后端 409 拒
+      //   → toast "还没轮到你行动" 误导
+      //   修复:用 _lastActionSent 记录 handId+action+ts,1.5s 内同样 → return
+      var lastSent = window._b9LastActionSent;
+      var nowTs = Date.now();
+      var sig = handId + ':' + action + ':' + (amount || 0);
+      if (lastSent && lastSent.sig === sig && (nowTs - lastSent.ts) < 1500) {
+        console.log('[B9 P2.1] 💤 重复点击 1.5s 内忽略:', sig);
+        return false;
+      }
+      window._b9LastActionSent = { sig: sig, ts: nowTs };
+
       var body = { action: action };
       if (typeof amount === 'number' && amount > 0) body.amount = amount;
       console.log('[B9 P2.1] → POST /actions', body);
@@ -31905,9 +31918,16 @@
           window.fetchAndRenderCurrentHand(Number(window.currentTableRoom.id));
         }
       }).catch(function(err) {
-        console.warn('[B9 P2.1] ❌ action 失败:', err);
-        if (typeof showToast === 'function') {
-          showToast('行动失败:' + (err && err.message ? err.message : '未知错误'));
+        // ⭐ 409"还没轮到你行动"通常是预选+手动重复触发或时序错,静默不 toast 用户
+        var msg = (err && err.message) || '';
+        var is409NotYourTurn = (err && err.status === 409) && msg.indexOf('还没轮到') >= 0;
+        if (is409NotYourTurn) {
+          console.warn('[B9 P2.1] 静默忽略 409(重复触发?):', msg);
+        } else {
+          console.warn('[B9 P2.1] ❌ action 失败:', err);
+          if (typeof showToast === 'function') {
+            showToast('行动失败:' + (msg || '未知错误'));
+          }
         }
       });
       // 乐观关弹窗

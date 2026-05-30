@@ -32849,6 +32849,9 @@
           window._b9ShowdownShownForHandId = null;
           window._b9PrevHand = null;
           window._b9AutoStartFired = false;
+          // ⭐ 2026-05-31:热桌规则跟后端 task #86 对齐 — 任意一手见过后,minPlayers 降到 2(heads-up OK)
+          //   进新桌时重置 false,从此桌的角度看是"冷桌"状态
+          window._b9TableHadHand = false;
           // ⭐ Bug A fix(2026-05-29):标记"刚进牌桌页面"→ 第一次 polling 拿到 hand 时不播洗牌/发牌动画
           //   防止用户重进牌桌时已存在的 hand 被当作"新一手"再播一次开局动画 + 声音
           window._b9FreshPageEntry = true;
@@ -33576,10 +33579,14 @@
       if (occupied && tableSettings && tableSettings.autoStartEnabled && !window._b9AutoStartFired) {
         var occCount = Object.keys(occupied).length;
         var myIsSeated = !!occupied['my'];
-        var minPlayers = Number(tableSettings.autoStartMinPlayers || 2);
-        if (occCount >= minPlayers && myIsSeated) {
+        var configuredMin = Number(tableSettings.autoStartMinPlayers || 2);
+        // ⭐ 2026-05-31:热桌规则 — 打过任意一手后,minPlayers 降到 2(heads-up OK)
+        //   跟后端 task #86 对齐:"minPlayers 只控冷启动,热表 ≥2 即可 heads-up 继续"
+        //   用户场景:建桌 minPlayers=3,3 人开第 1 手,1 人离桌剩 2 人 → 应继续发(过去因前端没此规则永远不开)
+        var effectiveMin = window._b9TableHadHand ? 2 : configuredMin;
+        if (occCount >= effectiveMin && myIsSeated) {
           window._b9AutoStartFired = true;
-          console.log('[B9 auto-start] 触发 occCount=' + occCount + ' >= minPlayers=' + minPlayers + ',2 秒后开局');
+          console.log('[B9 auto-start] 触发 occCount=' + occCount + ' >= effectiveMin=' + effectiveMin + '(configured=' + configuredMin + ',hadHand=' + !!window._b9TableHadHand + '),2 秒后开局');
           setTimeout(function() {
             if (currentTableRoom && Number(currentTableRoom.id)) {
               startHandViaBackend(Number(currentTableRoom.id));
@@ -33593,7 +33600,9 @@
       var center = document.querySelector('#page-table .table-center');
       if (center && occupied && tableSettings) {
         var occCountWait = Object.keys(occupied).length;
-        var minPlayersWait = Number(tableSettings.autoStartMinPlayers || 2);
+        // ⭐ 2026-05-31:用 effectiveMin 跟 auto-start 触发条件一致
+        var configuredMinWait = Number(tableSettings.autoStartMinPlayers || 2);
+        var minPlayersWait = window._b9TableHadHand ? 2 : configuredMinWait;
         var oldWait = document.getElementById('b9-wait-hint');
         if (oldWait) oldWait.remove();
         var waitDiv = document.createElement('div');
@@ -33612,6 +33621,9 @@
     }
     // 有牌局 → 重置自动开局 flag,下次 hand 结束又可触发
     window._b9AutoStartFired = false;
+    // ⭐ 2026-05-31:任意 poll 见到 hand → 桌子已"热",后续 minPlayers 降到 2
+    //   跟后端 task #86 对齐:打过手的桌 ≥2 人就能继续 heads-up
+    window._b9TableHadHand = true;
     // 清"等待开局"提示(进入 hand-active 后不再需要)
     var oldWaitHint = document.getElementById('b9-wait-hint');
     if (oldWaitHint) oldWaitHint.remove();

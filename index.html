@@ -29227,10 +29227,12 @@
         }
         clearBlindLabels();   // 发牌前清盲注标签
         dealHoleCardsAnimation();
-        // ⭐ v2.28 批次 A1:发牌音效(每张错开 80ms)
+        // ⭐ 2026-05-31 修同步:发底牌音效跨度拉宽匹配视觉
+        //   原:4 个声音 0/80/160/240ms 共 240ms,但视觉发牌跨度 ~1000-1200ms(N 座位×2 轮×80ms+轮间 120ms)
+        //   修:5 个声音均匀分布 0/200/400/600/800ms,跟视觉节奏更贴近
         if (window.soundEngine) {
-          for (let i = 0; i < 4; i++) {
-            setTimeout(() => window.soundEngine.play('dealHole'), 80 * i);
+          for (let i = 0; i < 5; i++) {
+            setTimeout(() => window.soundEngine.play('dealHole'), 200 * i);
           }
         }
         // ⭐ v2.28.13:发完底牌后更新头像底部牌型标签 + 翻前对子高亮
@@ -29251,11 +29253,16 @@
         //   是 demo 牌;而 renderCommunityCardsB9 后续写真后端牌
         //   → 视觉:"飞的牌"和"DOM 里看到的牌"是两套,看起来像"翻牌发两次还不一样"
         if (data.street) dealBoardAnimation(data.street, data.cards);
-        // ⭐ v2.28 批次 A1:发公共牌音效(根据张数错开)
+        // ⭐ 2026-05-31 修同步:声音对齐每张牌"落地"时刻,跟 dealBoardAnimation 内部时序一致
+        //   原 bug:声音 0/120/240ms 播,但 burnDoneDelay=1600 后牌才开始飞,1980ms 才落地
+        //     → 声音比视觉早 ~2 秒(用户反馈"声音和发牌不同步")
+        //   公式:burnDoneDelay(1600) + i*interval(160) + 飞行(380) = 1980/2140/2300ms
+        //   ⚠️ 这 3 个常量跟 dealBoardAnimation line 31297/31298/2897 对应,改其中一处要同步改这里
         if (window.soundEngine) {
           const n = data.street === 'flop' ? 3 : 1;
+          const BURN_DELAY = 1600, CARD_INTERVAL = 160, CARD_FLIGHT = 380;
           for (let i = 0; i < n; i++) {
-            setTimeout(() => window.soundEngine.play('dealBoard'), 120 * i);
+            setTimeout(() => window.soundEngine.play('dealBoard'), BURN_DELAY + i * CARD_INTERVAL + CARD_FLIGHT);
           }
         }
         // ⭐ v2.28.9 + v2.28.12 + v2.28.13:发牌动画完成后实时检查命中高亮 + 更新牌型标签
@@ -33153,12 +33160,19 @@
             // ⭐ 2026-05-31:派彩动画(B 路径:last-standing 无摊牌)
             //   showdown 路径已在 line 33296 处理 → 这里加 prevHand.state!=='showdown' 防双触发
             //   场景:全场弃牌剩 1 家 / 全 all-in fast-forward 后 / hand-end 兜底
+            // ⭐ 2026-05-31 修同步:同步加 winMine/winOther 声音(原 polling 路径缺失)
             if (prevHand.state !== 'showdown') {
               winnerSeatNos.forEach(function(sn) {
                 var seat = prevHand.seats.find(function(s) { return Number(s.seatNo) === sn; });
-                var sid = (seat && Number(seat.userId) === myUidEnd) ? 'my' : ('s' + sn);
+                var isMe = seat && Number(seat.userId) === myUidEnd;
+                var sid = isMe ? 'my' : ('s' + sn);
                 if (typeof window.potToWinnerAnimation === 'function') {
                   setTimeout(function() { window.potToWinnerAnimation(sid); }, 300);
+                }
+                if (window.soundEngine) {
+                  setTimeout(function() {
+                    window.soundEngine.play(isMe ? 'winMine' : 'winOther');
+                  }, 300);
                 }
               });
             }
@@ -33353,10 +33367,20 @@
             if (typeof showToast === 'function') showToast(winnerLabels + ' 赢');
             // ⭐ 2026-05-31:派彩动画 — 底池筹码飞向赢家座位 + 头像金光高亮
             //   旧 WS-mock 路径在 line 29465 已用,polling 真后端路径之前没接通
+            // ⭐ 2026-05-31 修同步:派彩声音同步 — winMine/winOther 跟筹码飞行同步播
+            //   原 bug:polling 路径接通了 potToWinnerAnimation 但没补声音,WS 路径有(line 29478)
+            var _myUidWin = window.currentUser && Number(window.currentUser.userId);
             sd.winners.forEach(function(w) {
               var sid = _b9SeatNoToId(w.seatNo, hand);
               if (typeof window.potToWinnerAnimation === 'function') {
                 setTimeout(function() { window.potToWinnerAnimation(sid); }, 500);
+              }
+              if (window.soundEngine) {
+                var _winnerSeat = (hand.seats || []).find(function(s) { return Number(s.seatNo) === Number(w.seatNo); });
+                var _isMe = _winnerSeat && Number(_winnerSeat.userId) === _myUidWin;
+                setTimeout(function() {
+                  window.soundEngine.play(_isMe ? 'winMine' : 'winOther');
+                }, 500);
               }
             });
           }

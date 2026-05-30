@@ -3415,6 +3415,15 @@
   }
   .my-cards.muck-back .card .rank,
   .my-cards.muck-back .card .suit { visibility: hidden; }
+  /* ⭐ 2026-05-31 延长看牌:settings.delayedRevealEnabled + 没轮到自己 → 显示牌背
+     轮到自己 → 移除 .delayed-back → 显示真牌面 */
+  .my-cards.delayed-back .card {
+    background: linear-gradient(135deg, #1e88e5, #0d47a1);
+    border: 1.5px solid white;
+    color: transparent;
+  }
+  .my-cards.delayed-back .card .rank,
+  .my-cards.delayed-back .card .suit { visibility: hidden; }
 
   /* ⭐ 2026-05-30:摊牌时点手牌"展示"——红色描边(亮边)= 结算时亮给别人看 */
   .my-cards.reveal-selectable .card { cursor: pointer; }
@@ -33225,6 +33234,32 @@
           // 兼容:保留 _b9LastSeenState 更新(其它逻辑读它的话不受影响)
           if (hand.state) window._b9LastSeenState = hand.state;
         }
+
+        // ⭐ 2026-05-31 延长看牌(delayedRevealEnabled):
+        //   N4 设置开启时,玩家手牌默认显示牌背,轮到自己行动时才显示真牌面
+        //   实现:每次 polling 后看 settings + 当前 actor,加/去 .my-cards.delayed-back 类
+        try {
+          var _settings = (currentTableRoom && currentTableRoom.settings) || {};
+          var _myCardsEl = document.querySelector('#page-table .my-seat .my-cards');
+          if (_settings.delayedRevealEnabled && _myCardsEl && hand) {
+            // 自己当前是否被分到行动权 → 轮到自己亮牌
+            var _myUidDR = window.currentUser && Number(window.currentUser.userId);
+            var _mySeatDR = Array.isArray(hand.seats)
+              ? hand.seats.find(function(s) { return Number(s.userId) === _myUidDR; })
+              : null;
+            var _myActing = !!(_mySeatDR && Number(hand.currentActionSeat) === Number(_mySeatDR.seatNo));
+            // showdown 阶段统一亮牌(不再盖)
+            var _isShowdown = (hand.state === 'showdown');
+            if (_myActing || _isShowdown) {
+              _myCardsEl.classList.remove('delayed-back');
+            } else {
+              _myCardsEl.classList.add('delayed-back');
+            }
+          } else if (_myCardsEl) {
+            // 没开延长看牌或没 hand → 确保没残留 delayed-back 类
+            _myCardsEl.classList.remove('delayed-back');
+          }
+        } catch (drErr) { console.warn('[延长看牌]', drErr); }
 
         // ⭐ P2.3 #17:showdown 摊牌处理(state='showdown' 第一次见)
         //   - 翻开所有 not-folded 玩家的对手座位底牌(自己已经看得见)

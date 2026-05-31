@@ -1448,6 +1448,22 @@
   }
   .ct-segment-btn.active { background: #1a1d24; color: #fff; }
   .ct-segment-big .ct-segment-btn { padding: 12px 0; font-size: 14px; }
+  /* ⭐ 2026-05-31:盲注 12 档横滑变体 — 不撑满父宽,溢出时手指左滑 */
+  .ct-segment-scroll {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .ct-segment-scroll::-webkit-scrollbar { display: none; }
+  .ct-segment-scroll .ct-segment-btn {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    white-space: nowrap;
+    scroll-snap-align: center;
+  }
+  .ct-segment-scroll .ct-segment-btn.active { background: #4dff4d; color: #16181f; font-weight: 600; }
   /* ⭐ 2026-05-31:自动开局人数 — 选中态前缀白点 ●(原 HTML 只 2 有,改 CSS 让 3/4/5 也显示)*/
   .ct-segment-icons .ct-segment-btn.active::before {
     content: '● ';
@@ -14672,23 +14688,23 @@
         </div>
 
         <!-- 盲注 -->
-        <div class="ct-row">
-          <span class="ct-row-label">盲注</span>
-          <select class="ct-inline-select" id="ct-blinds">
-            <!-- ⭐ 2026-05-31:12 档盲注重排 — value 保持真数字,显示文本带 K 缩写 -->
-            <option value="1/2" selected>1/2</option>
-            <option value="2/4">2/4</option>
-            <option value="5/10">5/10</option>
-            <option value="10/20">10/20</option>
-            <option value="20/40">20/40</option>
-            <option value="25/50">25/50</option>
-            <option value="50/100">50/100</option>
-            <option value="100/200">100/200</option>
-            <option value="200/400">200/400</option>
-            <option value="300/600">300/600</option>
-            <option value="500/1000">500/1K</option>
-            <option value="1000/2000">1K/2K</option>
-          </select>
+        <!-- ⭐ 2026-05-31:select 改横滑 chip 条 — native select 下拉到屏底被截断,用 ct-segment-scroll 解决 -->
+        <div class="ct-row" style="display:block;">
+          <span class="ct-row-label" style="display:block;margin-bottom:6px;">盲注</span>
+          <div class="ct-segment ct-segment-scroll" data-target="ct-blinds" data-current="1/2">
+            <div class="ct-segment-btn active" data-value="1/2">1/2</div>
+            <div class="ct-segment-btn" data-value="2/4">2/4</div>
+            <div class="ct-segment-btn" data-value="5/10">5/10</div>
+            <div class="ct-segment-btn" data-value="10/20">10/20</div>
+            <div class="ct-segment-btn" data-value="20/40">20/40</div>
+            <div class="ct-segment-btn" data-value="25/50">25/50</div>
+            <div class="ct-segment-btn" data-value="50/100">50/100</div>
+            <div class="ct-segment-btn" data-value="100/200">100/200</div>
+            <div class="ct-segment-btn" data-value="200/400">200/400</div>
+            <div class="ct-segment-btn" data-value="300/600">300/600</div>
+            <div class="ct-segment-btn" data-value="500/1000">500/1K</div>
+            <div class="ct-segment-btn" data-value="1000/2000">1K/2K</div>
+          </div>
         </div>
 
         <!-- 买入 min / max (BB 倍数) -->
@@ -34978,7 +34994,7 @@
     set('ct-name-input', D.name);
     n4SelectGameType(D.gameType);
     chk('ct-show-room-code', D.showRoomCode);
-    set('ct-blinds', D.blinds);
+    n4SetSegment('ct-blinds', D.blinds);  // ⭐ 2026-05-31:select → ct-segment-scroll
     set('ct-min-buyin', D.minBuyin);
     set('ct-max-buyin', D.maxBuyin);
     chk('ct-rebuy-enabled', D.rebuyLimitEnabled);
@@ -35043,7 +35059,7 @@
       const nameEl = document.getElementById('ct-name-input');
       const name = (nameEl && nameEl.value || '').trim();
       const gameType = n4GetGameType();
-      const blindsStr = document.getElementById('ct-blinds').value;
+      const blindsStr = n4GetSegment('ct-blinds', '1/2');  // ⭐ 2026-05-31:select → ct-segment-scroll
       const blindsParts = blindsStr.split('/');
       const sb = parseFloat(blindsParts[0]);
       const bb = parseFloat(blindsParts[1]);

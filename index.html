@@ -40559,16 +40559,109 @@
     }
   })();
 
-  // ⭐ 2026-05-30 v2:全屏诊断悬浮日志(可滑动 + 可复制)
-  //   屏幕右上半透明绿字条,实时显示 console.log/warn/error
-  //   header(顶部条)pointer-events:auto → 可点按钮 / 双击折叠
-  //   body 可滑动 + 可选中复制(pointer-events:auto)
-  //   按钮:📋 复制 / 🗑️ 清空 / 双击 header 收起
-  //   稳定后可整段删除
+  // ⭐ 2026-05-31 v3:日志悬浮窗改默认关闭(只显示 💬 圆球)+ 双击展开 + 长按拖动
+  //   - 圆球:角落显示一个 💬 图标,长按可拖动
+  //   - 双击圆球 → 展开成完整日志面板
+  //   - 面板顶部 header 也可长按拖动 + 双击收回圆球
+  //   - 圆球 + 面板位置 localStorage 持久化
+  //   - 日志内容 / 颜色 / 复制 / 清空逻辑全保留
   (function setupDiagOverlay() {
     'use strict';
     function init() {
       if (document.getElementById('b9-diag-overlay')) return;
+
+      // === 拖动支持 helper(同时支持鼠标 + 触屏)===
+      //   长按 LONG_PRESS_MS 后才进入拖动模式,避免误触 click/dblclick
+      var LONG_PRESS_MS = 350;
+      function makeDraggable(el, storageKey) {
+        var dragging = false, longPressTimer = null, startX, startY, origLeft, origTop;
+        function getPoint(e) {
+          if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          return { x: e.clientX, y: e.clientY };
+        }
+        function onDown(e) {
+          var p = getPoint(e);
+          startX = p.x; startY = p.y;
+          var rect = el.getBoundingClientRect();
+          origLeft = rect.left; origTop = rect.top;
+          longPressTimer = setTimeout(function() {
+            dragging = true;
+            el.style.transition = 'none';
+            el.style.opacity = '0.7';
+          }, LONG_PRESS_MS);
+        }
+        function onMove(e) {
+          if (!dragging) {
+            // 还没触发长按就移了 → 取消(让 dblclick 等手势继续生效)
+            var p = getPoint(e);
+            if (Math.abs(p.x - startX) > 10 || Math.abs(p.y - startY) > 10) {
+              clearTimeout(longPressTimer); longPressTimer = null;
+            }
+            return;
+          }
+          e.preventDefault();
+          var p = getPoint(e);
+          var nx = Math.max(0, Math.min(window.innerWidth - el.offsetWidth, origLeft + (p.x - startX)));
+          var ny = Math.max(0, Math.min(window.innerHeight - el.offsetHeight, origTop + (p.y - startY)));
+          el.style.left = nx + 'px'; el.style.top = ny + 'px';
+          el.style.right = 'auto'; el.style.bottom = 'auto';
+        }
+        function onUp() {
+          clearTimeout(longPressTimer); longPressTimer = null;
+          if (dragging) {
+            dragging = false;
+            el.style.opacity = '';
+            try {
+              localStorage.setItem(storageKey, JSON.stringify({ left: el.style.left, top: el.style.top }));
+            } catch (e) {}
+          }
+        }
+        el.addEventListener('mousedown', onDown);
+        el.addEventListener('touchstart', onDown, { passive: true });
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchend', onUp);
+        document.addEventListener('touchcancel', onUp);
+        // 恢复保存的位置
+        try {
+          var saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          if (saved && saved.left && saved.top) {
+            el.style.left = saved.left; el.style.top = saved.top;
+            el.style.right = 'auto'; el.style.bottom = 'auto';
+          }
+        } catch (e) {}
+        return { isDragging: function() { return dragging; } };
+      }
+
+      // === 💬 圆球(默认显示)===
+      var ball = document.createElement('div');
+      ball.id = 'b9-diag-ball';
+      ball.textContent = '💬';
+      ball.style.cssText = [
+        'position:fixed',
+        'top:80px',
+        'right:10px',
+        'width:36px',
+        'height:36px',
+        'border-radius:50%',
+        'background:rgba(0,0,0,0.75)',
+        'color:#7fff7f',
+        'font-size:18px',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'z-index:2147483647',
+        'cursor:pointer',
+        'box-shadow:0 2px 8px rgba(0,0,0,0.4)',
+        'user-select:none',
+        '-webkit-user-select:none',
+        'touch-action:none'
+      ].join(';');
+      document.body.appendChild(ball);
+      var ballDrag = makeDraggable(ball, '_b9_diag_ball_pos');
+
+      // === 日志面板(默认隐藏)===
       var overlay = document.createElement('div');
       overlay.id = 'b9-diag-overlay';
       overlay.style.cssText = [
@@ -40584,11 +40677,10 @@
         'z-index:2147483647',
         'word-break:break-all',
         'border-bottom-left-radius:6px',
-        'display:flex',
-        'flex-direction:column',
-        'pointer-events:none'         // 整体不挡;子元素 header/body 各自打开
+        'display:none',                // ⭐ 默认隐藏(双击圆球才显示)
+        'flex-direction:column'
       ].join(';');
-      // 顶部条(可点 / 可双击)
+      // 顶部条(可点 / 可双击 / 长按拖动)
       var header = document.createElement('div');
       header.style.cssText = [
         'color:#ffd54a',
@@ -40596,12 +40688,15 @@
         'padding:3px 5px',
         'font-weight:bold',
         'pointer-events:auto',
-        'cursor:pointer',
+        'cursor:move',
         'display:flex',
         'gap:6px',
         'align-items:center',
         'background:rgba(0,0,0,0.85)',
-        'flex-shrink:0'
+        'flex-shrink:0',
+        'touch-action:none',
+        'user-select:none',
+        '-webkit-user-select:none'
       ].join(';');
       var titleSpan = document.createElement('span');
       titleSpan.textContent = '💬 LOG';
@@ -40612,9 +40707,13 @@
       var clearBtn = document.createElement('button');
       clearBtn.textContent = '🗑️清';
       clearBtn.style.cssText = 'background:#a44;color:white;border:none;border-radius:3px;padding:2px 5px;font:10px monospace;cursor:pointer';
+      var closeBtn = document.createElement('button');
+      closeBtn.textContent = '×';
+      closeBtn.style.cssText = 'background:#666;color:white;border:none;border-radius:3px;padding:2px 6px;font:14px monospace;cursor:pointer;line-height:1';
       header.appendChild(titleSpan);
       header.appendChild(copyBtn);
       header.appendChild(clearBtn);
+      header.appendChild(closeBtn);
 
       // body 可滑动 + 可选中复制
       var body = document.createElement('div');
@@ -40632,13 +40731,91 @@
       overlay.appendChild(header);
       overlay.appendChild(body);
       document.body.appendChild(overlay);
+      // overlay 拖动:在 header 上 down,移 overlay(header 是 static 定位,不能直接拖)
+      (function() {
+        var dragging = false, longPressTimer = null, startX, startY, origLeft, origTop;
+        var LP = 350;
+        function getPoint(e) {
+          if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          return { x: e.clientX, y: e.clientY };
+        }
+        function onDown(e) {
+          if (e.target === copyBtn || e.target === clearBtn || e.target === closeBtn) return;
+          var p = getPoint(e);
+          startX = p.x; startY = p.y;
+          var rect = overlay.getBoundingClientRect();
+          origLeft = rect.left; origTop = rect.top;
+          longPressTimer = setTimeout(function() {
+            dragging = true;
+            overlay.style.transition = 'none';
+            overlay.style.opacity = '0.7';
+          }, LP);
+        }
+        function onMove(e) {
+          if (!dragging) {
+            var p = getPoint(e);
+            if (Math.abs(p.x - startX) > 10 || Math.abs(p.y - startY) > 10) {
+              clearTimeout(longPressTimer); longPressTimer = null;
+            }
+            return;
+          }
+          e.preventDefault();
+          var p = getPoint(e);
+          var nx = Math.max(0, Math.min(window.innerWidth - overlay.offsetWidth, origLeft + (p.x - startX)));
+          var ny = Math.max(0, Math.min(window.innerHeight - overlay.offsetHeight, origTop + (p.y - startY)));
+          overlay.style.left = nx + 'px'; overlay.style.top = ny + 'px';
+          overlay.style.right = 'auto'; overlay.style.bottom = 'auto';
+        }
+        function onUp() {
+          clearTimeout(longPressTimer); longPressTimer = null;
+          if (dragging) {
+            dragging = false;
+            overlay.style.opacity = '';
+            try {
+              localStorage.setItem('_b9_diag_overlay_pos', JSON.stringify({ left: overlay.style.left, top: overlay.style.top }));
+            } catch (e) {}
+          }
+        }
+        header.addEventListener('mousedown', onDown);
+        header.addEventListener('touchstart', onDown, { passive: true });
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchend', onUp);
+        // 恢复保存位置
+        try {
+          var saved = JSON.parse(localStorage.getItem('_b9_diag_overlay_pos') || 'null');
+          if (saved && saved.left && saved.top) {
+            overlay.style.left = saved.left; overlay.style.top = saved.top;
+            overlay.style.right = 'auto'; overlay.style.bottom = 'auto';
+          }
+        } catch (e) {}
+      })();
 
-      // 双击 header 折叠
-      var collapsed = false;
-      header.addEventListener('dblclick', function() {
-        collapsed = !collapsed;
-        body.style.display = collapsed ? 'none' : '';
-        overlay.style.maxHeight = collapsed ? '26px' : '60vh';
+      // === 圆球 ↔ 面板 toggle ===
+      function showOverlay() {
+        overlay.style.display = 'flex';
+        ball.style.display = 'none';
+      }
+      function showBall() {
+        overlay.style.display = 'none';
+        ball.style.display = 'flex';
+      }
+      // 双击圆球展开(拖动中的双击不算)
+      ball.addEventListener('dblclick', function(e) {
+        if (ballDrag.isDragging()) return;
+        e.stopPropagation();
+        showOverlay();
+      });
+      // 双击 header 收回圆球
+      header.addEventListener('dblclick', function(e) {
+        e.stopPropagation();
+        showBall();
+      });
+      // ✕ 按钮也收回圆球
+      closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        showBall();
       });
 
       var MAX = 500;   // 提升到 500 行,够一整手
@@ -40727,7 +40904,7 @@
       window.addEventListener('unhandledrejection', function(e) {
         add('error', ['[unhandled rejection] ' + (e.reason && e.reason.message || e.reason)]);
       });
-      console.log('[diag overlay v2] ready,可滑动 + 复制 + 清空 + 双击折叠');
+      console.log('[diag overlay v3] ready — 默认圆球 💬,双击展开,长按拖动');
     }
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', init);

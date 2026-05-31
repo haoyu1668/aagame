@@ -34385,6 +34385,35 @@
       renderCommunityCardsB9(hand.communityCards);
     }
 
+    // ⭐ #149 修复1c(2026-06-01):每-poll 同步我的底牌可见性(不受 once-per-hand 守卫限制)
+    //   回归修复:原 else 用"myHoleCards 是否 2 张"判断清空,会在 waitbb 转正首帧
+    //   (该 poll 尚未带 myHoleCards)误清,且渲染块每手只跑一次 → 牌面永久空(用户"看不到手牌")。
+    //   正解:判据改为"我是否真在本手"(在 hand.seats 即在局),并每 poll 自愈补渲染。
+    try {
+      var _myUidMC = window.currentUser && Number(window.currentUser.userId);
+      var _inHandSeatMC = (hand && Array.isArray(hand.seats))
+        ? hand.seats.find(function(s){ return Number(s.userId) === _myUidMC; })
+        : null;
+      var _mcSync = document.querySelector('#page-table .my-seat .my-cards');
+      if (_mcSync) {
+        if (hand.myHoleCards && hand.myHoleCards.length === 2) {
+          // 在本手有牌:my-cards 空(首帧错过/被清)→ 补渲染;非空则不动,避免每 poll 闪烁
+          if (!_mcSync.querySelector('.card')) {
+            if (typeof DEMO_HOLE_CARDS !== 'undefined') DEMO_HOLE_CARDS.my = hand.myHoleCards;
+            renderMyHoleCardsB9(hand.myHoleCards);
+          }
+        } else if (!_inHandSeatMC) {
+          // 确认不在本手(waitbb/旁观,不在 hand.seats)→ 清静态红卡背 + 牌型源 + 残留标签
+          _mcSync.innerHTML = '';
+          _mcSync.classList.remove('delayed-back', 'muck-back');
+          if (typeof DEMO_HOLE_CARDS !== 'undefined') DEMO_HOLE_CARDS.my = [];
+          var _tagSync = document.querySelector('#page-table .my-seat .win-tag');
+          if (_tagSync && !_tagSync.classList.contains('showdown-tag')) _tagSync.remove();
+        }
+        // _inHandSeatMC 存在但本 poll 无 myHoleCards(转正时序)→ 不动,等下次轮询补
+      }
+    } catch (e) { console.warn('[#149 修复1c]', e); }
+
     // ⭐ 守卫:hand.id 变了才跑置位 + 动画(防 5s 轮询重播 popup)
     var isFirstRenderOfHand = (window._b9AnimatedHandId !== hand.id);
     if (!isFirstRenderOfHand) return;
@@ -34429,27 +34458,9 @@
         DEMO_HOLE_CARDS.my = hand.myHoleCards;
       }
       renderMyHoleCardsB9(hand.myHoleCards);
-    } else {
-      // ⭐ #149 修复1(2026-06-01):没有底牌(waitbb 中途坐下 / 不在本手)
-      //   → 清空 my-cards,避免静态写死的红 K♥/10♦ 卡背残留显示
-      //   后端已对 waitbb 返 myHoleCards:[],这里把 UI 同步清干净
-      var _emptyMyCards = document.querySelector('#page-table .my-seat .my-cards');
-      if (_emptyMyCards) {
-        _emptyMyCards.innerHTML = '';
-        _emptyMyCards.classList.remove('delayed-back', 'muck-back');
-      }
-      // ⭐ #149 修复1b(2026-06-01):同步清牌型引擎源,否则牌型标签/高亮仍用静态 K♥10♦
-      //   updateMyHandTypeLabel / highlightCurrentMyHand 都读 DEMO_HOLE_CARDS.my
-      //   → waitbb 无牌却显示"两对 K-8"等假牌型。清空数组让它们 early-return
-      if (typeof DEMO_HOLE_CARDS !== 'undefined') DEMO_HOLE_CARDS.my = [];
-      // 移除已生成的非摊牌牌型标签(early-return 不会自己清,得手动移)
-      var _mySeatTag = document.querySelector('#page-table .my-seat .win-tag');
-      if (_mySeatTag && !_mySeatTag.classList.contains('showdown-tag')) _mySeatTag.remove();
-      // 清我方手牌实时高亮残留
-      document.querySelectorAll('#page-table .my-cards .live-hit').forEach(function(el) {
-        el.classList.remove('live-hit');
-      });
     }
+    // 注:my-cards 的"清空/补渲染"已移到上方每-poll 自愈块(#149 修复1c),
+    //   不在此 once-per-hand 块里用 myHoleCards 判据清空(那会误伤 waitbb 转正首帧)。
 
     // ⭐ 飞底牌动画(从牌堆 → 各人位置 → 翻面显示)
     //   仅在"hand 刚开始"才放:hand 已有 actions / 已经发了公牌 / 已经 showdown → 不重播

@@ -30679,8 +30679,10 @@
     const seatEl = document.querySelector(`.seat.${seatId}`);
     if (seatEl) {
       seatEl.classList.add('acting');
-      // 同时启动倒计时(其他玩家行动也算 15 秒)
-      if (!turnTimer.running) startTimer(TURN_DURATION_MS);
+      // ⭐ #149 修复2(2026-06-01):只加绿环,不在此启动计时器
+      //   原 bug:此处对任意座位(含对手)startTimer → 对手回合我端也读秒+tick 声
+      //   我自己的计时器由 actionArea data-state(p1-p4)的 MutationObserver 驱动(见下方)
+      //   对手 acting 只显示绿环,不读秒、不滴答
     }
   }
   // 暴露到 window 供 DEV 测试
@@ -34001,19 +34003,26 @@
             var _mySeatDR = Array.isArray(hand.seats)
               ? hand.seats.find(function(s) { return Number(s.userId) === _myUidDR; })
               : null;
-            var _myActing = !!(_mySeatDR && Number(hand.currentActionSeat) === Number(_mySeatDR.seatNo));
-            // 新手 → 重置 armed 标志
-            if (window._b9SeenCardsHandId !== hand.id) {
-              window._b9SeenCardsHandId = hand.id;
-              window._b9SeenCardsArmed = false;
-            }
-            // 一旦轮到我,本手剩余全亮(armed = true 持久)
-            if (_myActing) window._b9SeenCardsArmed = true;
-            // 还没轮过 + 现在也没轮到 → 盖;否则亮
-            if (!window._b9SeenCardsArmed && !_myActing) {
-              _myCardsEl.classList.add('delayed-back');
-            } else {
+            // ⭐ #149 修复3(2026-06-01):我不在本手(waitbb 中途坐下 / 旁观)→ 绝不加 delayed-back
+            //   原 bug:waitbb 玩家不在 hand.seats,_mySeatDR=null,却命中 !armed && !_myActing
+            //   → 给本该空的 my-cards 加 delayed-back(红卡背)。加守卫后转正瞬间状态机才有干净初始态
+            if (!_mySeatDR) {
               _myCardsEl.classList.remove('delayed-back');
+            } else {
+              var _myActing = !!(Number(hand.currentActionSeat) === Number(_mySeatDR.seatNo));
+              // 新手 → 重置 armed 标志
+              if (window._b9SeenCardsHandId !== hand.id) {
+                window._b9SeenCardsHandId = hand.id;
+                window._b9SeenCardsArmed = false;
+              }
+              // 一旦轮到我,本手剩余全亮(armed = true 持久)
+              if (_myActing) window._b9SeenCardsArmed = true;
+              // 还没轮过 + 现在也没轮到 → 盖;否则亮
+              if (!window._b9SeenCardsArmed && !_myActing) {
+                _myCardsEl.classList.add('delayed-back');
+              } else {
+                _myCardsEl.classList.remove('delayed-back');
+              }
             }
           } else if (_myCardsEl) {
             _myCardsEl.classList.remove('delayed-back');
@@ -34137,6 +34146,20 @@
               _ms.classList.remove('folded');
               console.log('[fold-clear] mySeat.folded 不一致后端,强制清');
             }
+          }
+          // ⭐ #149 修复4(2026-06-01):全座位 folded 权威对账
+          //   根因:.folded 有 3 处 imperative 加(ACTION_EXEC / 引擎 / 态驱动),无单一权威源
+          //   做法:每次轮询(2s)以后端 hand.seats[].folded 为唯一真值,对所有 .seat.sN 纠偏
+          //   保留即时 addClass 给瞬时反馈,这里每个 tick 纠正任何漂移(不推翻 imperative 层)
+          if (Array.isArray(hand.seats)) {
+            var _myFoldSeatNo = _myActiveSeat ? Number(_myActiveSeat.seatNo) : -1;
+            hand.seats.forEach(function(s) {
+              if (Number(s.seatNo) === _myFoldSeatNo) return;  // 我自己走上面 .my-seat 那段
+              var _seatEl = document.querySelector('.seat.s' + s.seatNo);
+              if (!_seatEl) return;
+              if (s.folded) _seatEl.classList.add('folded');
+              else _seatEl.classList.remove('folded');
+            });
           }
         } catch (diagErr) {}
         if (newActingSeatNo !== lastActingSeatNo) {
@@ -34406,6 +34429,15 @@
         DEMO_HOLE_CARDS.my = hand.myHoleCards;
       }
       renderMyHoleCardsB9(hand.myHoleCards);
+    } else {
+      // ⭐ #149 修复1(2026-06-01):没有底牌(waitbb 中途坐下 / 不在本手)
+      //   → 清空 my-cards,避免静态写死的红 K♥/10♦ 卡背残留显示
+      //   后端已对 waitbb 返 myHoleCards:[],这里把 UI 同步清干净
+      var _emptyMyCards = document.querySelector('#page-table .my-seat .my-cards');
+      if (_emptyMyCards) {
+        _emptyMyCards.innerHTML = '';
+        _emptyMyCards.classList.remove('delayed-back', 'muck-back');
+      }
     }
 
     // ⭐ 飞底牌动画(从牌堆 → 各人位置 → 翻面显示)

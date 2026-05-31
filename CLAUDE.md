@@ -235,7 +235,15 @@
 
 ### #149 牌桌会话整体审计(德州扑克规则合规)
 
-- **状态**:Pending(本对话不做,新对话冷启动做)
+- **状态**:Tier 0 已修(2026-06-01)。Tier 1 / Tier 2 待办(留独立 ticket)。
+  - **已做(Tier 0,前端 index.html only,+46/−14,详见 `RELEASE_NOTE_149_Tier0.md`)**:
+    问题1 waitbb 红卡背(渲染加 else 清 my-cards)/ 问题2 对手读秒+tick(删 setActingSeat 内 startTimer)/
+    问题3 转正延迟看牌卡红背(加 _mySeatDR 守卫)/ 问题4 .folded 多源(轮询全座位权威对账)。
+  - **待办 Tier 1(audit 顺带,值得修)**:I4 离桌不停 timer/poll · G3 muck 权不限赢家 ·
+    H1 后端不读 delayedRevealEnabled · H1 muck 时序错配 · I3 dissolve 判定重复+无行锁 ·
+    I1 两离座路由局中语义不一致 · G4 奇数筹码 remainder 不按位置 · K3 live 不下发分层边池。
+  - **待办 Tier 2(大工程,独立 ticket)**:C4 dead button 未实现 · G2 逐位摊牌顺序缺失 ·
+    D1/D4 街结束判定靠计数近似 · I2 sit-out 完全缺失 · 保险池后端纯占位(B16+)· A1 正式状态机(大整顿)。
 - **背景**:2026-05-31 到 06-01 长对话做了 150 个 task,发现 4 个牌桌会话逻辑问题需要整体审计:
   1. **waitbb 玩家不该看到任何卡**(包括卡背)— 用户中途坐下显示 my-cards 红色卡背
   2. **timer/tick 只对 current actor 启动** — 当前对手 acting 时也会 startTimer(visual countdown 设计本意,但用户感觉异常)

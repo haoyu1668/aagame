@@ -17329,7 +17329,48 @@
   window.cleanupTableSession = cleanupTableSession;
 
   // 真正返回大厅(根据来源跳转)
+  // ⭐ 2026-05-31:旁观心跳系统
+  //   进牌桌 → 30s 一次 POST /spectator/heartbeat(后端不管是否入座,统一记)
+  //   离桌 → 停 timer + DELETE 标记 left_at
+  //   后端 GET /spectators 自动排除入座者,所以心跳不区分坐没坐
+  let _b9SpectatorHeartbeatTimer = null;
+  function _b9StartSpectatorHeartbeat() {
+    _b9StopSpectatorHeartbeat();
+    const tableId = currentTableRoom && Number.isInteger(Number(currentTableRoom.id)) ? Number(currentTableRoom.id) : null;
+    if (!tableId) return;
+    // 立即调一次
+    window.apiClient.post('/api/tables/' + tableId + '/spectator/heartbeat', {}).catch(e => {
+      console.warn('[spec.hb] 首次心跳失败:', e.message || e);
+    });
+    // 然后每 30s 一次
+    _b9SpectatorHeartbeatTimer = setInterval(() => {
+      const tId = currentTableRoom && Number.isInteger(Number(currentTableRoom.id)) ? Number(currentTableRoom.id) : null;
+      if (!tId) return;
+      window.apiClient.post('/api/tables/' + tId + '/spectator/heartbeat', {}).catch(e => {
+        console.warn('[spec.hb] 心跳失败:', e.message || e);
+      });
+    }, 30000);
+  }
+  function _b9StopSpectatorHeartbeat() {
+    if (_b9SpectatorHeartbeatTimer) {
+      clearInterval(_b9SpectatorHeartbeatTimer);
+      _b9SpectatorHeartbeatTimer = null;
+    }
+  }
+  async function _b9CallSpectatorLeave(tableId) {
+    if (!tableId) return;
+    try {
+      await window.apiClient.del('/api/tables/' + tableId + '/spectator');
+    } catch (e) {
+      console.warn('[spec.leave] DELETE 失败(忽略):', e.message || e);
+    }
+  }
+
   function doReturnToLobby() {
+    // ⭐ 2026-05-31:停心跳 + 标记 left
+    const _exitTableId = currentTableRoom && Number.isInteger(Number(currentTableRoom.id)) ? Number(currentTableRoom.id) : null;
+    _b9StopSpectatorHeartbeat();
+    if (_exitTableId) _b9CallSpectatorLeave(_exitTableId);
     // ⭐ 2026-05-29:离表清 on-real-table class,DEV/DEMO 元素恢复显示
     document.body.classList.remove('on-real-table');
     if (tableEntryFrom === 'lobby') {
@@ -17932,70 +17973,11 @@
   // 6. 弹窗占左侧 75%,点右侧 25% 空白处关闭
   // 7. 滚动:rm-body 内部 overflow-y 滚动
 
-  // 演示数据:本桌玩家战绩
-  const demoRecordPlayers = [
-    { name: 'HB华强',       hands: 18, buyin: 200, score: 156.42 },
-    { name: '心比薄荷凉',   hands: 24, buyin: 100, score: 185.85 },
-    { name: '小波比跳',     hands: 26, buyin: 150, score: 81.29  },
-    { name: '过去好看的',   hands: 10, buyin: 100, score: 63.93  },
-    { name: '你媳妇折磨我', hands: 21, buyin: 200, score: 41.34  },
-    { name: 'XTXTXT',      hands: 26, buyin: 250, score: 10.22  },
-    { name: '猫屎泡过咖啡', hands: 0,  buyin: 100, score: 0,     inactive: true },
-    { name: 'AA推不动啊',   hands: 6,  buyin: 100, score: -8,    inactive: true },
-    { name: 'jujubang',    hands: 1,  buyin: 200, score: -9.83, inactive: true },
-    { name: 'yisabeier',   hands: 22, buyin: 100, score: -34.33 },
-    { name: '不过也不能门口', hands: 11, buyin: 100, score: -49.35 },
-    { name: '辽宁彭于晏',   hands: 6,  buyin: 100, score: -100,  inactive: true },
-    { name: '佛系一下',     hands: 20, buyin: 400, score: -194.63 },
-    { name: '夜半三更',     hands: 33, buyin: 300, score: 234.56 },
-    { name: '风吹麦浪',     hands: 18, buyin: 150, score: 78.21  },
-    { name: '雪花飘飘',     hands: 27, buyin: 200, score: 56.78  },
-    { name: '海角天涯路',   hands: 15, buyin: 100, score: 33.45  },
-    { name: '春暖花开',     hands: 9,  buyin: 100, score: 12.34  },
-    { name: '清风明月',     hands: 0,  buyin: 100, score: 0,     inactive: true },
-    { name: '一帆风顺',     hands: 31, buyin: 500, score: -23.45 },
-    { name: '步步高升',     hands: 14, buyin: 200, score: -45.67 },
-    { name: '万事如意',     hands: 19, buyin: 100, score: -67.89 },
-    { name: '财源滚滚',     hands: 8,  buyin: 100, score: -78.12 },
-    { name: '日进斗金',     hands: 22, buyin: 300, score: -89.34 },
-    { name: '招财进宝',     hands: 25, buyin: 200, score: -123.45 },
-    { name: '锦上添花',     hands: 12, buyin: 100, score: -156.78 },
-    { name: '锦衣玉食',     hands: 17, buyin: 400, score: -178.90 },
-    { name: '飞黄腾达',     hands: 7,  buyin: 100, score: -200.45 },
-    { name: '前程似锦',     hands: 29, buyin: 250, score: -234.56 },
-    { name: '鹏程万里',     hands: 23, buyin: 150, score: -267.89 },
-    { name: '虎虎生威',     hands: 16, buyin: 200, score: -345.67 }
-  ];
-
-  // 演示数据:旁观列表(left=true 表示已离桌、灰显)
-  // 真实业务:后端推 [{ uid, name, avatar, lastActiveAt, isLeft }]
-  // 前端:lastActiveAt 距今超 20 分钟 且 isLeft=true → 从列表删除
-  const demoSpectators = [
-    { name: 'AAKK不要',   avatar: 'A', left: true  },
-    { name: '阿桑刚刚',   avatar: '阿', left: true  },
-    { name: '考虑么的路', avatar: '考', left: false },
-    { name: '摸你头赢你', avatar: '摸', left: false },
-    { name: '铁头的儿子', avatar: '铁', left: true  },
-    { name: '玩德州就要', avatar: '玩', left: true  },
-    { name: 'AA推不动',   avatar: 'A', left: true  },
-    { name: '辽宁彭于晏', avatar: '辽', left: false },
-    { name: '夜空中最亮', avatar: '夜', left: false },
-    { name: '风中的少年', avatar: '风', left: true  },
-    { name: '雨打芭蕉',   avatar: '雨', left: false },
-    { name: '云淡风轻',   avatar: '云', left: true  },
-    { name: '海阔天空',   avatar: '海', left: false },
-    { name: '山高水长',   avatar: '山', left: true  },
-    { name: '日月同辉',   avatar: '日', left: false },
-    { name: '星河璀璨',   avatar: '星', left: true  },
-    { name: '梅兰竹菊',   avatar: '梅', left: false },
-    { name: '春夏秋冬',   avatar: '春', left: true  },
-    { name: '东南西北',   avatar: '东', left: false },
-    { name: '金木水火土', avatar: '金', left: true  },
-    { name: '诗酒趁年华', avatar: '诗', left: false },
-    { name: '剑指苍穹',   avatar: '剑', left: true  },
-    { name: '一笑而过',   avatar: '一', left: false },
-    { name: '随风而去',   avatar: '随', left: true  }
-  ];
+  // ⭐ 2026-05-31:demoRecordPlayers + demoSpectators 假数据彻底删
+  //   - demoRecordPlayers:战绩页早接通真后端,这堆假玩家是死代码
+  //   - demoSpectators:旁观系统真接通后,改用 _b9SpectatorsCache(从 /spectators 拉)
+  //   - 用户授权清理(2026-05-31 对话)
+  let _b9SpectatorsCache = [];
 
   // 格式化积分:正数前加+,负数自带-
   function formatScore(n) {
@@ -18013,15 +17995,23 @@
     document.getElementById('rm-insurance-score').textContent = '0';
     document.getElementById('rm-player-list').innerHTML = '<div style="text-align:center;padding:20px;color:#888;">加载中…</div>';
 
-    // 旁观区先用 mock 渲染(后续单独 ticket 接通)
-    document.getElementById('rm-spectator-count').textContent = demoSpectators.length + '人';
+    // ⭐ 2026-05-31:旁观区接通真后端 GET /api/tables/:id/spectators
+    //   有 cache 先渲染 cache,然后异步拉刷新
     const gridEl = document.getElementById('rm-spectator-grid');
-    gridEl.innerHTML = demoSpectators.map(s => `
-      <div class="rm-spec-cell ${s.left ? 'left' : ''}">
-        <div class="rm-spec-avatar">${s.avatar}</div>
-        <div class="rm-spec-name">${s.name}</div>
-      </div>
-    `).join('');
+    const renderSpectators = (list) => {
+      document.getElementById('rm-spectator-count').textContent = list.length + '人';
+      if (list.length === 0) {
+        gridEl.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:16px;color:#888;font-size:12px;">暂无旁观</div>';
+      } else {
+        gridEl.innerHTML = list.map(s => `
+          <div class="rm-spec-cell ${s.left ? 'left' : ''}">
+            <div class="rm-spec-avatar">${(s.avatar || (s.name && s.name[0]) || '?')}</div>
+            <div class="rm-spec-name">${s.name}</div>
+          </div>
+        `).join('');
+      }
+    };
+    renderSpectators(_b9SpectatorsCache);  // 先渲染 cache(空数组也 OK,渲染"暂无旁观")
 
     // 拉真后端
     const tableId = currentTableRoom && Number.isInteger(Number(currentTableRoom.id)) ? Number(currentTableRoom.id) : null;
@@ -18082,6 +18072,18 @@
         </div>
       `;
     }).join('');
+
+    // ⭐ 2026-05-31:并行拉真旁观列表
+    try {
+      const sp = await window.apiClient.get('/api/tables/' + tableId + '/spectators');
+      if (sp && sp.ok && Array.isArray(sp.spectators)) {
+        _b9SpectatorsCache = sp.spectators;
+        renderSpectators(sp.spectators);
+      }
+    } catch (e) {
+      console.warn('[record] 拉 spectators 失败:', e.message || e);
+      // 失败保留 cache 渲染,不打扰用户
+    }
   }
 
   // 打开战绩弹窗
@@ -33382,6 +33384,10 @@
       row.addEventListener('click', () => {
         tableEntryFrom = 'lobby';
         currentTableRoom = rs[idx];
+        // ⭐ 2026-05-31:进牌桌启动旁观心跳(30s 一次)
+        if (Number.isInteger(Number(currentTableRoom.id))) {
+          if (typeof _b9StartSpectatorHeartbeat === 'function') _b9StartSpectatorHeartbeat();
+        }
         // ⭐ 软清 demo 残留(2026-05-29):真后端桌进入瞬间,先清 mock 玩家 + my-seat 残留
         //   防止"BF JD洗 / 洗13 / 自己的旧头像"在 fetchAndRenderTableSeats 第一次拉完前露馅
         //   demo 桌(非数字 id 如 88888 mock)保留 mock 数据

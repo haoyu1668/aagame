@@ -14883,6 +14883,15 @@
           <span class="ct-row-label">无限注</span>
           <label class="ct-toggle"><input type="checkbox" id="ct-no-limit" checked><span class="ct-toggle-slider"></span></label>
         </div>
+        <!-- ⭐ 2026-05-31:防作弊 — IP / GPS 限制(默认关) -->
+        <div class="ct-row">
+          <span class="ct-row-label">IP 限制</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-ip-limit"><span class="ct-toggle-slider"></span></label>
+        </div>
+        <div class="ct-row">
+          <span class="ct-row-label">GPS 限制</span>
+          <label class="ct-toggle"><input type="checkbox" id="ct-gps-limit"><span class="ct-toggle-slider"></span></label>
+        </div>
 
         <!-- 底部"创建自动开局任务"+提交 -->
         <div class="ct-footer-strip">
@@ -16785,9 +16794,32 @@
         const seatNoNum = parseInt(targetSeatId.replace(/\D/g, ''), 10);
         try {
           buyinConfirm.classList.add('disabled');
+          // ⭐ 2026-05-31:GPS 限制 — 若桌开了 gpsLimitEnabled,先取 geolocation
+          //   拒绝授权或拿不到 → 弹 toast + 取消入座(避免被后端 400 + 钱白扣)
+          //   IP 限制不需要前端做事(后端取 req.ip)
+          const _seatBody = { buyin: Math.round(amount) };
+          const _gpsRequired = !!(currentTableRoom && currentTableRoom.settings && currentTableRoom.settings.gpsLimitEnabled);
+          if (_gpsRequired) {
+            if (!navigator.geolocation) {
+              if (typeof showToast === 'function') showToast('本桌要求 GPS 位置,但你的设备不支持');
+              buyinConfirm.classList.remove('disabled');
+              return;
+            }
+            try {
+              const _pos = await new Promise(function(resolve, reject) {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, maximumAge: 60000 });
+              });
+              _seatBody.lat = _pos.coords.latitude;
+              _seatBody.lng = _pos.coords.longitude;
+            } catch (geoErr) {
+              if (typeof showToast === 'function') showToast('本桌要求 GPS 位置权限,请允许定位后重试');
+              buyinConfirm.classList.remove('disabled');
+              return;
+            }
+          }
           const resp = await window.apiClient.post(
             '/api/tables/' + Number(currentTableRoom.id) + '/seats/' + seatNoNum,
-            { buyin: Math.round(amount) }
+            _seatBody
           );
           console.log('[B8.5] ✅ 入座成功:', resp);
           // 保存后端确认的座位 + 筹码,供离座时使用
@@ -34724,6 +34756,9 @@
     muteSpectatorsEnabled: true,
     insuranceEnabled:     true,
     noLimitEnabled:       true,
+    // ⭐ 2026-05-31:IP / GPS 防作弊,默认关
+    ipLimitEnabled:       false,
+    gpsLimitEnabled:      false,
     createAutoStartTask:  true
   };
 
@@ -34871,6 +34906,9 @@
     chk('ct-mute-spec', D.muteSpectatorsEnabled);
     chk('ct-insurance', D.insuranceEnabled);
     chk('ct-no-limit', D.noLimitEnabled);
+    // ⭐ 2026-05-31:IP / GPS 限制初始化
+    chk('ct-ip-limit', D.ipLimitEnabled);
+    chk('ct-gps-limit', D.gpsLimitEnabled);
     chk('ct-auto-task', D.createAutoStartTask);
     n4SyncToggleSubs();
   }
@@ -34970,6 +35008,9 @@
         muteSpectatorsEnabled: document.getElementById('ct-mute-spec').checked,
         insuranceEnabled:      document.getElementById('ct-insurance').checked,
         noLimitEnabled:        document.getElementById('ct-no-limit').checked,
+        // ⭐ 2026-05-31:IP / GPS 防作弊
+        ipLimitEnabled:        document.getElementById('ct-ip-limit').checked,
+        gpsLimitEnabled:       document.getElementById('ct-gps-limit').checked,
         createAutoStartTask:   document.getElementById('ct-auto-task').checked
       };
 

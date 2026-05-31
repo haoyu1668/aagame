@@ -30690,15 +30690,42 @@
   function setActingSeat(seatId) {
     // 清掉所有座位的 acting
     document.querySelectorAll('.seat.acting').forEach(el => el.classList.remove('acting'));
+    // ⭐ #149 修复11:切换行动者 → 取消上一个对手倒计时圈动画
+    if (window._b9OppRingRaf) { cancelAnimationFrame(window._b9OppRingRaf); window._b9OppRingRaf = null; }
     actingSeatId = seatId;
     if (!seatId) return;
     const seatEl = document.querySelector(`.seat.${seatId}`);
     if (seatEl) {
       seatEl.classList.add('acting');
-      // ⭐ #149 修复2(2026-06-01):只加绿环,不在此启动计时器
+      // ⭐ #149 修复2(2026-06-01):只加绿环,不在此启动"我的"计时器
       //   原 bug:此处对任意座位(含对手)startTimer → 对手回合我端也读秒+tick 声
       //   我自己的计时器由 actionArea data-state(p1-p4)的 MutationObserver 驱动(见下方)
-      //   对手 acting 只显示绿环,不读秒、不滴答
+      // ⭐ #149 修复11(2026-06-01):给对手头像加"绿色倒计时圈"(德州标准:轮到谁谁倒计时)
+      //   纯视觉:独立 rAF 推进 .seat-turn-ring 的 --turn-p,无 tick 声、无 onTimeout、
+      //   不碰"我的"行动计时器逻辑。约 15s(TURN_DURATION_MS)从检测到对手行动起算。
+      //   (my-seat 是 .my-seat 不匹配 .seat.sN,故只对对手生效;我自己的倒计时是行动按钮上的环)
+      window._b9OppRingStart = performance.now();
+      var _b9AnimOppRing = function() {
+        var actingEls = document.querySelectorAll('.seat.acting');
+        if (!actingEls.length) { window._b9OppRingRaf = null; return; }
+        var elapsed = performance.now() - window._b9OppRingStart;
+        var p = Math.min(100, (elapsed / TURN_DURATION_MS) * 100);
+        var pStr = p.toFixed(2);
+        actingEls.forEach(function(seat) {
+          var ring = seat.querySelector('.seat-turn-ring');
+          if (!ring) return;
+          ring.style.setProperty('--turn-p', pStr);
+          var glow = ring.querySelector('.turn-head-glow');
+          if (glow) {
+            var angle = (p / 100) * Math.PI * 2 - Math.PI / 2;
+            glow.setAttribute('cx', (Math.cos(angle) * 26).toFixed(2));
+            glow.setAttribute('cy', (Math.sin(angle) * 26).toFixed(2));
+          }
+        });
+        if (p < 100) window._b9OppRingRaf = requestAnimationFrame(_b9AnimOppRing);
+        else window._b9OppRingRaf = null;
+      };
+      window._b9OppRingRaf = requestAnimationFrame(_b9AnimOppRing);
     }
   }
   // 暴露到 window 供 DEV 测试

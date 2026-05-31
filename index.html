@@ -15054,10 +15054,7 @@
           <span class="ct-row-label">保险</span>
           <label class="ct-toggle"><input type="checkbox" id="ct-insurance" checked><span class="ct-toggle-slider"></span></label>
         </div>
-        <div class="ct-row">
-          <span class="ct-row-label">无限注</span>
-          <label class="ct-toggle"><input type="checkbox" id="ct-no-limit" checked><span class="ct-toggle-slider"></span></label>
-        </div>
+        <!-- ⭐ 2026-05-31:无限注 toggle 删除 — 本平台只做 NL,toggle 是死代码 -->
         <!-- ⭐ 2026-05-31:防作弊 — IP / GPS 限制(默认关) -->
         <div class="ct-row">
           <span class="ct-row-label">IP 限制</span>
@@ -35361,7 +35358,6 @@
     // ⭐ 2026-05-31:lotterySeatingEnabled 字段彻底删
     muteSpectatorsEnabled: true,
     insuranceEnabled:     true,
-    noLimitEnabled:       true,
     // ⭐ 2026-05-31:IP / GPS 防作弊,默认关
     ipLimitEnabled:       false,
     gpsLimitEnabled:      false,
@@ -35629,7 +35625,7 @@
     // ⭐ 2026-05-31:抽签入座初始化删
     chk('ct-mute-spec', D.muteSpectatorsEnabled);
     chk('ct-insurance', D.insuranceEnabled);
-    chk('ct-no-limit', D.noLimitEnabled);
+    // ⭐ 2026-05-31:ct-no-limit toggle 已删(NL 是唯一支持的下注结构)
     // ⭐ 2026-05-31:IP / GPS 限制初始化
     chk('ct-ip-limit', D.ipLimitEnabled);
     chk('ct-gps-limit', D.gpsLimitEnabled);
@@ -35731,7 +35727,7 @@
         // ⭐ 2026-05-31:lotterySeatingEnabled 字段删,后端本来就没代码
         muteSpectatorsEnabled: document.getElementById('ct-mute-spec').checked,
         insuranceEnabled:      document.getElementById('ct-insurance').checked,
-        noLimitEnabled:        document.getElementById('ct-no-limit').checked,
+        // ⭐ 2026-05-31:noLimitEnabled 字段删(本平台只做 NL)
         // ⭐ 2026-05-31:IP / GPS 防作弊
         ipLimitEnabled:        document.getElementById('ct-ip-limit').checked,
         gpsLimitEnabled:       document.getElementById('ct-gps-limit').checked,

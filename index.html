@@ -6133,6 +6133,26 @@
     filter: grayscale(0.7) brightness(0.7);
     opacity: 0.7;
   }
+  /* ⭐ 2026-05-31:离桌留座 — 头像上叠倒计时数字(.seat 已 position:absolute,直接作锚点) */
+  .seat-afk-countdown {
+    position: absolute;
+    top: 14px;            /* 48px 头像高的中心位置 ≈ 14 + 半徽章高 ≈ 26 */
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 44px;
+    padding: 3px 8px;
+    background: rgba(255, 90, 70, 0.95);
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1;
+    border-radius: 12px;
+    text-align: center;
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.5);
+    white-space: nowrap;
+  }
   /* 旁观模式下整个 P 区禁用 */
   body.spectator-mode .action-area .ab-btn {
     pointer-events: none;
@@ -14952,7 +14972,7 @@
           <span class="ct-row-label">离桌留座时间</span>
           <div class="ct-stepper">
             <button type="button" class="ct-stepper-btn" id="ct-afk-minus">−</button>
-            <span class="ct-stepper-value" id="ct-afk-value">180S</span>
+            <span class="ct-stepper-value" id="ct-afk-value">120S</span>
             <button type="button" class="ct-stepper-btn" id="ct-afk-plus">+</button>
           </div>
         </div>
@@ -34981,7 +35001,7 @@
     // ⭐ 2026-05-31:rakeHalfOnFew 字段彻底删
     rakeMinPot:        10,   // ⭐ 2026-05-31:默认 1 → 10 BB
     rakeCap:           100,
-    afkSeatHoldSec:    180,
+    afkSeatHoldSec:    120,   // ⭐ 2026-05-31:默认 180→120 秒
     payToSeeBoardEnabled: true,
     payToSeeHoleEnabled:  true,  payToSeeHoleBb: 0.5,
     payToCutEnabled:      true,  payToCutBb:     0.5,
@@ -38116,6 +38136,7 @@
           return;
         }
         // ⭐ v2.28 批次 D3:"离桌留座" → 暂离不发牌 + 顶部状态条;再次点取消
+        // ⭐ 2026-05-31:加头像倒计时(读 settings.afkSeatHoldSec 默认 120),0 时自动取消
         if (action === '离桌留座') {
           const mySeat = document.querySelector('.my-seat');
           const isReserved = mySeat && mySeat.classList.contains('reserved');
@@ -38124,6 +38145,12 @@
           }
           // 顶部状态条
           updateSitOutBanner(!isReserved ? 'reserved' : null);
+          // ⭐ 倒计时控制:开/关
+          if (!isReserved) {
+            startAfkCountdown();
+          } else {
+            stopAfkCountdown();
+          }
           showToast(!isReserved ? '已离桌留座,本手开始后将暂不发牌' : '已取消留座');
           if (window.soundEngine) window.soundEngine.play('tap');
           return;
@@ -38149,6 +38176,56 @@
         showToast(action + ' 开发中');
       });
     });
+  }
+
+  // ⭐ 2026-05-31:离桌留座头像倒计时
+  let _afkCountdownTimer = null;
+  function stopAfkCountdown() {
+    if (_afkCountdownTimer) {
+      clearInterval(_afkCountdownTimer);
+      _afkCountdownTimer = null;
+    }
+    const old = document.querySelector('.seat-afk-countdown');
+    if (old) old.remove();
+  }
+  function startAfkCountdown() {
+    stopAfkCountdown();  // 先清旧的
+    const mySeat = document.querySelector('.my-seat');
+    if (!mySeat) return;
+    // 读 settings.afkSeatHoldSec(默认 120)— 兼容 window.* / 直接变量两种暴露方式
+    let seconds = 120;
+    try {
+      let s = null;
+      if (typeof currentTableRoom !== 'undefined' && currentTableRoom && currentTableRoom.settings) {
+        s = currentTableRoom.settings;
+      } else if (window.currentTableRoom && window.currentTableRoom.settings) {
+        s = window.currentTableRoom.settings;
+      }
+      if (s && Number(s.afkSeatHoldSec) > 0) seconds = Math.floor(Number(s.afkSeatHoldSec));
+    } catch (_) {}
+    // 注入 badge
+    const badge = document.createElement('div');
+    badge.className = 'seat-afk-countdown';
+    badge.textContent = seconds + 's';
+    mySeat.appendChild(badge);
+    // 每秒 -1
+    _afkCountdownTimer = setInterval(() => {
+      seconds--;
+      if (seconds <= 0) {
+        // 自动取消留座 + toast
+        clearInterval(_afkCountdownTimer);
+        _afkCountdownTimer = null;
+        const ms = document.querySelector('.my-seat');
+        if (ms) ms.classList.remove('reserved');
+        updateSitOutBanner(null);
+        const b = document.querySelector('.seat-afk-countdown');
+        if (b) b.remove();
+        if (typeof showToast === 'function') showToast('留座时间已到,已自动取消');
+        return;
+      }
+      const b = document.querySelector('.seat-afk-countdown');
+      if (b) b.textContent = seconds + 's';
+    }, 1000);
   }
 
   // ⭐ v2.28 批次 D3:顶部"暂离/旁观"状态条(横贯顶部,提醒玩家当前状态)

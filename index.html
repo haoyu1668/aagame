@@ -4308,6 +4308,28 @@
     border-top-color: #555;
   }
 
+  /* ⭐ 2026-05-31:顶部 2 座位(s1/s2)气泡反向放下方,避免上溢屏幕外 */
+  .seat.s1 .seat-action-tag,
+  .seat.s2 .seat-action-tag {
+    top: 100%;
+    margin-top: 8px;
+    bottom: auto;
+  }
+  .seat.s1 .seat-action-tag::after,
+  .seat.s2 .seat-action-tag::after {
+    bottom: auto;
+    top: -7px;
+    border-top: 0;
+    border-bottom: 7px solid currentColor;
+    border-left: 6px solid transparent;
+    border-right: 0;
+  }
+
+  /* ⭐ 2026-05-31:我自己的座位不显示动作气泡(自己知道刚做了什么,腾位置给牌型) */
+  .my-seat .seat-action-tag {
+    display: none;
+  }
+
   /* ⭐ 跟注:薄荷绿 */
   .seat-action-tag.action-call {
     background: #3ecf8e;

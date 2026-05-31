@@ -4428,6 +4428,12 @@
   }
   /* 弃牌气泡保持原样,不一起灰显(让"弃牌"二字仍清晰可辨) */
 
+  /* ⭐ 2026-05-31:我自己弃牌后,明牌(.my-cards .card)也暗化 — 公牌不受影响(不在 .my-seat 里) */
+  .my-seat.folded .my-cards .card {
+    opacity: 0.35;
+    filter: grayscale(0.7);
+  }
+
   /* 赢家标签(两对/一对) - 显示在头像上方 */
   .win-tag {
     position: absolute;

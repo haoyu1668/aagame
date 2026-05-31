@@ -6980,8 +6980,17 @@
     align-items: center;
     gap: 4px;
   }
+  /* ⭐ 2026-05-31:亮/暗对比度增强 — 默认(还在旁观)= 亮 + 绿描边,.left = 暗 */
   .rm-spec-cell.left {
-    opacity: 0.35;     /* 已离开,灰显 */
+    opacity: 0.3;     /* 已离开,更暗 */
+  }
+  .rm-spec-cell.left .rm-spec-avatar {
+    background: #1a1d24;
+    color: #666;
+    border-color: rgba(255,255,255,0.05);
+  }
+  .rm-spec-cell.left .rm-spec-name {
+    color: #888;
   }
   .rm-spec-avatar {
     width: 42px;
@@ -6994,10 +7003,13 @@
     font-size: 13px;
     color: var(--white);
     font-weight: 600;
+    border: 1.5px solid rgba(77,255,77,0.4);  /* ⭐ 还在看 — 绿描边 */
+    box-shadow: 0 0 6px rgba(77,255,77,0.15);  /* ⭐ 微微发光 */
   }
   .rm-spec-name {
     font-size: 11px;
     color: var(--white);
+    font-weight: 500;     /* ⭐ 加粗一点 */
     max-width: 70px;
     overflow: hidden;
     text-overflow: ellipsis;

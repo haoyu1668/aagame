@@ -14649,7 +14649,8 @@
 
         <!-- 牌桌名 -->
         <div class="ct-name-card">
-          <input type="text" class="ct-name-input" id="ct-name-input" maxlength="32" placeholder="例：AA娱乐01">
+          <!-- ⭐ 2026-05-31:autocomplete='off' + name='' 防浏览器保存 / 提示历史输入(用户要求) -->
+          <input type="text" class="ct-name-input" id="ct-name-input" maxlength="32" placeholder="例：AA娱乐01" autocomplete="off" name="">
         </div>
 
         <!-- 显示牌局编号 -->

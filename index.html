@@ -1464,6 +1464,116 @@
     scroll-snap-align: center;
   }
   .ct-segment-scroll .ct-segment-btn.active { background: #4dff4d; color: #16181f; font-weight: 600; }
+  /* ⭐ 2026-05-31:盲注+买入滑杆 */
+  .ct-slider-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .ct-slider-val {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  /* 单滑杆(盲注) */
+  .ct-slider-single {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: #2a2d34;
+    border-radius: 2px;
+    outline: none;
+    margin: 8px 0 14px;
+  }
+  .ct-slider-single::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px; height: 22px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 0 1px #4dff4d;
+  }
+  .ct-slider-single::-moz-range-thumb {
+    width: 22px; height: 22px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid #4dff4d;
+  }
+  /* 双滑杆(买入) */
+  .ct-dual-labels {
+    position: relative;
+    height: 16px;
+    margin-bottom: 4px;
+  }
+  .ct-dual-labels span {
+    position: absolute;
+    font-size: 11px;
+    color: #aaa;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+  .ct-dual-range {
+    position: relative;
+    height: 28px;
+    margin-bottom: 14px;
+  }
+  .ct-dual-track,
+  .ct-dual-progress {
+    position: absolute;
+    top: 12px;
+    height: 4px;
+    border-radius: 2px;
+    pointer-events: none;
+  }
+  .ct-dual-track {
+    left: 0; right: 0;
+    background: #2a2d34;
+  }
+  .ct-dual-progress {
+    background: #4dff4d;
+    left: 0%;
+    right: 50%;
+  }
+  .ct-dual-range input[type='range'] {
+    position: absolute;
+    top: 0;
+    left: 0; right: 0;
+    width: 100%;
+    height: 28px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    pointer-events: none;
+    outline: none;
+    margin: 0;
+  }
+  .ct-dual-range input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px; height: 22px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 0 1px #4dff4d;
+    pointer-events: auto;
+    margin-top: -9px;
+  }
+  .ct-dual-range input[type='range']::-moz-range-thumb {
+    width: 22px; height: 22px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid #4dff4d;
+    pointer-events: auto;
+  }
+  .ct-dual-range input[type='range']::-webkit-slider-runnable-track {
+    background: transparent;
+    height: 4px;
+  }
   /* ⭐ 2026-05-31:自动开局人数 — 选中态前缀白点 ●(原 HTML 只 2 有,改 CSS 让 3/4/5 也显示)*/
   .ct-segment-icons .ct-segment-btn.active::before {
     content: '● ';
@@ -14687,34 +14797,35 @@
           <label class="ct-toggle"><input type="checkbox" id="ct-show-room-code" checked><span class="ct-toggle-slider"></span></label>
         </div>
 
-        <!-- 盲注 -->
-        <!-- ⭐ 2026-05-31:select 改横滑 chip 条 — native select 下拉到屏底被截断,用 ct-segment-scroll 解决 -->
+        <!-- ⭐ 2026-05-31:盲注+买入改成滑杆联动(盲注 12 档单滑块,买入 8 档双滑块,中间显示真金额)-->
+        <!-- 盲注 单滑杆 -->
         <div class="ct-row" style="display:block;">
-          <span class="ct-row-label" style="display:block;margin-bottom:6px;">盲注</span>
-          <div class="ct-segment ct-segment-scroll" data-target="ct-blinds" data-current="1/2">
-            <div class="ct-segment-btn active" data-value="1/2">1/2</div>
-            <div class="ct-segment-btn" data-value="2/4">2/4</div>
-            <div class="ct-segment-btn" data-value="5/10">5/10</div>
-            <div class="ct-segment-btn" data-value="10/20">10/20</div>
-            <div class="ct-segment-btn" data-value="20/40">20/40</div>
-            <div class="ct-segment-btn" data-value="25/50">25/50</div>
-            <div class="ct-segment-btn" data-value="50/100">50/100</div>
-            <div class="ct-segment-btn" data-value="100/200">100/200</div>
-            <div class="ct-segment-btn" data-value="200/400">200/400</div>
-            <div class="ct-segment-btn" data-value="300/600">300/600</div>
-            <div class="ct-segment-btn" data-value="500/1000">500/1K</div>
-            <div class="ct-segment-btn" data-value="1000/2000">1K/2K</div>
+          <div class="ct-slider-head">
+            <span class="ct-row-label">盲注</span>
+            <span class="ct-slider-val" id="ct-blinds-val">1/2</span>
           </div>
+          <input type="range" id="ct-blinds-slider" class="ct-slider-single" min="0" max="11" step="1" value="0">
+          <input type="hidden" id="ct-blinds" value="1/2">
         </div>
 
-        <!-- 买入 min / max (BB 倍数) -->
-        <div class="ct-row ct-buyin-row">
-          <span class="ct-row-label">买入 (BB)</span>
-          <div class="ct-buyin-inputs">
-            <input type="number" class="ct-num-input" id="ct-min-buyin" min="1" max="10000" value="50">
-            <span class="ct-dash">-</span>
-            <input type="number" class="ct-num-input" id="ct-max-buyin" min="1" max="10000" value="300">
+        <!-- 买入 双滑杆 -->
+        <div class="ct-row" style="display:block;">
+          <div class="ct-slider-head">
+            <span class="ct-row-label">买入</span>
+            <span class="ct-slider-val" id="ct-buyin-money">200 - 1000</span>
           </div>
+          <div class="ct-dual-labels">
+            <span id="ct-buyin-min-label">100BB</span>
+            <span id="ct-buyin-max-label">500BB</span>
+          </div>
+          <div class="ct-dual-range">
+            <div class="ct-dual-track"></div>
+            <div class="ct-dual-progress" id="ct-buyin-progress"></div>
+            <input type="range" id="ct-buyin-min-slider" min="0" max="7" step="1" value="0">
+            <input type="range" id="ct-buyin-max-slider" min="0" max="7" step="1" value="4">
+          </div>
+          <input type="hidden" id="ct-min-buyin" value="100">
+          <input type="hidden" id="ct-max-buyin" value="500">
         </div>
 
         <!-- 补码上限 toggle -->
@@ -34853,7 +34964,7 @@
     gameType: 'NLH_long',
     showRoomCode: true,
     blinds: '1/2',
-    minBuyin: 50, maxBuyin: 300,
+    minBuyin: 100, maxBuyin: 500,  // ⭐ 2026-05-31:滑杆默认 100~500 BB
     rebuyLimitEnabled: true,  rebuyLimitMultiplier: 3,
     // ⭐ 2026-05-31:止损上限(stoplossEnabled/stoplossMultiplier)字段彻底删
     anteEnabled:       true,  anteBb:               1,
@@ -34928,6 +35039,124 @@
     });
   });
 
+  // -------- ⭐ 2026-05-31:盲注+买入双滑杆联动 --------
+  const N4_BLINDS_STEPS = ['1/2','2/4','5/10','10/20','20/40','25/50','50/100','100/200','200/400','300/600','500/1000','1000/2000'];
+  const N4_BUYIN_STEPS  = [100, 200, 300, 400, 500, 1000, 1500, 2000];
+  function n4BlindsLabelFor(val) {
+    // value="500/1000" 显示 "500/1K" / "1000/2000" → "1K/2K"
+    if (val === '500/1000') return '500/1K';
+    if (val === '1000/2000') return '1K/2K';
+    return val;
+  }
+  function n4CurrentBB() {
+    const v = (document.getElementById('ct-blinds').value || '1/2');
+    const bb = parseFloat(v.split('/')[1]);
+    return isNaN(bb) ? 2 : bb;
+  }
+  function n4UpdateBuyinMoney() {
+    const bb = n4CurrentBB();
+    const minBB = parseInt(document.getElementById('ct-min-buyin').value, 10) || 0;
+    const maxBB = parseInt(document.getElementById('ct-max-buyin').value, 10) || 0;
+    const money = document.getElementById('ct-buyin-money');
+    if (money) money.textContent = (bb * minBB).toLocaleString() + ' - ' + (bb * maxBB).toLocaleString();
+  }
+  function n4UpdateBuyinProgress() {
+    const minSlider = document.getElementById('ct-buyin-min-slider');
+    const maxSlider = document.getElementById('ct-buyin-max-slider');
+    const progress  = document.getElementById('ct-buyin-progress');
+    const minLabel  = document.getElementById('ct-buyin-min-label');
+    const maxLabel  = document.getElementById('ct-buyin-max-label');
+    if (!minSlider || !maxSlider) return;
+    const N = N4_BUYIN_STEPS.length - 1;  // 7
+    const minIdx = parseInt(minSlider.value, 10);
+    const maxIdx = parseInt(maxSlider.value, 10);
+    const minPct = (minIdx / N) * 100;
+    const maxPct = (maxIdx / N) * 100;
+    if (progress) {
+      progress.style.left = minPct + '%';
+      progress.style.right = (100 - maxPct) + '%';
+    }
+    if (minLabel) {
+      minLabel.textContent = N4_BUYIN_STEPS[minIdx] + 'BB';
+      minLabel.style.left = minPct + '%';
+    }
+    if (maxLabel) {
+      maxLabel.textContent = N4_BUYIN_STEPS[maxIdx] + 'BB';
+      maxLabel.style.left = maxPct + '%';
+    }
+    // 写 hidden input(供提交读取)
+    document.getElementById('ct-min-buyin').value = N4_BUYIN_STEPS[minIdx];
+    document.getElementById('ct-max-buyin').value = N4_BUYIN_STEPS[maxIdx];
+    n4UpdateBuyinMoney();
+  }
+  function n4SetBlindsByValue(blindsVal) {
+    const idx = N4_BLINDS_STEPS.indexOf(blindsVal);
+    const safeIdx = (idx >= 0 ? idx : 0);
+    const slider = document.getElementById('ct-blinds-slider');
+    const valEl  = document.getElementById('ct-blinds-val');
+    const hidden = document.getElementById('ct-blinds');
+    if (slider) slider.value = safeIdx;
+    if (hidden) hidden.value = N4_BLINDS_STEPS[safeIdx];
+    if (valEl)  valEl.textContent = n4BlindsLabelFor(N4_BLINDS_STEPS[safeIdx]);
+    n4UpdateBuyinMoney();
+  }
+  function n4SetBuyinByValues(minBB, maxBB) {
+    // 找最接近的档(传入值若不在 8 档里,落到最近一档)
+    function nearest(target) {
+      let best = 0, dist = Infinity;
+      N4_BUYIN_STEPS.forEach((v, i) => {
+        const d = Math.abs(v - target);
+        if (d < dist) { dist = d; best = i; }
+      });
+      return best;
+    }
+    let minIdx = nearest(minBB);
+    let maxIdx = nearest(maxBB);
+    if (minIdx > maxIdx) { const t = minIdx; minIdx = maxIdx; maxIdx = t; }
+    if (minIdx === maxIdx && maxIdx < N4_BUYIN_STEPS.length - 1) maxIdx++;
+    document.getElementById('ct-buyin-min-slider').value = minIdx;
+    document.getElementById('ct-buyin-max-slider').value = maxIdx;
+    n4UpdateBuyinProgress();
+  }
+  // 绑定事件:盲注滑杆
+  (function bindN4Sliders() {
+    const blindsSlider = document.getElementById('ct-blinds-slider');
+    if (blindsSlider) {
+      blindsSlider.addEventListener('input', () => {
+        const idx = parseInt(blindsSlider.value, 10);
+        n4SetBlindsByValue(N4_BLINDS_STEPS[idx]);
+      });
+    }
+    const minSlider = document.getElementById('ct-buyin-min-slider');
+    const maxSlider = document.getElementById('ct-buyin-max-slider');
+    if (minSlider && maxSlider) {
+      minSlider.addEventListener('input', () => {
+        let minIdx = parseInt(minSlider.value, 10);
+        let maxIdx = parseInt(maxSlider.value, 10);
+        // min 不能 >= max(留 1 档间距)
+        if (minIdx >= maxIdx) {
+          minIdx = maxIdx - 1;
+          if (minIdx < 0) minIdx = 0;
+          minSlider.value = minIdx;
+        }
+        n4UpdateBuyinProgress();
+      });
+      maxSlider.addEventListener('input', () => {
+        let minIdx = parseInt(minSlider.value, 10);
+        let maxIdx = parseInt(maxSlider.value, 10);
+        if (maxIdx <= minIdx) {
+          maxIdx = minIdx + 1;
+          if (maxIdx > N4_BUYIN_STEPS.length - 1) maxIdx = N4_BUYIN_STEPS.length - 1;
+          maxSlider.value = maxIdx;
+        }
+        n4UpdateBuyinProgress();
+      });
+    }
+    // 首次渲染
+    n4SetBlindsByValue('1/2');
+    n4UpdateBuyinProgress();
+  })();
+
   // -------- helper:stepper(座位数 / 离桌时间)--------
   function n4Stepper(minusId, plusId, valueId, opts) {
     const minus = document.getElementById(minusId);
@@ -34994,9 +35223,9 @@
     set('ct-name-input', D.name);
     n4SelectGameType(D.gameType);
     chk('ct-show-room-code', D.showRoomCode);
-    n4SetSegment('ct-blinds', D.blinds);  // ⭐ 2026-05-31:select → ct-segment-scroll
-    set('ct-min-buyin', D.minBuyin);
-    set('ct-max-buyin', D.maxBuyin);
+    // ⭐ 2026-05-31:盲注+买入滑杆重置
+    n4SetBlindsByValue(D.blinds);
+    n4SetBuyinByValues(D.minBuyin, D.maxBuyin);
     chk('ct-rebuy-enabled', D.rebuyLimitEnabled);
     set('ct-rebuy-mult', D.rebuyLimitMultiplier);
     // ⭐ 2026-05-31:止损上限初始化删
@@ -35059,7 +35288,7 @@
       const nameEl = document.getElementById('ct-name-input');
       const name = (nameEl && nameEl.value || '').trim();
       const gameType = n4GetGameType();
-      const blindsStr = n4GetSegment('ct-blinds', '1/2');  // ⭐ 2026-05-31:select → ct-segment-scroll
+      const blindsStr = (document.getElementById('ct-blinds').value || '1/2');  // ⭐ 2026-05-31:滑杆 hidden input
       const blindsParts = blindsStr.split('/');
       const sb = parseFloat(blindsParts[0]);
       const bb = parseFloat(blindsParts[1]);

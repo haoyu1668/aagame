@@ -17992,39 +17992,16 @@
     return '0';
   }
 
-  // 渲染战绩弹窗内容(根据当前 currentTableRoom)
-  function renderRecordModal() {
-    // 顶部牌局编号 + 剩余时间
-    // 真实业务:从 currentTableRoom.handNo / remainingTime 取
-    const handNoEl = document.getElementById('table-hand-no');
-    const handNo = handNoEl ? handNoEl.textContent : '#000000';
-    document.getElementById('rm-hand-no').textContent = handNo + '-' + Math.floor(Math.random()*30+1);
-    document.getElementById('rm-remaining').textContent = '01:00:00';
-
-    // 保险池(等后端推送,现阶段假数据 0)
+  // ⭐ 2026-05-31:接通真后端 GET /api/tables/:id/stats
+  //   旁观列表仍 mock(无后端 spectator 系统,后续 ticket)
+  async function renderRecordModal() {
+    // 先用占位填充(后端拉到再覆盖,避免空白)
+    document.getElementById('rm-hand-no').textContent = '#------';
+    document.getElementById('rm-remaining').textContent = '--:--:--';
     document.getElementById('rm-insurance-score').textContent = '0';
+    document.getElementById('rm-player-list').innerHTML = '<div style="text-align:center;padding:20px;color:#888;">加载中…</div>';
 
-    // 玩家行
-    const listEl = document.getElementById('rm-player-list');
-    listEl.innerHTML = demoRecordPlayers.map(p => {
-      const scoreClass = p.score > 0 ? 'pos' : (p.score < 0 ? 'neg' : '');
-      // 行的状态 class:inactive(已离桌灰显) + is-me(当前用户高亮)
-      let rowClass = 'rm-player-row';
-      if (p.inactive) rowClass += ' inactive';
-      if (p.name === currentUser.name) rowClass += ' is-me';
-      return `
-        <div class="${rowClass}" data-record-player="${p.name}">
-          <div class="rm-player-name">
-            <span class="rm-player-name-text">${p.name}</span>
-          </div>
-          <div class="rm-player-num">${p.hands}</div>
-          <div class="rm-player-bal">${p.buyin}</div>
-          <div class="rm-player-score ${scoreClass}">${formatScore(p.score)}</div>
-        </div>
-      `;
-    }).join('');
-
-    // 旁观区
+    // 旁观区先用 mock 渲染(后续单独 ticket 接通)
     document.getElementById('rm-spectator-count').textContent = demoSpectators.length + '人';
     const gridEl = document.getElementById('rm-spectator-grid');
     gridEl.innerHTML = demoSpectators.map(s => `
@@ -18033,6 +18010,66 @@
         <div class="rm-spec-name">${s.name}</div>
       </div>
     `).join('');
+
+    // 拉真后端
+    const tableId = currentTableRoom && Number.isInteger(Number(currentTableRoom.id)) ? Number(currentTableRoom.id) : null;
+    if (!tableId) {
+      document.getElementById('rm-player-list').innerHTML = '<div style="text-align:center;padding:20px;color:#888;">无牌桌 ID</div>';
+      return;
+    }
+    let stats = null;
+    try {
+      stats = await window.apiClient.get('/api/tables/' + tableId + '/stats');
+      console.log('[record] stats 响应:', stats);
+    } catch (e) {
+      console.warn('[record] 拉 stats 失败:', e.message || e);
+      document.getElementById('rm-player-list').innerHTML = '<div style="text-align:center;padding:20px;color:#888;">加载失败:' + (e.message || '') + '</div>';
+      return;
+    }
+    if (!stats || !stats.ok) return;
+
+    // 头部 hand_no 格式:#{table_id 6位}-{hand_no 2位}
+    const tIdPad = String(stats.table.id).padStart(6, '0');
+    const hnPad  = String(stats.table.handNo || 0).padStart(2, '0');
+    document.getElementById('rm-hand-no').textContent = '#' + tIdPad + '-' + hnPad;
+
+    // 剩余时间 HH:MM:SS
+    const rem = Math.max(0, Number(stats.table.remainingSec) || 0);
+    const hh = String(Math.floor(rem / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((rem % 3600) / 60)).padStart(2, '0');
+    const ss = String(rem % 60).padStart(2, '0');
+    document.getElementById('rm-remaining').textContent = hh + ':' + mm + ':' + ss;
+
+    // 保险池(MVP 占位 0,后端 insurancePool 字段已留)
+    document.getElementById('rm-insurance-score').textContent = String(Number(stats.insurancePool) || 0);
+
+    // 玩家行
+    const listEl = document.getElementById('rm-player-list');
+    const players = Array.isArray(stats.players) ? stats.players : [];
+    if (players.length === 0) {
+      listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">本桌还没打过手</div>';
+      return;
+    }
+    listEl.innerHTML = players.map(p => {
+      const score = Number(p.pnl) || 0;
+      const scoreClass = score > 0 ? 'pos' : (score < 0 ? 'neg' : '');
+      // is-me 判断:userId === 当前用户 id
+      let rowClass = 'rm-player-row';
+      const myUid = (currentUser && currentUser.userId) ? Number(currentUser.userId) : null;
+      if (myUid && Number(p.userId) === myUid) rowClass += ' is-me';
+      // inactive:hands=0 视作未参与(灰显)
+      if (!Number(p.hands)) rowClass += ' inactive';
+      return `
+        <div class="${rowClass}" data-record-player="${p.name}">
+          <div class="rm-player-name">
+            <span class="rm-player-name-text">${p.name}</span>
+          </div>
+          <div class="rm-player-num">${p.hands}</div>
+          <div class="rm-player-bal">${p.totalBuyin}</div>
+          <div class="rm-player-score ${scoreClass}">${formatScore(score)}</div>
+        </div>
+      `;
+    }).join('');
   }
 
   // 打开战绩弹窗

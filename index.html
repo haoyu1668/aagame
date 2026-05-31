@@ -14939,10 +14939,10 @@
                同步删:JS defaults + 提交字段 + 后端 rake.js 内部 halfOnFew 逻辑 -->
           <div class="ct-row">
             <span class="ct-row-label">触发抽水底池(BB)</span>
-            <input type="number" class="ct-num-input" id="ct-rake-min-pot" min="0" max="10000" value="1" style="width:90px">
+            <input type="number" class="ct-num-input" id="ct-rake-min-pot" min="0" max="10000" value="10" style="width:90px">
           </div>
           <div class="ct-row">
-            <span class="ct-row-label">每手抽水封顶</span>
+            <span class="ct-row-label">每手抽水封顶(BB)</span>
             <input type="number" class="ct-num-input" id="ct-rake-cap" min="0" max="100000" value="100" style="width:90px">
           </div>
         </div>
@@ -34979,7 +34979,7 @@
     rakeType:          'pot',
     rakePercent:       3,
     // ⭐ 2026-05-31:rakeHalfOnFew 字段彻底删
-    rakeMinPot:        1,
+    rakeMinPot:        10,   // ⭐ 2026-05-31:默认 1 → 10 BB
     rakeCap:           100,
     afkSeatHoldSec:    180,
     payToSeeBoardEnabled: true,

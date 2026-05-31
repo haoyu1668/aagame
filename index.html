@@ -16149,8 +16149,9 @@
       const ratio = r.seats / total;
       const offset = (CIRC * (1 - ratio)).toFixed(1);
       const full = r.seats >= total ? ' full' : '';
-      // ⭐ v2.18.6 标记"游戏中":如果上次进过这个房间(出来又回到大厅)
-      const inGame = (window.lastVisitedRoom === r.name) ? '<span class="room-ingame-tag">游戏中</span>' : '';
+      // ⭐ 2026-05-31 修真凶:原 v2.18.6 用 lastVisitedRoom 判,只要进过永远显"游戏中"(bug)
+      //   改成读后端真字段:r.time === '游戏中'(由 hasActiveHand 映射)→ 真有人在打才显示
+      const inGame = (r.time === '游戏中') ? '<span class="room-ingame-tag">游戏中</span>' : '';
       return `
         <div class="room-row">
           <div class="progress-ring">
@@ -16187,8 +16188,7 @@
       row.addEventListener('click', () => {
         tableEntryFrom = 'game';
         currentTableRoom = filtered[idx];
-        // ⭐ v2.18.6 记录最后进入的房间,大厅返回时显示"游戏中"标识
-        window.lastVisitedRoom = filtered[idx].name;
+        // ⭐ 2026-05-31:删 lastVisitedRoom 记录(老 bug 根源,已改用后端 hasActiveHand)
         fillTableCenter(currentTableRoom);
         showSubPage('table');
       });

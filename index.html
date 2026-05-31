@@ -3404,7 +3404,7 @@
      3366 把所有 .seat-cards-back 强制隐藏了,但只给 my-cards 加了 hand-active override,
      漏了对手 → 真桌对手头像上永远没牌背(用户反馈)。补:hand-active 时显示在局对手牌背。
      排除 空座/满员占位/等大盲(不在本手)/弃牌(已盖牌 muck)。摊牌时 face-up 牌也由此显示。 */
-  body.on-real-table.hand-active .seat:not(.empty):not(.full):not(.waitbb):not(.folded) .seat-cards-back { display: flex !important; }
+  body.on-real-table.hand-active.holes-revealed .seat:not(.empty):not(.full):not(.waitbb):not(.folded) .seat-cards-back { display: flex !important; }
   body.on-real-table.hand-active .table-center::before { display: none; }
   /* ⭐ Bug 真凶(2026-05-30 终极):真桌时 .seat-bet 永远 display:none(line 3221-3222),
      handactive override 漏了它 → flyChipsToSeatBet/betChipsToPotAnimation 算 getRelativeCenter
@@ -34490,9 +34490,15 @@
       || (Array.isArray(hand.communityCards) && hand.communityCards.length > 0)
       || hand.state !== 'preflop';
     var freshPageEntryWithExistingHand = window._b9FreshPageEntry === true;
+    // ⭐ #149 修复6(2026-06-01):每手开始先藏对手牌背(holes-revealed 门控),
+    //   等发牌动画飞牌落地、或中途进场无动画时,再放行显示 → "飞牌后才出现牌背"。
+    //   用持久 class 而非内联 opacity(后者被每 2s renderSeats 重建 DOM 冲掉而失效)。
+    document.body.classList.remove('holes-revealed');
     // 不论"hand 已开打"或"刚进页面看到 hand"→ 标记已动画,跳过 shuffle+deal
     if (freshPageEntryWithExistingHand) {
       window._b9AnimatedHandId = hand.id;
+      // 中途进页面看到已存在的 hand:无发牌动画 → 牌背立即显示
+      document.body.classList.add('holes-revealed');
       window._b9FreshPageEntry = false;
       // ⭐ Bug D v3:中途进入时若已有公牌,直接 setStage 让 CSS 显示
       //   3 张 = flop, 4 张 = turn, 5 张 = river/showdown
@@ -34517,6 +34523,8 @@
         } catch (e) {
           console.warn('[B9] dealHoleCardsAnimation 异常:', e);
         }
+        // ⭐ #149 修复6:发牌动画(~1300ms)飞牌落地后,放行对手牌背显示
+        setTimeout(function() { document.body.classList.add('holes-revealed'); }, 1500);
       }
       if (typeof window.playShuffleAnimation === 'function') {
         try {
@@ -34530,6 +34538,8 @@
       }
     } else if (handAlreadyInProgress) {
       console.log('[B9] hand 已在进行中(state=' + hand.state + ', actions=' + (hand.actions || []).length + '),跳过洗牌+发牌动画');
+      // ⭐ #149 修复6:hand 已在进行中、无发牌动画 → 牌背立即显示(不再藏)
+      document.body.classList.add('holes-revealed');
     }
 
     // 等洗牌(1500ms)+ 飞牌(~1200ms)完才下盲注筹码 = 2700ms

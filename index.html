@@ -13094,7 +13094,7 @@
         <div class="table-meta">
           <span class="meta-row" id="table-hand-no">#992793</span>
           <span class="meta-row">盲注 <span id="table-blinds">10/20(20)</span></span>
-          <span class="meta-row">止损上限 <span id="table-stoploss">50K</span></span>
+          <!-- ⭐ 2026-05-31:止损上限显示删(止损功能彻底删除) -->
           <span class="meta-row" id="table-rake-info" style="display:none;">抽水 <span id="table-rake-text">5%</span></span>
           <span class="meta-row" id="table-timer">00:24:00</span>
         </div>
@@ -14703,19 +14703,9 @@
           </select>
         </div>
 
-        <!-- 止损上限 -->
-        <div class="ct-row">
-          <span class="ct-row-label">止损上限</span>
-          <label class="ct-toggle"><input type="checkbox" id="ct-stoploss-enabled" checked><span class="ct-toggle-slider"></span></label>
-        </div>
-        <div class="ct-row ct-sub" id="ct-stoploss-mult-row">
-          <span class="ct-row-label">止损上限设置</span>
-          <select class="ct-inline-select" id="ct-stoploss-mult">
-            <option value="3">3倍</option>
-            <option value="5" selected>5倍</option>
-            <option value="10">10倍</option>
-          </select>
-        </div>
+        <!-- ⭐ 2026-05-31:用户要求彻底删 - 止损上限 toggle + 设置(原 line 14707-14718)
+             同步删:JS defaults + 提交字段 + 后端 hand.js applyStrictStoploss -->
+
 
         <!-- 前注 (ante) toggle + BB 段选 -->
         <div class="ct-row">
@@ -14803,10 +14793,8 @@
               <span>%</span>
             </div>
           </div>
-          <div class="ct-row">
-            <span class="ct-row-label">小于X人减半</span>
-            <label class="ct-toggle"><input type="checkbox" id="ct-rake-half-on-few"><span class="ct-toggle-slider"></span></label>
-          </div>
+          <!-- ⭐ 2026-05-31:用户要求彻底删 - 小于X人减半(原 line 14796-14799)
+               同步删:JS defaults + 提交字段 + 后端 rake.js 内部 halfOnFew 逻辑 -->
           <div class="ct-row">
             <span class="ct-row-label">触发抽水底池(BB)</span>
             <input type="number" class="ct-num-input" id="ct-rake-min-pot" min="0" max="10000" value="1" style="width:90px">
@@ -14882,11 +14870,7 @@
           </div>
         </div>
 
-        <!-- 抽签入座 / 观众禁言 / 保险 / 无限注 -->
-        <div class="ct-row">
-          <span class="ct-row-label">抽签入座</span>
-          <label class="ct-toggle"><input type="checkbox" id="ct-lottery-seat" checked><span class="ct-toggle-slider"></span></label>
-        </div>
+        <!-- 抽签入座(2026-05-31 删 — 无后端代码,UI 摆设)/ 观众禁言 / 保险 / 无限注 -->
         <div class="ct-row">
           <span class="ct-row-label">观众禁言</span>
           <label class="ct-toggle"><input type="checkbox" id="ct-mute-spec" checked><span class="ct-toggle-slider"></span></label>
@@ -16234,19 +16218,8 @@
     // 盲注:直接用房间的
     document.getElementById('table-blinds').textContent = room.blinds || '-';
 
-    // ⭐ 2026-05-29:止损上限 + 抽水显示真 N4 设置值
+    // ⭐ 2026-05-29:抽水显示真 N4 设置值(止损功能 2026-05-31 已删)
     const settings = room.settings || {};
-    const stoplossEl = document.getElementById('table-stoploss');
-    if (stoplossEl) {
-      if (settings.stoplossEnabled && settings.stoplossMultiplier) {
-        const pct = Math.round(Number(settings.stoplossMultiplier) * 100);
-        stoplossEl.textContent = '止损 ' + pct + '%';
-      } else {
-        // 兜底:旧路径(假数据 buyin × 25)— demo 桌仍用
-        const stoploss = (room.buyin || 0) * 25;
-        stoplossEl.textContent = stoploss > 0 ? formatChips(stoploss) : '不限';
-      }
-    }
 
     // 抽水信息:N4 settings.rakeType + rakePercent
     const rakeInfoEl = document.getElementById('table-rake-info');
@@ -29138,10 +29111,7 @@
           const bnEl = document.getElementById('table-blinds');
           if (bnEl) bnEl.textContent = data.blinds;
         }
-        if (data.stopLoss) {
-          const slEl = document.getElementById('table-stoploss');
-          if (slEl) slEl.textContent = data.stopLoss;
-        }
+        // ⭐ 2026-05-31:止损功能已删,table-stoploss 元素也删了
         // 启动牌桌时长计时(每秒更新)
         if (!window._tableSessionStartAt) {
           window._tableSessionStartAt = Date.now();
@@ -34730,7 +34700,7 @@
     blinds: '1/2',
     minBuyin: 50, maxBuyin: 300,
     rebuyLimitEnabled: true,  rebuyLimitMultiplier: 3,
-    stoplossEnabled:   true,  stoplossMultiplier:   5,
+    // ⭐ 2026-05-31:止损上限(stoplossEnabled/stoplossMultiplier)字段彻底删
     anteEnabled:       true,  anteBb:               1,
     maxSeats:          7,
     durationHours:     1,
@@ -34741,7 +34711,7 @@
     rakeEnabled:       true,
     rakeType:          'pot',
     rakePercent:       3,
-    rakeHalfOnFew:     false,
+    // ⭐ 2026-05-31:rakeHalfOnFew 字段彻底删
     rakeMinPot:        1,
     rakeCap:           100,
     afkSeatHoldSec:    180,
@@ -34750,7 +34720,7 @@
     payToCutEnabled:      true,  payToCutBb:     0.5,
     delayedRevealEnabled: true,
     autoStartEnabled:     true,  autoStartMinPlayers: 2,
-    lotterySeatingEnabled: true,
+    // ⭐ 2026-05-31:lotterySeatingEnabled 字段彻底删
     muteSpectatorsEnabled: true,
     insuranceEnabled:     true,
     noLimitEnabled:       true,
@@ -34838,7 +34808,7 @@
   // 配对:[parent checkbox id, sub block id]
   const N4_TOGGLE_SUBS = [
     ['ct-rebuy-enabled',    'ct-rebuy-mult-row'],
-    ['ct-stoploss-enabled', 'ct-stoploss-mult-row'],
+    // ⭐ 2026-05-31:止损 toggle/sub 删
     ['ct-ante-enabled',     'ct-ante-bb-row'],
     ['ct-pflr-limit',       'ct-pflr-detail-block'],
     ['ct-rake-enabled',     'ct-rake-detail-block'],
@@ -34871,8 +34841,7 @@
     set('ct-max-buyin', D.maxBuyin);
     chk('ct-rebuy-enabled', D.rebuyLimitEnabled);
     set('ct-rebuy-mult', D.rebuyLimitMultiplier);
-    chk('ct-stoploss-enabled', D.stoplossEnabled);
-    set('ct-stoploss-mult', D.stoplossMultiplier);
+    // ⭐ 2026-05-31:止损上限初始化删
     chk('ct-ante-enabled', D.anteEnabled);
     n4SetSegment('ct-ante-bb', D.anteBb);
     const sv = document.getElementById('ct-seats-value'); if (sv) sv.textContent = String(D.maxSeats);
@@ -34886,7 +34855,7 @@
     chk('ct-rake-enabled', D.rakeEnabled);
     n4SetSegment('ct-rake-type', D.rakeType);
     set('ct-rake-percent', D.rakePercent);
-    chk('ct-rake-half-on-few', D.rakeHalfOnFew);
+    // ⭐ 2026-05-31:小于X人减半初始化删
     set('ct-rake-min-pot', D.rakeMinPot);
     set('ct-rake-cap', D.rakeCap);
     const afk = document.getElementById('ct-afk-value'); if (afk) afk.textContent = D.afkSeatHoldSec + 'S';
@@ -34898,7 +34867,7 @@
     chk('ct-delayed-reveal', D.delayedRevealEnabled);
     chk('ct-autostart-enabled', D.autoStartEnabled);
     n4SetSegment('ct-autostart-min', D.autoStartMinPlayers);
-    chk('ct-lottery-seat', D.lotterySeatingEnabled);
+    // ⭐ 2026-05-31:抽签入座初始化删
     chk('ct-mute-spec', D.muteSpectatorsEnabled);
     chk('ct-insurance', D.insuranceEnabled);
     chk('ct-no-limit', D.noLimitEnabled);
@@ -34974,8 +34943,7 @@
         showRoomCode:          document.getElementById('ct-show-room-code').checked,
         rebuyLimitEnabled:     document.getElementById('ct-rebuy-enabled').checked,
         rebuyLimitMultiplier:  parseInt(document.getElementById('ct-rebuy-mult').value, 10),
-        stoplossEnabled:       document.getElementById('ct-stoploss-enabled').checked,
-        stoplossMultiplier:    parseInt(document.getElementById('ct-stoploss-mult').value, 10),
+        // ⭐ 2026-05-31:止损上限 (stoplossEnabled+stoplossMultiplier) 字段删,后端 applyStrictStoploss 也删
         anteEnabled:           anteEnabled,
         anteBb:                anteBb,
         durationHours:         parseInt(document.getElementById('ct-duration').value, 10),
@@ -34986,7 +34954,7 @@
         rakeEnabled:           document.getElementById('ct-rake-enabled').checked,
         rakeType:              n4GetSegment('ct-rake-type', 'pot'),
         rakePercent:           parseFloat(document.getElementById('ct-rake-percent').value),
-        rakeHalfOnFew:         document.getElementById('ct-rake-half-on-few').checked,
+        // ⭐ 2026-05-31:rakeHalfOnFew 字段删,后端 rake.js 内部 halfOnFew 逻辑也删
         rakeMinPot:            parseInt(document.getElementById('ct-rake-min-pot').value, 10),
         rakeCap:               parseInt(document.getElementById('ct-rake-cap').value, 10),
         afkSeatHoldSec:        parseInt(String(afkVal).replace(/\D/g, ''), 10),
@@ -34998,7 +34966,7 @@
         delayedRevealEnabled:  document.getElementById('ct-delayed-reveal').checked,
         autoStartEnabled:      document.getElementById('ct-autostart-enabled').checked,
         autoStartMinPlayers:   parseInt(n4GetSegment('ct-autostart-min', '2'), 10),
-        lotterySeatingEnabled: document.getElementById('ct-lottery-seat').checked,
+        // ⭐ 2026-05-31:lotterySeatingEnabled 字段删,后端本来就没代码
         muteSpectatorsEnabled: document.getElementById('ct-mute-spec').checked,
         insuranceEnabled:      document.getElementById('ct-insurance').checked,
         noLimitEnabled:        document.getElementById('ct-no-limit').checked,

@@ -18332,6 +18332,7 @@
   let totalReplayCount = 0;
   let _b9ReplayList = [];
   let _b9ReplayDetail = null;
+  let _b9ReplayLoaded = false;  // ⭐ true 后 renderReplayModal 不再退 demo,显示空状态
 
   // 把单张手牌字符串(如 'J♦' / '3♦' / '🂠')渲染成 mini-card HTML
   function renderMiniCard(card) {
@@ -18427,8 +18428,30 @@
 
   // 渲染整个牌谱弹窗
   function renderReplayModal() {
-    // ⭐ 2026-05-31:优先用真后端数据,空时回退到 demoReplay(防 UI 崩)
-    const data = _b9ReplayDetail || demoReplay;
+    // ⭐ 2026-05-31:优先真后端数据
+    //   未尝试加载过 → 回退 demoReplay 防崩
+    //   加载过 + 详情非空 → 用真数据
+    //   加载过 + 空列表 → 显示空状态(清空 UI)
+    let data;
+    if (_b9ReplayDetail) {
+      data = _b9ReplayDetail;
+    } else if (_b9ReplayLoaded) {
+      // 空列表 — 显示空状态
+      document.getElementById('rp-hand-id').textContent = '牌局ID: —';
+      document.getElementById('rp-blinds').textContent = '—';
+      document.getElementById('rp-pot').textContent = '0';
+      const preflopEl = document.getElementById('rp-preflop');
+      if (preflopEl) preflopEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#888;font-size:14px;">暂无牌谱<br><span style="font-size:12px;color:#666;">先去打几手牌就有了</span></div>';
+      const roundsEl = document.getElementById('rp-rounds');
+      if (roundsEl) roundsEl.innerHTML = '';
+      document.getElementById('rp-page-num').textContent = '0/0';
+      document.getElementById('rp-prev').classList.add('disabled');
+      document.getElementById('rp-next').classList.add('disabled');
+      updatePeekButtonPrices();
+      return;
+    } else {
+      data = demoReplay;
+    }
     document.getElementById('rp-hand-id').textContent = '牌局ID: ' + data.handId;
     document.getElementById('rp-blinds').textContent = data.blinds;
     document.getElementById('rp-pot').textContent = (data.finalPot || 0).toLocaleString();
@@ -18524,12 +18547,16 @@
   async function _b9FetchMyHands(clubId) {
     try {
       const qs = clubId ? ('?clubId=' + clubId + '&limit=50') : '?limit=50';
-      const r = await (window.apiClient ? window.apiClient.get('/api/users/me/hands' + qs) : fetch('/api/users/me/hands' + qs).then(r => r.json()));
+      const path = '/api/users/me/hands' + qs;
+      console.log('[replay] 拉列表 path=' + path);
+      const r = await (window.apiClient ? window.apiClient.get(path) : fetch(path).then(r => r.json()));
+      console.log('[replay] 列表响应:', r);
       if (r && r.ok && Array.isArray(r.hands)) {
+        console.log('[replay] hands.length=' + r.hands.length + ' total=' + r.total);
         return r.hands;
       }
     } catch (e) {
-      console.warn('[replay] 拉 hands 列表失败:', e);
+      console.warn('[replay] 拉 hands 列表失败:', e.message || e, 'status=' + (e.status || '?'));
     }
     return [];
   }
@@ -18546,9 +18573,11 @@
   // 入口:打开牌谱时调,加载列表 + 第 1 手
   async function _b9LoadReplayList() {
     const clubId = (typeof currentClubInfoId !== 'undefined' && currentClubInfoId) ? currentClubInfoId : null;
+    console.log('[replay] _b9LoadReplayList clubId=' + clubId);
     const list = await _b9FetchMyHands(clubId);
     _b9ReplayList = list;
     totalReplayCount = list.length;
+    _b9ReplayLoaded = true;  // ⭐ 标记:已尝试加载,renderReplayModal 不再退 demo
     if (list.length === 0) {
       currentReplayIndex = 0;
       _b9ReplayDetail = null;

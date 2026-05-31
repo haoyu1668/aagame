@@ -13091,12 +13091,22 @@
         <div class="pot-label">底池: <span id="table-pot">1.33K</span></div>
         <!-- ⭐ v2.25 子项 3:边池分层显示(只在有边池时显示;无边池时 :empty 自动隐藏) -->
         <div class="pot-list" id="pot-list"></div>
+        <!-- ⭐ 2026-05-31 重构:桌面信息条按 N4 toggle 显示控制(6 项 + 桌名/盲注 默认显)
+             1. 桌名(永显)  2. #XXXXXX-NN 手牌编号(showRoomCode)
+             3. 盲注(永显)  4. 保险/IP/GPS(各自 toggle,同行)
+             5. 延迟看牌(toggle) 6. 服务费(rakeEnabled) 7. 计时器 -->
         <div class="table-meta">
-          <span class="meta-row" id="table-hand-no">#992793</span>
-          <span class="meta-row">盲注 <span id="table-blinds">10/20(20)</span></span>
-          <!-- ⭐ 2026-05-31:止损上限显示删(止损功能彻底删除) -->
-          <span class="meta-row" id="table-rake-info" style="display:none;">抽水 <span id="table-rake-text">5%</span></span>
-          <span class="meta-row" id="table-timer">00:24:00</span>
+          <span class="meta-row" id="table-name-display">设置你的牌桌名</span>
+          <span class="meta-row" id="table-hand-no" style="display:none;">#000000-00</span>
+          <span class="meta-row" id="table-blinds-row">盲注 <span id="table-blinds">-</span><span id="table-straddle-tag" style="display:none;"> 抓头</span></span>
+          <span class="meta-row" id="table-flags-row" style="display:none;">
+            <span id="table-flag-insurance" style="display:none;">保险</span>
+            <span id="table-flag-ip" style="display:none;"> IP</span>
+            <span id="table-flag-gps" style="display:none;"> GPS</span>
+          </span>
+          <span class="meta-row" id="table-flag-delayed" style="display:none;">延迟看牌</span>
+          <span class="meta-row" id="table-rake-info" style="display:none;">服务费 <span id="table-rake-text">5%</span></span>
+          <span class="meta-row" id="table-timer">00:00:00</span>
         </div>
       </div>
 
@@ -16252,24 +16262,50 @@
     // 调用座位渲染函数(传入桌子数据)
     renderSeats(room);
 
-    // 牌局号:基于房间名末尾数字 + 随机后缀
-    const m = (room.name || '').match(/(\d+)$/);
-    const baseNo = m ? m[1] : '000000';
-    const handNo = '#' + baseNo + Math.floor(Math.random() * 90 + 10);
-    document.getElementById('table-hand-no').textContent = handNo;
-
-    // 盲注:直接用房间的
-    document.getElementById('table-blinds').textContent = room.blinds || '-';
-
-    // ⭐ 2026-05-29:抽水显示真 N4 设置值(止损功能 2026-05-31 已删)
+    // ⭐ 2026-05-31 重构:桌面信息条 — 真 N4 设置 + toggle 控制显示
     const settings = room.settings || {};
 
-    // 抽水信息:N4 settings.rakeType + rakePercent
+    // 1. 桌名(永显)— 来自 N4 表单"设置你的牌桌名"
+    const nameEl = document.getElementById('table-name-display');
+    if (nameEl) nameEl.textContent = room.name || '未命名牌桌';
+
+    // 2. 桌子手牌编号(toggle: showRoomCode)— 真 hand_no 由 polling 写入,这里只控显隐
+    //    fillTableCenter 只在进桌时调一次,此时还没 hand → 初始隐藏 + 占位
+    //    polling fetchAndRenderCurrentHand 内会动态更新文本 + 显隐
+    const handNoEl = document.getElementById('table-hand-no');
+    if (handNoEl) {
+      handNoEl.style.display = settings.showRoomCode ? '' : 'none';
+      handNoEl.textContent = '#' + String(Number(room.id) || 0).padStart(6, '0') + '-00';
+    }
+
+    // 3. 盲注(永显)+ 抓头 tag(straddleEnabled)
+    document.getElementById('table-blinds').textContent = room.blinds || '-';
+    const straddleTag = document.getElementById('table-straddle-tag');
+    if (straddleTag) straddleTag.style.display = settings.straddleEnabled ? '' : 'none';
+
+    // 4. 保险 / IP / GPS(任一开就显示同行,各自独立 toggle)
+    const insurEl = document.getElementById('table-flag-insurance');
+    const ipEl    = document.getElementById('table-flag-ip');
+    const gpsEl   = document.getElementById('table-flag-gps');
+    const flagsRow= document.getElementById('table-flags-row');
+    if (insurEl) insurEl.style.display = settings.insuranceEnabled ? '' : 'none';
+    if (ipEl)    ipEl.style.display    = settings.ipLimitEnabled   ? '' : 'none';
+    if (gpsEl)   gpsEl.style.display   = settings.gpsLimitEnabled  ? '' : 'none';
+    if (flagsRow) {
+      const anyFlag = settings.insuranceEnabled || settings.ipLimitEnabled || settings.gpsLimitEnabled;
+      flagsRow.style.display = anyFlag ? '' : 'none';
+    }
+
+    // 5. 延迟看牌(toggle: delayedRevealEnabled)
+    const delayedEl = document.getElementById('table-flag-delayed');
+    if (delayedEl) delayedEl.style.display = settings.delayedRevealEnabled ? '' : 'none';
+
+    // 6. 服务费(toggle: rakeEnabled,文案随 rakeType / rakePercent 变化)
     const rakeInfoEl = document.getElementById('table-rake-info');
     const rakeTextEl = document.getElementById('table-rake-text');
     if (rakeInfoEl && rakeTextEl) {
-      if (settings.rakeType && settings.rakeType !== 'none' && settings.rakePercent) {
-        const typeName = settings.rakeType === 'pot' ? '底池' : (settings.rakeType === 'buyin' ? '买入' : '局');
+      if (settings.rakeEnabled && settings.rakeType && settings.rakeType !== 'none' && settings.rakePercent) {
+        const typeName = settings.rakeType === 'pot' ? '底池' : (settings.rakeType === 'buyin' ? '买入' : '局抽');
         rakeTextEl.textContent = typeName + ' ' + settings.rakePercent + '%';
         rakeInfoEl.style.display = '';
       } else {
@@ -33140,6 +33176,24 @@
         //   解决 bug:renderSeats 5s 一次 innerHTML 重写,洗掉 setDealer 的 .dealer-mark
         window._b9CurrentHand = hand;
 
+        // ⭐ 2026-05-31:桌面顶部"#XXXXXX-NN"手牌编号 — 真后端 hand.handNo 接通
+        //   只在 settings.showRoomCode=true 时显示;hand 为 null(没在打)→ 不更新数字保留上一次
+        try {
+          var _showCode = !!(currentTableRoom.settings && currentTableRoom.settings.showRoomCode);
+          var _handNoEl = document.getElementById('table-hand-no');
+          if (_handNoEl) {
+            if (_showCode && hand && hand.handNo) {
+              var _tid6 = String(Number(currentTableRoom.id) || 0).padStart(6, '0');
+              var _hno2 = String(Number(hand.handNo) || 0).padStart(2, '0');
+              _handNoEl.textContent = '#' + _tid6 + '-' + _hno2;
+              _handNoEl.style.display = '';
+            } else if (!_showCode) {
+              _handNoEl.style.display = 'none';
+            }
+            // _showCode=true 但 hand=null → 保留上次内容 + 显隐(玩家刚结束本手时还能看到)
+          }
+        } catch (hnErr) { console.warn('[table-hand-no]', hnErr); }
+
         // ⭐ 2026-05-31:见 hand 且我在 hand.seats(发到牌)→ 标记此桌"我玩过",大厅显"游戏过"红字
         //   存 localStorage(Set 形),renderRooms 按 r.id 查
         try {
@@ -40436,10 +40490,8 @@
 
       chipText.textContent = shortenHash(window.currentHandHash);
 
-      // 牌桌中央 #table-hand-no 顺手联动,跟 currentHandId 一致
-      if (handNo && window.currentHandId) {
-        handNo.textContent = '#' + window.currentHandId;
-      }
+      // ⭐ 2026-05-31:删原"顺手联动" — 跟新格式 #XXXXXX-NN 冲突(覆盖掉真后端 handNo)
+      //   真后端 table-hand-no 由 fetchAndRenderCurrentHand 写,这里不再插手
 
       // 短闪效果(去类再加,触发动画)
       chip.classList.remove('refreshing');

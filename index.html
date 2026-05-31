@@ -19775,6 +19775,9 @@
     document.querySelectorAll('.win-tag').forEach(el => el.remove());
     // 3. 清弃牌灰显
     document.querySelectorAll('.seat.folded').forEach(el => el.classList.remove('folded'));
+    // ⭐ 2026-05-31 fix:.my-seat 是独立元素不在 .seat 下,要单独清 folded class
+    //   否则新手开始后 .my-seat.folded 仍在 → 我的明牌一直 dim
+    document.querySelectorAll('.my-seat.folded').forEach(el => el.classList.remove('folded'));
     // 4. 清 acting + winner-glow
     setActingSeat(null);
     document.querySelectorAll('.winner-glow').forEach(el => el.classList.remove('winner-glow'));

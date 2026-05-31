@@ -1446,7 +1446,8 @@
     border-radius: 6px;
     transition: background 0.15s, color 0.15s;
   }
-  .ct-segment-btn.active { background: #1a1d24; color: #fff; }
+  /* ⭐ 2026-05-31:选中文字绿 + 加粗(● 字符颜色自动跟着变绿)*/
+  .ct-segment-btn.active { background: #1a1d24; color: #4dff4d; font-weight: 600; }
   .ct-segment-big .ct-segment-btn { padding: 12px 0; font-size: 14px; }
   /* ⭐ 2026-05-31:盲注 12 档横滑变体 — 不撑满父宽,溢出时手指左滑 */
   .ct-segment-scroll {
@@ -14921,10 +14922,10 @@
         </div>
         <div class="ct-sub" id="ct-rake-detail-block">
           <!-- 抽水类型 tab -->
+          <!-- ⭐ 2026-05-31:删买入抽(UI + 后端)— 用户决定,对齐 task #124 -->
           <div class="ct-segment ct-segment-big" data-target="ct-rake-type">
-            <div class="ct-segment-btn" data-value="buyin">买入抽</div>
-            <div class="ct-segment-btn" data-value="round">局抽</div>
             <div class="ct-segment-btn active" data-value="pot">把抽</div>
+            <div class="ct-segment-btn" data-value="round">局抽</div>
           </div>
           <!-- 抽水百分比 -->
           <div class="ct-row">

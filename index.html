@@ -18172,7 +18172,38 @@
   }
 
   // 发消息(追加到列表 + 重新渲染)
+  // ⭐ 2026-05-31:观众禁言判定 — 旁观者(未入座)在 muteSpectatorsEnabled=true 桌不能发
+  function _b9IsChatMuted() {
+    try {
+      const s = currentTableRoom && currentTableRoom.settings;
+      if (!s || !s.muteSpectatorsEnabled) return false;
+      // 我是不是入座了?用 DOM 检查 .my-seat.seated 最可靠
+      const mySeat = document.querySelector('#page-table .my-seat.seated');
+      return !mySeat;  // 没坐 → 旁观 → 禁言
+    } catch (_) { return false; }
+  }
+  // 同步禁言态到 input + send-btn(改 placeholder + disabled)
+  function _b9SyncChatMuteUI() {
+    const inp  = document.getElementById('chat-input');
+    const send = document.getElementById('chat-send-btn');
+    const muted = _b9IsChatMuted();
+    if (inp) {
+      inp.disabled = muted;
+      inp.placeholder = muted ? '旁观者禁言中(本桌设置)' : '说点什么...';
+    }
+    if (send) {
+      send.disabled = muted;
+      send.style.opacity = muted ? '0.4' : '';
+      send.style.pointerEvents = muted ? 'none' : '';
+    }
+  }
+
   function sendChatMessage(text) {
+    // ⭐ 2026-05-31:禁言 gate
+    if (_b9IsChatMuted()) {
+      if (typeof showToast === 'function') showToast('旁观者禁言中,无法发消息');
+      return;
+    }
     text = (text || '').trim();
     if (!text) return;
     // 自己发的消息:from = currentUser.name
@@ -18203,6 +18234,7 @@
         if (tableBottombar) tableBottombar.style.display = '';
       } else {
         renderChatMessages();
+        _b9SyncChatMuteUI();   // ⭐ 2026-05-31:开聊天时刷新禁言态
         chatMask.classList.add('show');
         if (tableBottombar) tableBottombar.style.display = 'none';
       }

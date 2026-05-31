@@ -19780,7 +19780,7 @@
     // 1. 公共牌回 preflop(全隐)
     setStage('preflop');
     // 2. 清空所有动作气泡 + winTag
-    clearActionTags();
+    clearActionTags(true);  // 新一手:连弃牌气泡一起清(派彩已结束)
     document.querySelectorAll('.win-tag').forEach(el => el.remove());
     // 3. 清弃牌灰显
     document.querySelectorAll('.seat.folded').forEach(el => el.classList.remove('folded'));
@@ -30966,8 +30966,12 @@
   }
 
   // 清空所有座位动作气泡(同一手内每轮结束时调用)
-  function clearActionTags() {
+  function clearActionTags(includeFold) {
+    // ⭐ #149 修复7(2026-06-01):弃牌气泡保留到本手结束(派彩)
+    //   call/raise/check 等瞬时气泡随街切换/动作清掉;但 .action-fold 一直留着,
+    //   让玩家全程看到谁弃了牌。仅新一手 fullResetTable 传 includeFold=true 才清弃牌气泡。
     document.querySelectorAll('.seat-action-tag, .my-seat .seat-action-tag').forEach(el => {
+      if (!includeFold && el.classList.contains('action-fold')) return;
       el.remove();
     });
   }
@@ -33626,9 +33630,15 @@
           }
           // ⭐ #149 修复5b(2026-06-01):从 hand.seats 富化 folded,让 renderSeats(16584)
           //   正确隐藏弃牌对手的牌背(原 player 对象没带 folded → renderSeats 每次洗掉 .folded)
+          // ⭐ #149 修复7(2026-06-01):同时富化 action='fold' → renderSeats 重渲保留"弃牌"气泡
+          //   (否则每 2s 重建座位 HTML 会抹掉 attachActionTag 加的弃牌气泡)
           if (Array.isArray(hand.seats)) {
             var _hsFold = hand.seats.find(function(x){ return Number(x.seatNo) === Number(s.seatNo); });
-            if (_hsFold && _hsFold.folded) player.folded = true;
+            if (_hsFold && _hsFold.folded) {
+              player.folded = true;
+              player.action = 'fold';
+              player.actionLabel = '弃牌';
+            }
           }
         }
         if (myUserId !== null && Number(s.userId) === myUserId) {

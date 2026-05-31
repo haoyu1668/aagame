@@ -17058,7 +17058,15 @@
           window._myRealTableId = Number(currentTableRoom.id);
         } catch (err) {
           console.warn('[B8.5] ❌ 入座失败:', err);
-          if (typeof showToast === 'function') {
+          // ⭐ 2026-05-31:409(座位已占)时强刷 seats UI,让头像浮现避免再点同一位
+          if (err && err.status === 409) {
+            if (typeof showToast === 'function') showToast('该座位已被占用,请试其他位置');
+            try {
+              if (typeof window.fetchAndRenderTableSeats === 'function' && currentTableRoom && Number.isInteger(Number(currentTableRoom.id))) {
+                window.fetchAndRenderTableSeats(Number(currentTableRoom.id));
+              }
+            } catch (refreshErr) { console.warn('[B8.5] 409 refresh 失败:', refreshErr); }
+          } else if (typeof showToast === 'function') {
             showToast('入座失败:' + (err && err.message ? err.message : '未知错误'));
           }
           buyinConfirm.classList.remove('disabled');

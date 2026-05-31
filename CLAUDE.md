@@ -235,15 +235,24 @@
 
 ### #149 牌桌会话整体审计(德州扑克规则合规)
 
-- **状态**:Tier 0 已修(2026-06-01)。Tier 1 / Tier 2 待办(留独立 ticket)。
-  - **已做(Tier 0,前端 index.html only,+46/−14,详见 `RELEASE_NOTE_149_Tier0.md`)**:
-    问题1 waitbb 红卡背(渲染加 else 清 my-cards)/ 问题2 对手读秒+tick(删 setActingSeat 内 startTimer)/
-    问题3 转正延迟看牌卡红背(加 _mySeatDR 守卫)/ 问题4 .folded 多源(轮询全座位权威对账)。
-  - **待办 Tier 1(audit 顺带,值得修)**:I4 离桌不停 timer/poll · G3 muck 权不限赢家 ·
-    H1 后端不读 delayedRevealEnabled · H1 muck 时序错配 · I3 dissolve 判定重复+无行锁 ·
-    I1 两离座路由局中语义不一致 · G4 奇数筹码 remainder 不按位置 · K3 live 不下发分层边池。
+- **状态**:Tier 0 + 真机连测追加修复均已上线(2026-06-01)。详见 `RELEASE_NOTE_149_Tier0.md`。
+    Tier 1 / Tier 2 仍待办(留独立 ticket)。
+  - **已做(Tier 0,前端)**:问题1 waitbb 红卡背 / 问题2 对手读秒+tick / 问题3 转正延迟看牌卡红背 /
+    问题4 .folded 多源。
+  - **已做(追加,真机测试驱动)**:
+    - 前端(Vercel):1b waitbb 清 DEMO_HOLE_CARDS 去假牌型 · **1c 回归修复 waitbb 转正"看不到手牌"
+      (改用每-poll 自愈 + `_myActiveSeat` 判据)** · 5/5b 真桌显示在局对手牌背(CSS hand-active override
+      + 富化 player.folded) · 6 发牌动画落地后才显牌背(holes-revealed class 门控) · 7 弃牌气泡留到派彩 ·
+      8 动作气泡留到本街结束(_b9StreetActions 持久重建) · 10 牌局中退出立即回大厅 ·
+      11 对手头像绿色倒计时圈(独立 rAF 纯视觉,无 tick 声)。
+    - 后端(Railway,`aagame-backend/src/routes/hand.js`):**9 街结束判定改"每个活跃玩家本街都行动过"
+      (修抓头/BB option 被跳过,commit eaf3693)** · **12 行动超时改"能 check 就 check 否则 fold"
+      (含 advanceStreetOnTimeout helper,commit a10f93a)**。
+  - **待办 Tier 1(audit 顺带,值得修)**:G3 muck 权不限赢家 · H1 后端不读 delayedRevealEnabled ·
+    H1 muck 时序错配 · I3 dissolve 判定重复+无行锁 · I1 两离座路由局中语义不一致 ·
+    G4 奇数筹码 remainder 不按位置 · K3 live 不下发分层边池。(I4 离桌不停 timer/poll 部分随 10 缓解)
   - **待办 Tier 2(大工程,独立 ticket)**:C4 dead button 未实现 · G2 逐位摊牌顺序缺失 ·
-    D1/D4 街结束判定靠计数近似 · I2 sit-out 完全缺失 · 保险池后端纯占位(B16+)· A1 正式状态机(大整顿)。
+    I2 sit-out 完全缺失 · 保险池后端纯占位(B16+)· A1 正式状态机(大整顿)。(D4 街结束判定已由修复9 改进)
 - **背景**:2026-05-31 到 06-01 长对话做了 150 个 task,发现 4 个牌桌会话逻辑问题需要整体审计:
   1. **waitbb 玩家不该看到任何卡**(包括卡背)— 用户中途坐下显示 my-cards 红色卡背
   2. **timer/tick 只对 current actor 启动** — 当前对手 acting 时也会 startTimer(visual countdown 设计本意,但用户感觉异常)

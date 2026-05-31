@@ -56,4 +56,55 @@ I2 sit-out / 保险池后端)均留独立 ticket,本次不动(守红线 1)。
 - 不涉及 mock 数据(88888/demo 牌桌),不删任何代码(守红线 1/3)。
 
 ---
-*对应 commit:见 git log #149 Tier 0 · index.html +46/−14*
+
+# 追加修复(同对话续,2026-06-01 真机测试驱动)
+
+> Tier 0 四项上线后,真机连测中又发现并修复了一批牌桌会话问题。
+> 前端在 `aagame-six`(Vercel),后端在 `aagame-backend`(Railway)。
+
+## 前端(index.html)
+
+- **修复1b**:waitbb 清 `.my-cards` 后,牌型引擎仍读静态 `DEMO_HOLE_CARDS.my=['K♥','10♦']`
+  显示假牌型("两对 K-8")。→ 不在本手时清空 `DEMO_HOLE_CARDS.my` + 移除残留牌型标签。
+- **修复1c(回归修复)**:修复1 用"myHoleCards 是否 2 张"判据 + 每手只跑一次的渲染块,
+  导致 waitbb 转正首帧无 myHoleCards 时误清 my-cards 且不再补渲 → **"看不到手牌"**。
+  → 撤销该 else 清空;新增**每-poll 自愈块**:判据改为"我是否在 hand.seats"(`_myActiveSeat`),
+  在局有牌但 my-cards 空 → 补渲染;确认不在局 → 才清静态红卡背。
+- **修复5 / 5b**:真桌对手头像**无牌背**。根因 CSS 3366 `display:none!important` 隐藏所有对手
+  `.seat-cards-back`,只给 my-cards 加了 hand-active override,漏了对手。
+  → 加 `hand-active` override 显示在局对手牌背(排除 空座/满员/等大盲/弃牌);
+  fetchAndRenderTableSeats 从 hand.seats 富化 `player.folded` 让 renderSeats 可靠隐藏弃牌对手牌背。
+- **修复6**:对手牌背"直接 pop 出来",非"飞牌落地后才出现"。根因发牌动画用内联 opacity
+  被每 2s renderSeats 重建冲掉。→ 改用持久 class `holes-revealed` 门控:每手开始移除(藏),
+  发牌动画飞牌落地后(~1.5s)或中途进场(无动画)再加上(显)。
+- **修复7**:弃牌气泡过早消失。→ `clearActionTags(includeFold)` 默认保留 `.action-fold`,
+  仅新一手 fullResetTable 传 true 才清;renderSeats 据 `player.action='fold'` 持久重建弃牌气泡
+  → 弃牌气泡留到本手派彩结束。
+- **修复8**:call/raise/check/bet 气泡被每 2s renderSeats 抹掉。→ 维护 `_b9StreetActions`
+  记录对手本街动作,renderSeats 据此持久重建;街/手边界(clearActionTags)清空记录
+  → 动作气泡活到本街结束才消失(弃牌除外,走修复7)。
+- **修复10**:牌局中点"退出房间"被留在桌上干等。→ 申请退出(pending_leave)成功即
+  cleanupTableSession + doReturnToLobby **立即回大厅**;后端轮到他时自动弃牌、本手结束退筹码回钱包。
+- **修复11**:对手头像缺绿色倒计时圈(修复2 去 tick 声时连视觉圈一起砍了)。
+  → setActingSeat 里用**独立 rAF 纯视觉动画**推进对手 `.seat-turn-ring` 的 `--turn-p`(~15s),
+  无 tick 声、无 onTimeout、不碰"我的"行动计时器。
+
+## 后端(aagame-backend / src/routes/hand.js)
+
+- **修复9**:街结束判定从 `COUNT(*) 总动作数 >= 活跃人数` 改为 **"每个活跃(未弃/未 all-in)
+  玩家本街都真行动过"**(去重座位交集)。原 bug:已弃牌玩家的动作"顶替"未行动活跃玩家名额
+  → 街提前结束、**抓头/BB 的最后 option 被跳过**(日志 hand 536:straddle s2 翻前从未行动直接进 flop)。
+- **修复12**:行动超时默认动作从"一律 fold"改为 **"能 check 就 check,否则 fold"**。
+  无需跟注(current_bet 已是最高)→ 超时自动 check(不再误弃能免费过牌的人,如 BB option);
+  面对下注 → fold。新增 `advanceStreetOnTimeout` helper(镜像 POST /actions 街结束逻辑,
+  不依赖 res),处理 check 关闭本轮时的"推进街/发公牌/摊牌",避免全员掉线 check 到底卡住。
+  MAX_LOOPS=12 仍兜底。
+- **(配套设计,无需改)场景:关闭小程序**:`tryExpireTimedOutAction` 在每个 GET /current-hand
+  轮询入口跑(hand.js:1125),只要桌上还有人轮询,掉线玩家轮到他时由服务端超时自动处理。
+
+## 部署
+- 前端:Vercel,逐 commit push(修复1b…11)。
+- 后端:Railway,commit `eaf3693`(修复9)、`a10f93a`(修复12)。无 DB 迁移。
+
+---
+*Tier 0 原始 commit:见 git log #149 Tier 0 · index.html +46/−14。追加修复见上。*

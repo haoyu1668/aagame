@@ -29937,6 +29937,13 @@
         };
         const info = labelMap[data.action];
         if (info) attachActionTag(data.seatId, info.cls, info.text);
+        // ⭐ #149 修复8(2026-06-01):记录对手本街动作,供 renderSeats 重渲时持久重建气泡
+        //   (否则每 2s renderSeats 重建座位 HTML 会抹掉非弃牌气泡)。弃牌走 hand.seats 不记这。
+        //   存 css 后缀(bet→raise 复用样式)+ 文案;'my' 不记(my-seat 不被 renderSeats 重建)。
+        if (info && data.action !== 'fold' && data.seatId && data.seatId !== 'my') {
+          window._b9StreetActions = window._b9StreetActions || {};
+          window._b9StreetActions[data.seatId] = { a: info.cls.replace('action-', ''), label: info.text };
+        }
         // 更新座位下注 / 弃牌灰显
         if (data.action === 'fold') {
           const el = data.seatId === 'my' ? document.querySelector('.my-seat') : document.querySelector('.seat.' + data.seatId);
@@ -30967,6 +30974,9 @@
 
   // 清空所有座位动作气泡(同一手内每轮结束时调用)
   function clearActionTags(includeFold) {
+    // ⭐ #149 修复8(2026-06-01):街/手边界清空"本街动作记录"(renderSeats 重渲用),
+    //   使 call/raise/check/bet 气泡只活到本街结束;下一街重新记录。弃牌不在此记录里(走 hand.seats)。
+    window._b9StreetActions = {};
     // ⭐ #149 修复7(2026-06-01):弃牌气泡保留到本手结束(派彩)
     //   call/raise/check 等瞬时气泡随街切换/动作清掉;但 .action-fold 一直留着,
     //   让玩家全程看到谁弃了牌。仅新一手 fullResetTable 传 includeFold=true 才清弃牌气泡。
@@ -33639,6 +33649,12 @@
               player.action = 'fold';
               player.actionLabel = '弃牌';
             }
+          }
+          // ⭐ #149 修复8(2026-06-01):非弃牌对手 → 若本街有动作记录,补 action/label
+          //   让 renderSeats 持久重渲该街动作气泡(call/raise/check/bet/allin),到本街结束才清
+          if (!player.folded && window._b9StreetActions) {
+            var _sa = window._b9StreetActions['s' + s.seatNo];
+            if (_sa) { player.action = _sa.a; player.actionLabel = _sa.label; }
           }
         }
         if (myUserId !== null && Number(s.userId) === myUserId) {

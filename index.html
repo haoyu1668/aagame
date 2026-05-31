@@ -34128,6 +34128,16 @@
             'currentActor=s' + newActingSeatNo + (_myActiveSeat && Number(_myActiveSeat.seatNo) === Number(newActingSeatNo) ? '★MY_TURN' : ''),
             'mySeat=' + _mySeatLog,
             'changed?', (newActingSeatNo !== lastActingSeatNo) ? 'YES' : 'no');
+          // ⭐ 2026-06-01:防御性清 .my-seat.folded — 后端说我没 fold 时强制移除
+          //   解决"弃牌灰色样式残留"bug:fullResetTable 跟此处双保险
+          var _ms = document.querySelector('.my-seat');
+          if (_ms && _ms.classList.contains('folded')) {
+            var shouldBeFolded = !!(_myActiveSeat && _myActiveSeat.folded);
+            if (!shouldBeFolded) {
+              _ms.classList.remove('folded');
+              console.log('[fold-clear] mySeat.folded 不一致后端,强制清');
+            }
+          }
         } catch (diagErr) {}
         if (newActingSeatNo !== lastActingSeatNo) {
           window._b9LastActingSeatNo = newActingSeatNo;

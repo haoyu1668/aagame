@@ -13862,20 +13862,22 @@
           <div id="rp-rounds"></div>
         </div>
 
-        <!-- 付费按钮(发发看/偷偷看)⭐ v2.28.40 金额从 AAGAME_FEE_CONFIG 读 -->
+        <!-- ⭐ 2026-05-31:付费按钮金额改连 N4 settings.payToSeeBb(公牌+手牌共用)
+             保留 ₮ 符号,数字直接显示设置值(如 "0.2BB")。
+             无 data-fee-key 是故意的 — 不让 refreshFeeLabels 覆盖。 -->
         <div class="rp-paid-bar" id="rp-paid-bar">
           <button class="rp-paid-btn" id="rp-faafakan">
             <span>发发看</span>
             <span class="rp-paid-price">
               <span class="rp-paid-price-icon">₮</span>
-              <span data-fee-key="faafakan" data-fee-show="cost">50</span>
+              <span id="rp-faafakan-price">0.2BB</span>
             </span>
           </button>
           <button class="rp-paid-btn" id="rp-toutoukan">
             <span>偷偷看</span>
             <span class="rp-paid-price">
               <span class="rp-paid-price-icon">₮</span>
-              <span data-fee-key="toutoukan" data-fee-show="cost">50</span>
+              <span id="rp-toutoukan-price">0.2BB</span>
             </span>
           </button>
         </div>
@@ -14977,23 +14979,22 @@
           </div>
         </div>
 
-        <!-- 付费看公牌 -->
+        <!-- ⭐ 2026-05-31:付费看公牌+手牌共用 1 档 BB(5 档,默认 0.2)— 用户决定 -->
         <div class="ct-row">
           <span class="ct-row-label">付费看公牌</span>
           <label class="ct-toggle"><input type="checkbox" id="ct-pay-board" checked><span class="ct-toggle-slider"></span></label>
         </div>
-
-        <!-- 付费看手牌 + BB segment -->
         <div class="ct-row">
           <span class="ct-row-label">付费看手牌</span>
           <label class="ct-toggle"><input type="checkbox" id="ct-pay-hole-enabled" checked><span class="ct-toggle-slider"></span></label>
         </div>
-        <div class="ct-sub" id="ct-pay-hole-bb-row">
-          <div class="ct-segment" data-target="ct-pay-hole-bb">
-            <div class="ct-segment-btn active" data-value="0.5">0.5BB</div>
+        <div class="ct-sub" id="ct-pay-bb-row">
+          <div class="ct-segment" data-target="ct-pay-bb">
+            <div class="ct-segment-btn" data-value="0.1">0.1BB</div>
+            <div class="ct-segment-btn active" data-value="0.2">0.2BB</div>
+            <div class="ct-segment-btn" data-value="0.5">0.5BB</div>
             <div class="ct-segment-btn" data-value="1">1BB</div>
             <div class="ct-segment-btn" data-value="1.5">1.5BB</div>
-            <div class="ct-segment-btn" data-value="2">2BB</div>
           </div>
         </div>
 
@@ -18427,12 +18428,34 @@
     renderReplayPreflop(data);
     renderReplayRounds(data);
     // 付费按钮常驻显示,点击时判断条件给反馈(发发看判断河牌是否已出)
+    // ⭐ 2026-05-31:从 N4 settings.payToSeeBb 同步发发看/偷偷看价格(共享)
+    updatePeekButtonPrices();
     // 分页
     document.getElementById('rp-page-num').textContent = currentReplayIndex + '/' + totalReplayCount;
     document.getElementById('rp-prev').classList.toggle('disabled', currentReplayIndex <= 1);
     document.getElementById('rp-next').classList.toggle('disabled', currentReplayIndex >= totalReplayCount);
     // ⭐ v2.23 同步 ⭐ 按钮的收藏状态
     if (typeof syncStarButtonState === 'function') syncStarButtonState();
+  }
+
+  // ⭐ 2026-05-31:发发看/偷偷看价格 = 当前桌 settings.payToSeeBb(默认 0.2BB)
+  //   按钮文本直接显示设置值(0.2BB / 1BB 等),保留 ₮ 前缀
+  function updatePeekButtonPrices() {
+    let bbValue = 0.2;  // 默认值跟 N4_DEFAULTS.payToSeeBb 对齐
+    try {
+      let s = null;
+      if (typeof currentTableRoom !== 'undefined' && currentTableRoom && currentTableRoom.settings) {
+        s = currentTableRoom.settings;
+      } else if (window.currentTableRoom && window.currentTableRoom.settings) {
+        s = window.currentTableRoom.settings;
+      }
+      if (s && Number(s.payToSeeBb) > 0) bbValue = Number(s.payToSeeBb);
+    } catch (_) {}
+    const display = bbValue + 'BB';
+    const faaEl = document.getElementById('rp-faafakan-price');
+    const touEl = document.getElementById('rp-toutoukan-price');
+    if (faaEl) faaEl.textContent = display;
+    if (touEl) touEl.textContent = display;
   }
 
   // 打开牌谱
@@ -18877,42 +18900,58 @@
   }
 
   // 发发看 / 偷偷看 → 占位 toast
+  // ⭐ 2026-05-31:加 toggle 检查(payToSeeBoardEnabled / payToSeeHoleEnabled),
+  //   关时 toast 拒绝;开时 toast 显示扣费金额(真扣等 B16 之后单独 ticket)
+  function _peekSettings() {
+    let s = {};
+    try {
+      if (typeof currentTableRoom !== 'undefined' && currentTableRoom && currentTableRoom.settings) {
+        s = currentTableRoom.settings;
+      } else if (window.currentTableRoom && window.currentTableRoom.settings) {
+        s = window.currentTableRoom.settings;
+      }
+    } catch (_) {}
+    return s;
+  }
   const rpFaaBtn = document.getElementById('rp-faafakan');
   const rpTouBtn = document.getElementById('rp-toutoukan');
   if (rpFaaBtn) {
     rpFaaBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // 判断河牌是否已出:有"河牌"或"摊牌"段就说明已发完
-      // 真实业务:后端字段 data.riverDealt 或 community.length >= 5 直接判断
       const data = demoReplay;
       const riverDealt = data.rounds.some(r => r.name === '河牌' || r.name === '摊牌');
       if (riverDealt) {
         if (typeof showToast === 'function') showToast('河牌已出,不需要发发看');
         return;
       }
+      const s = _peekSettings();
+      if (s.payToSeeBoardEnabled === false) {
+        if (typeof showToast === 'function') showToast('本桌未开通付费看公牌');
+        return;
+      }
+      const bb = (Number(s.payToSeeBb) > 0 ? Number(s.payToSeeBb) : 0.2);
       if (typeof showToast === 'function') {
-        const fee = window.getFee('faafakan');
-        showToast('发发看(开发中,扣 ₮' + fee.cost + ' 查看未发完的牌)');
+        showToast('发发看(开发中,扣 ' + bb + 'BB 记分牌 查看未发完的牌)');
       }
     });
   }
   if (rpTouBtn) {
     rpTouBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // 判断是否所有玩家都已亮牌:遍历 players,看有没有手牌没亮的(hole 是 🂠 牌背的就是没亮)
-      // 真实业务:后端字段 data.allShowdown 或遍历 players 判断 hole 是否全部公开
       const data = demoReplay;
-      const hasUnrevealed = data.players.some(p => {
-        // 手牌为 🂠 牌背 = 未亮牌
-        return p.hole && p.hole.some(c => c === '🂠');
-      });
+      const hasUnrevealed = data.players.some(p => p.hole && p.hole.some(c => c === '🂠'));
       if (!hasUnrevealed) {
         if (typeof showToast === 'function') showToast('所有玩家已亮牌,无需偷偷看');
         return;
       }
+      const s = _peekSettings();
+      if (s.payToSeeHoleEnabled === false) {
+        if (typeof showToast === 'function') showToast('本桌未开通付费看手牌');
+        return;
+      }
+      const bb = (Number(s.payToSeeBb) > 0 ? Number(s.payToSeeBb) : 0.2);
       if (typeof showToast === 'function') {
-        const fee = window.getFee('toutoukan');
-        showToast('偷偷看(开发中,扣 ₮' + fee.cost + ' 查看别人手牌)');
+        showToast('偷偷看(开发中,扣 ' + bb + 'BB 记分牌 查看别人手牌)');
       }
     });
   }
@@ -35002,8 +35041,10 @@
     rakeMinPot:        10,   // ⭐ 2026-05-31:默认 1 → 10 BB
     rakeCap:           100,
     afkSeatHoldSec:    120,   // ⭐ 2026-05-31:默认 180→120 秒
+    // ⭐ 2026-05-31:公牌+手牌共用 payToSeeBb(单字段),默认 0.2BB
     payToSeeBoardEnabled: true,
-    payToSeeHoleEnabled:  true,  payToSeeHoleBb: 0.5,
+    payToSeeHoleEnabled:  true,
+    payToSeeBb:           0.2,
     payToCutEnabled:      true,  payToCutBb:     0.5,
     delayedRevealEnabled: true,
     autoStartEnabled:     true,  autoStartMinPlayers: 2,
@@ -35269,7 +35310,7 @@
     const afk = document.getElementById('ct-afk-value'); if (afk) afk.textContent = D.afkSeatHoldSec + 'S';
     chk('ct-pay-board', D.payToSeeBoardEnabled);
     chk('ct-pay-hole-enabled', D.payToSeeHoleEnabled);
-    n4SetSegment('ct-pay-hole-bb', D.payToSeeHoleBb);
+    n4SetSegment('ct-pay-bb', D.payToSeeBb);  // ⭐ 2026-05-31:共享 BB 档
     chk('ct-pay-cut-enabled', D.payToCutEnabled);
     n4SetSegment('ct-pay-cut-bb', D.payToCutBb);
     chk('ct-delayed-reveal', D.delayedRevealEnabled);
@@ -35371,7 +35412,7 @@
         afkSeatHoldSec:        parseInt(String(afkVal).replace(/\D/g, ''), 10),
         payToSeeBoardEnabled:  document.getElementById('ct-pay-board').checked,
         payToSeeHoleEnabled:   document.getElementById('ct-pay-hole-enabled').checked,
-        payToSeeHoleBb:        parseFloat(n4GetSegment('ct-pay-hole-bb', '0.5')),
+        payToSeeBb:            parseFloat(n4GetSegment('ct-pay-bb', '0.2')),  // ⭐ 2026-05-31:共享 BB 档
         payToCutEnabled:       document.getElementById('ct-pay-cut-enabled').checked,
         payToCutBb:            parseFloat(n4GetSegment('ct-pay-cut-bb', '0.5')),
         delayedRevealEnabled:  document.getElementById('ct-delayed-reveal').checked,

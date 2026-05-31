@@ -18546,19 +18546,19 @@
   // 拉我打过的手列表
   async function _b9FetchMyHands(clubId) {
     try {
-      const qs = clubId ? ('?clubId=' + clubId + '&limit=50') : '?limit=50';
+      // ⭐ limit 50→200 让用户能翻更多历史(无需 offset 分页)
+      const qs = clubId ? ('?clubId=' + clubId + '&limit=200') : '?limit=200';
       const path = '/api/users/me/hands' + qs;
       console.log('[replay] 拉列表 path=' + path);
       const r = await (window.apiClient ? window.apiClient.get(path) : fetch(path).then(r => r.json()));
-      console.log('[replay] 列表响应:', r);
+      console.log('[replay] 列表响应 total=' + (r && r.total) + ' loaded=' + ((r && r.hands && r.hands.length) || 0));
       if (r && r.ok && Array.isArray(r.hands)) {
-        console.log('[replay] hands.length=' + r.hands.length + ' total=' + r.total);
-        return r.hands;
+        return { hands: r.hands, total: Number(r.total) || r.hands.length };
       }
     } catch (e) {
       console.warn('[replay] 拉 hands 列表失败:', e.message || e, 'status=' + (e.status || '?'));
     }
-    return [];
+    return { hands: [], total: 0 };
   }
   // 拉单手详情
   async function _b9FetchHandReplay(handId) {
@@ -18574,18 +18574,21 @@
   async function _b9LoadReplayList() {
     const clubId = (typeof currentClubInfoId !== 'undefined' && currentClubInfoId) ? currentClubInfoId : null;
     console.log('[replay] _b9LoadReplayList clubId=' + clubId);
-    const list = await _b9FetchMyHands(clubId);
-    _b9ReplayList = list;
-    totalReplayCount = list.length;
-    _b9ReplayLoaded = true;  // ⭐ 标记:已尝试加载,renderReplayModal 不再退 demo
-    if (list.length === 0) {
+    const resp = await _b9FetchMyHands(clubId);
+    _b9ReplayList = resp.hands;
+    // ⭐ totalReplayCount = backend 真总数(不是 loaded 数,显示 311 不是 200)
+    totalReplayCount = resp.total;
+    _b9ReplayLoaded = true;
+    if (_b9ReplayList.length === 0) {
       currentReplayIndex = 0;
       _b9ReplayDetail = null;
       if (typeof showToast === 'function') showToast('暂无牌谱,先去玩几手');
       return;
     }
-    currentReplayIndex = 1;
-    _b9ReplayDetail = await _b9FetchHandReplay(list[0].handId);
+    // ⭐ 2026-05-31:latest 在高端 — 默认 currentReplayIndex = total(最新手)
+    //   listIndex = total - currentReplayIndex(0=最新,在 list[0])
+    currentReplayIndex = totalReplayCount;
+    _b9ReplayDetail = await _b9FetchHandReplay(_b9ReplayList[0].handId);  // list[0] = 最新
   }
 
   // ⭐ 2026-05-31:发发看/偷偷看价格 = 当前桌 settings.payToSeeBb(默认 0.2BB)
@@ -19037,14 +19040,22 @@
   // 分页按钮
   const rpPrev = document.getElementById('rp-prev');
   const rpNext = document.getElementById('rp-next');
+  // ⭐ 2026-05-31:分页方向 — latest 在高端
+  //   user_index → list_index: listIdx = total - user_index(0 = list[0] = latest)
+  //   <(prev) = 看更早的手 = user_index--
+  //   >(next) = 看更新的手 = user_index++
   if (rpPrev) {
     rpPrev.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (currentReplayIndex <= 1) return;
-      currentReplayIndex--;
-      // ⭐ 2026-05-31:从真后端拉对应索引的手详情
-      const target = _b9ReplayList[currentReplayIndex - 1];
-      if (target) _b9ReplayDetail = await _b9FetchHandReplay(target.handId);
+      const newIdx = currentReplayIndex - 1;
+      const listIdx = totalReplayCount - newIdx;
+      if (listIdx >= _b9ReplayList.length) {
+        if (typeof showToast === 'function') showToast('更早的手未加载,刷新牌谱后重试');
+        return;
+      }
+      currentReplayIndex = newIdx;
+      _b9ReplayDetail = await _b9FetchHandReplay(_b9ReplayList[listIdx].handId);
       renderReplayModal();
     });
   }
@@ -19052,9 +19063,11 @@
     rpNext.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (currentReplayIndex >= totalReplayCount) return;
-      currentReplayIndex++;
-      const target = _b9ReplayList[currentReplayIndex - 1];
-      if (target) _b9ReplayDetail = await _b9FetchHandReplay(target.handId);
+      const newIdx = currentReplayIndex + 1;
+      const listIdx = totalReplayCount - newIdx;
+      if (listIdx < 0 || listIdx >= _b9ReplayList.length) return;
+      currentReplayIndex = newIdx;
+      _b9ReplayDetail = await _b9FetchHandReplay(_b9ReplayList[listIdx].handId);
       renderReplayModal();
     });
   }
@@ -19076,12 +19089,35 @@
     } catch (_) {}
     return s;
   }
+  // ⭐ 2026-05-31:peek 真接通 — 调后端 POST /hands/:id/peek 扣钱包返底牌/公牌
+  async function _b9PeekCall(type) {
+    if (!_b9ReplayDetail) return null;
+    // handId 从 _b9ReplayDetail 拿(用 list 当前索引拿,避开 "#" 前缀)
+    const listIdx = totalReplayCount - currentReplayIndex;
+    const target = _b9ReplayList[listIdx];
+    if (!target) return null;
+    const handId = target.handId;
+    try {
+      const r = await window.apiClient.post('/api/hands/' + handId + '/peek', { type });
+      console.log('[replay.peek] ✅', type, r);
+      return r;
+    } catch (e) {
+      console.warn('[replay.peek] ❌', type, e.message || e, 'status=' + (e.status || '?'));
+      if (typeof showToast === 'function') {
+        const msg = (e.data && e.data.error) || e.message || '扣费失败';
+        showToast(msg);
+      }
+      return null;
+    }
+  }
+
   const rpFaaBtn = document.getElementById('rp-faafakan');
   const rpTouBtn = document.getElementById('rp-toutoukan');
   if (rpFaaBtn) {
-    rpFaaBtn.addEventListener('click', (e) => {
+    rpFaaBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const data = demoReplay;
+      // ⭐ 2026-05-31 fix:用真数据(_b9ReplayDetail)不再用 demoReplay
+      const data = _b9ReplayDetail || demoReplay;
       const riverDealt = data.rounds.some(r => r.name === '河牌' || r.name === '摊牌');
       if (riverDealt) {
         if (typeof showToast === 'function') showToast('河牌已出,不需要发发看');
@@ -19092,16 +19128,24 @@
         if (typeof showToast === 'function') showToast('本桌未开通付费看公牌');
         return;
       }
-      const bb = (Number(s.payToSeeBb) > 0 ? Number(s.payToSeeBb) : 0.2);
-      if (typeof showToast === 'function') {
-        showToast('发发看(开发中,扣 ' + bb + 'BB 记分牌 查看未发完的牌)');
+      const r = await _b9PeekCall('board');
+      if (!r || !r.ok) return;
+      // 把 extras 合到当前 detail 的 community → 重 render(后续街显示完整公牌)
+      _b9ReplayDetail._extraBoard = r.extraCommunity || [];
+      _b9ReplayDetail._fullBoard  = r.fullCommunity  || [];
+      // 找最后一个有 community 的 round 把后续公牌追加显示
+      if (_b9ReplayDetail.rounds && _b9ReplayDetail.rounds.length > 0) {
+        const lastRound = _b9ReplayDetail.rounds[_b9ReplayDetail.rounds.length - 1];
+        lastRound.community = r.fullCommunity;
       }
+      if (typeof showToast === 'function') showToast('已扣 ' + r.cost + ' 记分牌,看到了!');
+      renderReplayModal();
     });
   }
   if (rpTouBtn) {
-    rpTouBtn.addEventListener('click', (e) => {
+    rpTouBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const data = demoReplay;
+      const data = _b9ReplayDetail || demoReplay;
       const hasUnrevealed = data.players.some(p => p.hole && p.hole.some(c => c === '🂠'));
       if (!hasUnrevealed) {
         if (typeof showToast === 'function') showToast('所有玩家已亮牌,无需偷偷看');
@@ -19112,10 +19156,26 @@
         if (typeof showToast === 'function') showToast('本桌未开通付费看手牌');
         return;
       }
-      const bb = (Number(s.payToSeeBb) > 0 ? Number(s.payToSeeBb) : 0.2);
-      if (typeof showToast === 'function') {
-        showToast('偷偷看(开发中,扣 ' + bb + 'BB 记分牌 查看别人手牌)');
-      }
+      const r = await _b9PeekCall('hole');
+      if (!r || !r.ok || !Array.isArray(r.seats)) return;
+      // 用 seatNo 匹配 _b9ReplayDetail.players 把 hole 从 🂠🂠 换成真牌
+      //   _b9ReplayDetail.players[i].seat 是 'BTN'/'SB'/'BB'/'S1' 这种 label,
+      //   匹配不到时 fallback name 也匹配一遍
+      const seatLabelToCards = {};
+      const nameToCards = {};
+      r.seats.forEach(s => {
+        const posLabel = 'S' + s.seatNo;  // 简化匹配:发牌时 transform 给的也是 S{seatNo}
+        seatLabelToCards[posLabel] = s.holeCards;
+        if (s.name) nameToCards[s.name] = s.holeCards;
+      });
+      _b9ReplayDetail.players.forEach(p => {
+        if (!p.folded) return;
+        // 找到对应真牌
+        let cards = seatLabelToCards[p.seat] || nameToCards[p.name];
+        if (cards && cards.length) p.hole = cards;
+      });
+      if (typeof showToast === 'function') showToast('已扣 ' + r.cost + ' 记分牌,看到了!');
+      renderReplayModal();
     });
   }
 

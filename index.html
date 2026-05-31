@@ -17272,14 +17272,18 @@
             const resp2 = await callLeaveApi(true);
             console.log('[Task 2] ✅ 申请退出成功,后端返:', resp2);
             if (resp2 && resp2.pending) {
-              // 申请成功:留在桌上等本手结束
-              leftPending = true;
-              if (typeof showToast === 'function') {
-                showToast('已申请退出,本手结束自动离桌(轮到你时自动弃牌)');
-              }
-              // 标记给 polling:发现"自己已不在 seats" → 自动返大厅
+              // ⭐ #149 修复10(2026-06-01):申请退出成功 → 立即回大厅(用户要求"点退出就直接退出")
+              //   后端 pending_leave:轮到他时自动弃牌,本手结束 cleanupPendingLeaveSeats 退筹码回钱包。
+              //   前端无需留在桌上干等,直接清理会话 + 返大厅。
               window._pendingLeaveTableId = leaveTableId;
-              return;   // 不进 doReturnToLobby
+              window._myRealTableId = null;
+              window._myRealSeatNo = null;
+              if (typeof showToast === 'function') {
+                showToast('已退出房间,本手轮到你时自动弃牌,筹码结算后退回钱包');
+              }
+              if (typeof cleanupTableSession === 'function') cleanupTableSession();
+              if (typeof doReturnToLobby === 'function') doReturnToLobby();
+              return;
             } else if (resp2 && typeof resp2.returnedChips === 'number') {
               // 立即离座成功(已 folded 等场景)
               returnedAmount = resp2.returnedChips;

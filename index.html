@@ -29393,9 +29393,12 @@
     // 4. 加注按钮 raise/bet 切换:P2 显"下注"(有人下注的回应仍叫加注…但德扑标准:面对下注时按钮叫"加注";本街首次主动下注叫"下注")
     //    项目锁死:本街尚无下注 → "下注";已有下注 → "加注"
     //    ⭐ 2026-05-31 Texas 审计 #1:opts 现在按 callAmt 包含 'bet' 或 'raise'(不再永远 'raise')
+    //    ⭐ 2026-05-31 Bug 修(真凶):用 opts 直接决定,不再用 callAmt
+    //      preflop 时 callAmt=0 但 opts 只含 'raise'(盲注算 bet,新增需用 raise)
+    //      原 bug:硬塞 'bet' → 后端 409"已有人下注,应该 raise 不是 bet"
     const raiseBtn = document.getElementById('ab-raise-btn');
     if (raiseBtn) {
-      raiseBtn.dataset.action = (callAmt === 0 && (opts.includes('bet') || opts.includes('raise'))) ? 'bet' : 'raise';
+      raiseBtn.dataset.action = opts.includes('bet') ? 'bet' : 'raise';
     }
 
     // 5. P3 大盲位常用 → 显示 Y3 风格的"过/弃"合并按钮?

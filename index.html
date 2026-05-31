@@ -32982,7 +32982,11 @@
         if (amount >= myChips) {
           window.sendClientAction('allin');
         } else {
-          const action = (req.callAmount === 0) ? 'bet' : 'raise';
+          // ⭐ 2026-05-31 Bug 真凶 v3:tile 点击也有 callAmount===0 ? 'bet' : 'raise' bug
+          //   preflop callAmount=0 但 opts 只有 'raise',硬塞 'bet' → 409
+          //   修:用 opts.includes('bet') 判断
+          const opts = (req.options && Array.isArray(req.options)) ? req.options : [];
+          const action = opts.includes('bet') ? 'bet' : 'raise';
           window.sendClientAction(action, amount);
         }
         return;

@@ -33846,6 +33846,15 @@
           //   原 bug:每次重进牌桌 polling 都把 hand_actions 表里所有旧 action 当新的 dispatch
           //   → "加注/飞牌"音效连续响一遍,UI 出现已结束的动作气泡
           //   修复:计算当前 hand 已存在的最大 action id,只 dispatch 比它新的(将来发生的)
+          // ⭐ 2026-05-31 Bug fix:polling 检测到新 hand 也调 fullResetTable
+          //   原 bug:只有 WS HAND_START 事件触发 fullResetTable,但真后端 polling 模式从不派该事件
+          //   → 上手的 .my-seat.folded / .seat.folded class 不清 → 新一手卡牌仍 dim
+          //   触发条件:_b9LastSeenHandId 已有值(不是首次进牌桌)且变化(真的新一手)
+          if (window._b9LastSeenHandId && hand.id !== window._b9LastSeenHandId) {
+            if (typeof fullResetTable === 'function') {
+              try { fullResetTable(); } catch (resetErr) { console.warn('[fullReset on new hand] ', resetErr); }
+            }
+          }
           var existingMaxAid = 0;
           if (Array.isArray(hand.actions)) {
             for (var _ai = 0; _ai < hand.actions.length; _ai++) {

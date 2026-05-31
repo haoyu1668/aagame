@@ -34438,6 +34438,17 @@
         _emptyMyCards.innerHTML = '';
         _emptyMyCards.classList.remove('delayed-back', 'muck-back');
       }
+      // ⭐ #149 修复1b(2026-06-01):同步清牌型引擎源,否则牌型标签/高亮仍用静态 K♥10♦
+      //   updateMyHandTypeLabel / highlightCurrentMyHand 都读 DEMO_HOLE_CARDS.my
+      //   → waitbb 无牌却显示"两对 K-8"等假牌型。清空数组让它们 early-return
+      if (typeof DEMO_HOLE_CARDS !== 'undefined') DEMO_HOLE_CARDS.my = [];
+      // 移除已生成的非摊牌牌型标签(early-return 不会自己清,得手动移)
+      var _mySeatTag = document.querySelector('#page-table .my-seat .win-tag');
+      if (_mySeatTag && !_mySeatTag.classList.contains('showdown-tag')) _mySeatTag.remove();
+      // 清我方手牌实时高亮残留
+      document.querySelectorAll('#page-table .my-cards .live-hit').forEach(function(el) {
+        el.classList.remove('live-hit');
+      });
     }
 
     // ⭐ 飞底牌动画(从牌堆 → 各人位置 → 翻面显示)

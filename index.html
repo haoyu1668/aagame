@@ -32580,8 +32580,12 @@
         if (isAllIn) {
           window.sendClientAction('allin');
         } else {
-          // 翻前/翻后 无人下注 → bet,否则 → raise
-          const action = (req.callAmount === 0) ? 'bet' : 'raise';
+          // ⭐ 2026-05-31 Bug 真凶修复:用后端 req.options 而非 callAmount===0 判断
+          //   preflop 时 callAmount=0 但 opts 只含 'raise'(盲注算 bet,新增需用 raise)
+          //   原 bug:硬塞 'bet' → 后端 409"已有人下注,应该 raise 不是 bet"
+          //   修复:opts 包含 'bet' → 用 bet;否则 → 用 raise
+          const opts = (req.options && Array.isArray(req.options)) ? req.options : [];
+          const action = opts.includes('bet') ? 'bet' : 'raise';
           window.sendClientAction(action, currentAmount);
         }
         return;

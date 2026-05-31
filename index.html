@@ -32846,6 +32846,10 @@
       const ratio = r.seats / total;
       const offset = (CIRC * (1 - ratio)).toFixed(1);
       const full = r.seats >= total ? ' full' : '';
+      // ⭐ 2026-05-31:跟游戏 Tab 同步 — 玩家玩过此桌 ≥ 1 手 → 显"游戏过"红字
+      //   读 localStorage(_b9GetPlayedTables(),按 userId 分 key)
+      const _playedSet = (typeof window._b9GetPlayedTables === 'function') ? window._b9GetPlayedTables() : null;
+      const inGame = (_playedSet && _playedSet.has(Number(r.id))) ? '<span class="room-ingame-tag">游戏过</span>' : '';
       return `
         <div class="room-row">
           <div class="progress-ring">
@@ -32858,7 +32862,7 @@
             <div class="ring-time">${r.time}</div>
           </div>
           <div class="room-info">
-            <div class="room-name">${r.name}</div>
+            <div class="room-name"><span class="room-name-text">${r.name}</span>${inGame}</div>
             <div class="room-meta">${r.blinds} · ${r.type}</div>
             <div class="room-tags">
               <span class="insurance-tag">${SHIELD_SVG} 保险</span>

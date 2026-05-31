@@ -3400,6 +3400,11 @@
   body.on-real-table.hand-active .table-center .pot-label { display: block !important; }
   body.on-real-table.hand-active #community-cards { display: flex !important; }
   body.on-real-table.hand-active .my-seat .my-cards { display: flex !important; }
+  /* ⭐ #149 修复5(2026-06-01):真桌进行中显示在局对手的牌背
+     3366 把所有 .seat-cards-back 强制隐藏了,但只给 my-cards 加了 hand-active override,
+     漏了对手 → 真桌对手头像上永远没牌背(用户反馈)。补:hand-active 时显示在局对手牌背。
+     排除 空座/满员占位/等大盲(不在本手)/弃牌(已盖牌 muck)。摊牌时 face-up 牌也由此显示。 */
+  body.on-real-table.hand-active .seat:not(.empty):not(.full):not(.waitbb):not(.folded) .seat-cards-back { display: flex !important; }
   body.on-real-table.hand-active .table-center::before { display: none; }
   /* ⭐ Bug 真凶(2026-05-30 终极):真桌时 .seat-bet 永远 display:none(line 3221-3222),
      handactive override 漏了它 → flyChipsToSeatBet/betChipsToPotAnimation 算 getRelativeCenter
@@ -33618,6 +33623,12 @@
             player.bet = Number(hand.sbAmount);
           } else if (Number(s.seatNo) === Number(hand.bbSeat) && Number(hand.bbAmount) > 0) {
             player.bet = Number(hand.bbAmount);
+          }
+          // ⭐ #149 修复5b(2026-06-01):从 hand.seats 富化 folded,让 renderSeats(16584)
+          //   正确隐藏弃牌对手的牌背(原 player 对象没带 folded → renderSeats 每次洗掉 .folded)
+          if (Array.isArray(hand.seats)) {
+            var _hsFold = hand.seats.find(function(x){ return Number(x.seatNo) === Number(s.seatNo); });
+            if (_hsFold && _hsFold.folded) player.folded = true;
           }
         }
         if (myUserId !== null && Number(s.userId) === myUserId) {

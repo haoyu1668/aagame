@@ -4448,11 +4448,11 @@
     white-space: nowrap;
     z-index: 4;
   }
-  /* 自己座位的牌型标签:跨在两张手牌中间底部,往上移避开昵称 */
+  /* ⭐ 2026-05-31:自己座位牌型标签 — 上移到头像上方,跟对手座位一致(避开名字/筹码) */
   .my-seat .win-tag {
-    top: auto;
-    bottom: -1px;
-    z-index: 2;
+    top: -22px;
+    bottom: auto;
+    z-index: 4;
   }
   /* 赢家盈利金额(替换原筹码,变金色) */
   .seat.winner .seat-chips {
@@ -31108,6 +31108,16 @@
   //   皇家同花顺 → "皇家同花顺"
   // ─────────────────────────────────────────────────────────────────────
   function updateMyHandTypeLabel() {
+    // ⭐ 2026-05-31:hand 不活跃(state=null/ended)→ 清残留 + 返回(防上手牌型残留)
+    const _state = window._b9LastSeenState;
+    if (!_state || _state === 'ended' || _state === 'dissolved') {
+      const _ms = document.querySelector('.my-seat');
+      if (_ms) {
+        const existing = _ms.querySelector('.win-tag');
+        if (existing && !existing.classList.contains('showdown-tag')) existing.remove();
+      }
+      return;
+    }
     if (typeof DEMO_HOLE_CARDS === 'undefined' || !DEMO_HOLE_CARDS.my) return;
     const myCards = DEMO_HOLE_CARDS.my;
     if (!myCards || myCards.length < 2) return;
